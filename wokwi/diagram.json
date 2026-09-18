@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "author": "bms-connection-tester",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-s3-devkitc-1", "id": "dut", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-led", "id": "ledG", "top": -60, "left": 200, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "ledR", "top": -20, "left": 200, "attrs": { "color": "red" } },
+    { "type": "wokwi-resistor", "id": "rG", "top": -50, "left": 160, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "rR", "top": -10, "left": 160, "attrs": { "value": "220" } },
+    { "type": "board-esp32-s3-devkitc-1", "id": "meter", "top": 200, "left": 0, "attrs": {} }
+  ],
+  "connections": [
+    [ "dut:10", "rG:1", "green", [] ],
+    [ "rG:2", "ledG:A", "green", [] ],
+    [ "ledG:C", "dut:GND.1", "black", [] ],
+    [ "dut:11", "rR:1", "red", [] ],
+    [ "rR:2", "ledR:A", "red", [] ],
+    [ "ledR:C", "dut:GND.1", "black", [] ],
+    [ "dut:17", "meter:16", "orange", [] ],
+    [ "dut:16", "meter:17", "yellow", [] ],
+    [ "dut:GND.1", "meter:GND.1", "black", [] ]
+  ],
+  "dependencies": {}
+}
