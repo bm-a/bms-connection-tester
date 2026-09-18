@@ -5,6 +5,13 @@ over RS485, so any compatible meter, display, or host can be exercised without
 the real battery pack. Two status LEDs report link state live:
 **green = valid BMS traffic seen, red = bus silent**. No buttons, no screens.
 
+> **New to RS485 or the JBD protocol?** Start with the companion handbook:
+> **[jbd-bms-rs485-handbook](https://github.com/bm-a/jbd-bms-rs485-handbook)** —
+> how RS485 works, the MAX485 module up close, the JBD frame format with worked
+> examples, shopping list with search terms, and a step-by-step build guide.
+> (Also known as: JBD BMS emulator, Xiaoxiang BMS simulator/tester, smart BMS
+> responder, RS485 battery emulator, e-rickshaw meter tester.)
+
 | | |
 |---|---|
 | Target | ESP32-S3 DevKitC-1 + MAX485 transceiver |
