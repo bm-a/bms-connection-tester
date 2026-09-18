@@ -32,6 +32,11 @@ echo "=== native: test_parser (Unity) ==="
 g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp test/test_parser/test_parser.cpp .unity/unity.c -o .test_parser
 ./.test_parser
 
+echo "=== native: test_stress (Unity, extended data) ==="
+g++ -O2 -std=c++17 -I src -I .unity src/bms_protocol.cpp test/test_stress/test_stress.cpp .unity/unity.c -o .test_stress
+./.test_stress
+rm -f .test_stress
+
 echo "=== soak: 8-day continuous-run simulation ==="
 g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o .soak_sim
 ./.soak_sim

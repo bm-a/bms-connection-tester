@@ -105,7 +105,7 @@ table(["Item", "Detail"], [
     ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v1.1 only"],
     ["Date", "September 2026"],
     ["Firmware", "firmware.bin — 277,360 bytes, compiled + verified"],
-    ["Tests", "28 / 28 passing (protocol + lamp logic + faults + 8-day soak)"],
+    ["Tests", "32 / 32 passing (protocol + lamp logic + faults + 8-day soak)"],
     ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Nothing to press."],
 ], widths=[1.6, 4.6])
 cp = doc.add_paragraph()
@@ -236,7 +236,7 @@ table(["Artifact", "Detail"], [
     ["On-target test builds", "All three unit-test programs also compile + link for the S3 chip (they execute once a board is plugged in)."],
     ["QEMU S3 boot test", "QEMU 9.2.2 built from source on this phone; it boots our firmware to the Arduino flash-init step. Tracing proved QEMU's flash model lacked RDID 0x90/0xAB and GD25Q64 SFDP — both patched (separate emulator repo). Only an undecodable DIO-era cmd 0x77 remains: emulator gap, our code is never reached. Wokwi S3 is the practical Arduino-emulation path."],
 ], widths=[1.7, 4.5])
-doc.add_heading("7.2 Automated tests — 28 / 28 PASS (run_tests.sh)", level=2)
+doc.add_heading("7.2 Automated tests — 32 / 32 PASS (run_tests.sh)", level=2)
 table(["Group", "Tests", "Result"], [
     ["Checksums + golden frame (7)", "FFFD / FCDA / FCA8 / FA86 / F65A (2nd Docklight 0x2A variant), byte-exact 0x03 frame, exact-yes / 7xcorrupt-no.", "7 PASS"],
     ["Lamp logic, adaptive (8)", "Boot red, green fast, red after window, self-heal, slow-poll adapt, 2 s floor / 10 s cap, rollover, legacy compat.", "8 PASS"],
@@ -280,7 +280,7 @@ table(["Path", "What it is"], [
     ["VERSION", "1.1 (also baked into STATUS? replies)."],
     ["arduino/bms_connection_tester/", "Same v1.1 as an Arduino sketch + README."],
     ["firmware/*.bin", "Ready-to-flash v1.1 binaries + flash README."],
-    ["test/test_checksum|test_logic|test_parser", "28 automated tests, all passing."],
+    ["test/test_checksum|test_logic|test_parser", "32 automated tests, all passing."],
     ["tools/soak_sim.cpp", "8-day run: 691,040 polls answered, rollover crossed, no reset."],
     ["captures/", "Original Docklight xlsx + README (ground-truth vectors)."],
     ["releases/", "Frozen bms-connection-tester-v1.0.zip (git-ignored)."],
