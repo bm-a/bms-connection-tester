@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <cstdio>
 #include <cstring>
 #include "../../src/bms_protocol.h"
 
