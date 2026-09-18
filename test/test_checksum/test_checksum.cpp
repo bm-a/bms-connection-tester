@@ -33,6 +33,18 @@ void test_soc50_checksum_fca8(void) {
   TEST_ASSERT_EQUAL_HEX16(0xFCA8, jbd_checksum(frame + 2, 29));
 }
 
+// Regression: second 0x2A variant straight from the Docklight xlsx (row 21) -> F65A
+void test_xlsx_2a_variant_f65a(void) {
+  uint8_t frame[] = {
+    0xDD, 0x03, 0x00, 0x2A, 0x14, 0x9C, 0x00, 0x00, 0x12, 0xFA, 0x25, 0x1C,
+    0x00, 0x01, 0x34, 0x8F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x62, 0x31,
+    0x03, 0x10, 0x05, 0x0B, 0xDB, 0x0B, 0xD7, 0x0B, 0xD9, 0x0B, 0xD7, 0x0B,
+    0xD5, 0x00, 0x00, 0x00, 0x26, 0x70, 0x12, 0xFA, 0x00, 0x00, 0xF6, 0x5A,
+    0x77
+  };
+  TEST_ASSERT_EQUAL_HEX16(0xF65A, jbd_checksum(frame + 2, 44));
+}
+
 // Regression: 90%/45C vector (0x22 len) -> FA86
 void test_90pct_checksum_fa86(void) {
   uint8_t frame[] = {
@@ -68,6 +80,7 @@ void run_all() {
   RUN_TEST(test_soc100_checksum_fcda);
   RUN_TEST(test_soc50_checksum_fca8);
   RUN_TEST(test_90pct_checksum_fa86);
+  RUN_TEST(test_xlsx_2a_variant_f65a);
   RUN_TEST(test_golden_frame_exact);
   RUN_TEST(test_matcher_exact_true_corrupt_false);
 }
