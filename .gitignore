@@ -1,0 +1,6 @@
+.pio/
+.unity/
+.test_*
+*.log
+tc.json
+__pycache__/

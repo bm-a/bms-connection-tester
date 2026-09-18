@@ -1,0 +1,9 @@
+[wokwi]
+version = 1
+firmware = ".pio/build/esp32-s3-devkitc-1/firmware.bin"
+elf = ".pio/build/esp32-s3-devkitc-1/firmware.elf"
+
+# Meter stimulus: second MCU (see wokwi/meter.ino) polls every 1s.
+# RS485 emulated at UART+DE logic level; MAX485 modeled by custom chip
+# (pattern: github.com/iconnor/max485-chip) or direct UART cross-wire
+# for logic verification.
