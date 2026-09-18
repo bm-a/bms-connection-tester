@@ -32,6 +32,11 @@ echo "=== native: test_parser (Unity) ==="
 g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp test/test_parser/test_parser.cpp .unity/unity.c -o .test_parser
 ./.test_parser
 
+echo "=== soak: 8-day continuous-run simulation ==="
+g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o .soak_sim
+./.soak_sim
+rm -f .soak_sim .test_checksum .test_logic .test_parser
+
 echo "=== pio test -e native (upstream wrapper; expected to fail on Android) ==="
 if command -v pio >/dev/null 2>&1 && pio test -e native 2>&1 | tail -5; then
   :

@@ -4,3 +4,4 @@
 *.log
 tc.json
 __pycache__/
+releases/
