@@ -8,7 +8,7 @@ e-rickshaw meter to recognize it. The worker connects two wires and reads two la
 |---|---|
 | Board | ESP32-S3 DevKitC-1 + MAX485 module |
 | Current release | **v1.1** (frozen `v1.0` in ZIP + git tag) |
-| Tests | **28 / 28 passing** (`run_tests.sh` / `pio test -e native`) |
+| Tests | **32 / 32 passing** (`run_tests.sh` / `pio test -e native`) |
 | Firmware | `firmware/firmware.bin` (277,360 bytes, SHA below) |
 
 ## Wiring
@@ -48,7 +48,7 @@ Details + troubleshooting + full test report: [`RS485-Tester-Report.docx`](RS485
 
 ```sh
 sh run_tests.sh          # native suite (always) + hardware suite (if a board is attached)
-pio test -e native       # 28/28 Unity tests: checksums, golden frame, parser, faults, timing
+pio test -e native       # 32/32 Unity tests: checksums, golden frame, parser, faults, timing
 ```
 
 `firmware.bin` SHA-256: `7195161117ef68e3a3cd4c7793539a87c03083b067bde1a6e5b13ae330a376cf`
@@ -60,6 +60,6 @@ pio test -e native       # 28/28 Unity tests: checksums, golden frame, parser, f
 
 ## Layout
 
-`src/` firmware · `test/` 28 Unity tests · `tools/` virtual meter + HIL pytest + QEMU script ·
+`src/` firmware · `test/` 32 Unity tests · `tools/` virtual meter + HIL pytest + QEMU script ·
 `arduino/` IDE sketch · `firmware/` flash-ready binaries · `wokwi/` browser simulation ·
 `captures/` original Docklight recordings.
