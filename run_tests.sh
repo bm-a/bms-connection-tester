@@ -28,6 +28,10 @@ echo "=== native: test_logic (Unity) ==="
 g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp test/test_logic/test_logic.cpp .unity/unity.c -o .test_logic
 ./.test_logic
 
+echo "=== native: test_parser (Unity) ==="
+g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp test/test_parser/test_parser.cpp .unity/unity.c -o .test_parser
+./.test_parser
+
 echo "=== pio test -e native (upstream wrapper; expected to fail on Android) ==="
 if command -v pio >/dev/null 2>&1 && pio test -e native 2>&1 | tail -5; then
   :
