@@ -32,9 +32,15 @@ jobs:
       - run: ./test_web
   wokwi-sim:
     runs-on: ubuntu-latest
-    if: ${{ secrets.WOKWI_CLI_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
+      - run: |
+          if [ -z "$WOKWI_CLI_TOKEN" ]; then
+            echo "WOKWI_CLI_TOKEN not set - skipping headless sim (see wiki/Emulators.md)"
+            exit 0
+          fi
+        env:
+          WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install platformio
