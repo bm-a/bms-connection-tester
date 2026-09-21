@@ -18,10 +18,28 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.4** current · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Releases | **v2.5** current · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
 | Tests | **134 passing** (93 via `pio test -e native` + 41 web, via `sh run_tests.sh`) + 8-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
+
+## What v2.5 adds (trigger save, portal landing, structured config, emulation)
+
+- **Trigger group** on the spoof card: enable + GPIO + polarity with a
+  dedicated Save (no firing) — physical-switch users finally have a save
+  path, and `sinv` is wired end to end (was NVS-only).
+- **Captive-portal landing**: phones that pop the mini-browser get a slim
+  page with a big Open-Dashboard button + Safari/Chrome steps; everything
+  else still 302s to `/`. Dismissing the popup no longer matters — the
+  session lives in the real browser.
+- **Structured config** (`docs/CONFIG-SCHEMA.md`): sectioned v2 backups
+  (relays/spoof/trigger/network/ota/meta, passwords in no section), v1 flat
+  backups still migrate, one shared validation table.
+- **Fixed by emulation**: multipart-auth 403s, whitespace-JSON rejects,
+  test-then-install dead end (check/install/URL now join on demand).
+- **Proof**: socket harness (real handlers, real HTTP) 54 checks + 48 h run
+  10 checks + 30-day soak (2.59 M polls, 309 k cycles, 30 NVS commits) —
+  see `docs/EMULATION-v2.5.md`. Text-browser renders (`w3m`) verify pages.
 
 ## What v2.4 adds (Tasmota-grade update + relay review R1–R31)
 
@@ -111,7 +129,7 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.4` / `RED 2.4`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.5` / `RED 2.5`.
 - Joining the AP pops the dashboard automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
@@ -135,11 +153,17 @@ pio test -e native       # 93 Unity tests: checksum, logic, parser, stress, rela
 pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile (run inside proot-debian: glibc toolchain)
 ```
 
-Emulator results for v2.4 (Termux + Debian proot):
-- Native 134/134 (88 pio + 41 web + 5 upload + contract) + web-contract PASS + soak — PASS (frozen v1.x untouched).
+Emulator results for v2.5 (Termux + Debian proot):
+- Socket harness (`tools/fw_emu`, real handlers over real HTTP): 54 checks
+  PASS (portal, relay flows, spoof/trigger, uploads, backup/restore,
+  console, resets, STA/OTA, info) + 48 h run (10 checks) PASS.
+- Native 137/137 (93 pio + 44 web + contract) + web-contract PASS + 30-day
+  soak (2.59 M polls, rollover crossed) — PASS (frozen v1.x untouched).
 - Virtual bus (`sh tools/virtual_bus.sh`, in proot-debian for /tmp): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
-- Dashboard JS (both pages): `node --check` clean; JS↔firmware contract gate green (incl. single-end rule + no-SIZE_UNKNOWN rule).
+- Dashboard + portal pages: `w3m -dump` renders verified; JS `node --check`
+  clean; JS↔firmware contract gate green (incl. single-end, no-SIZE_UNKNOWN,
+  portal-surface rules).
 - Wokwi: diagram DUT pins verified against firmware (relays 5,6,7,8,9,12,13,14 · LEDs 10,11 · RGB 48 · UART 16,17 · button 15 · spoof 21);
   headless run needs `WOKWI_CLI_TOKEN` (CI-gated).
 - QEMU-S3: parked (Stage-0 flash model clean; guest resets in 2nd-stage bootloader SITE1) — see HANDOFF.
@@ -149,6 +173,9 @@ Emulator results for v2.4 (Termux + Debian proot):
 
 ## Versions
 
+- **v2.5** — trigger save, portal landing, structured config, on-demand STA,
+  whitespace-tolerant JSON, socket harness (64/64) + 30-day soak.
+  137/137 tests.
 - **v2.4** — Tasmota-grade update path, per-mode relay menu (chase BBM, stop
   dead-band, timing floors), spoof save-only, console, backup/restore,
   custom OTA URL, STA uplink test, info card, mDNS, keep-WiFi/bootcount

@@ -25,7 +25,10 @@ a Tasmota-grade update path (exact asset match, explicit budget, image-head
 gate, single finalize, named errors), per-mode relay menu (chase
 break-before-make, stop dead-band, timing floors), spoof save-only, web
 console, config backup/restore, custom OTA URL, one-shot STA uplink test,
-info card, mDNS, keep-WiFi/bootcount resets. v1.x responder core frozen.
+info card, mDNS, keep-WiFi/bootcount resets. v2.5 adds trigger save (pin +
+enable + polarity), captive-portal landing for phones, structured config
+schema (v1+v2 backups), on-demand STA join, whitespace-tolerant JSON, socket
+emulation harness (64/64 over real HTTP) + 30-day soak. v1.x responder core frozen.
 
 Also known as / search terms: JBD BMS emulator, JBD BMS simulator, Xiaoxiang
 BMS tester, smart BMS responder, RS485 BMS spoof, e-rickshaw meter tester,
@@ -48,7 +51,7 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.4` / `RED 2.4`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.5` / `RED 2.5`.
 
 ## Code map
 
@@ -58,7 +61,7 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 - `src/ota.{h,cpp}` — OTA decision logic: version compare, asset pick, download URL, auto-check gate (host-tested, no Arduino deps).
 - `src/web_ui.{h,cpp}` — always-on AP dashboard (no login wall; per-request admin password for sensitive actions), per-mode menu, NVS v3 + migration, captive portal, STA uplink + test, Tasmota-grade manual `/update` upload + OTA check/install/URL, console, backup/restore, mDNS (ESP-only).
 - `src/main.cpp` — Arduino loop: frozen RS485 path + relay/web/spoof/OTA handling.
-- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_ota|test_upload|test_system` — 93 Unity tests (pio) + `test_web` (41, g++ host stubs) + `tools/check_web_contract.py` gate.
+- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_ota|test_upload|test_system` — 93 Unity tests (pio) + `test_web` (44, g++ host stubs) + `tools/check_web_contract.py` gate + `tools/fw_emu` socket harness.
 - `tools/virtual_meter.py` — host-side meter simulator with scenario modes.
 - `wokwi/sim.yaml` — headless automation scenario (needs WOKWI_CLI_TOKEN).
 - `tools/dut_emu.cpp` + `tools/raw_meter.py` + `tools/virtual_bus.sh` — PTY virtual-bus emulation (no ESP32).

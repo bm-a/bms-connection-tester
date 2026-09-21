@@ -21,7 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o soak && ./soak
+      - run: g++ -O2 -std=c++17 -I src src/bms_protocol.cpp src/relay_ctrl.cpp tools/soak_sim.cpp -o soak && ./soak
+  emu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install requests
+      - run: g++ -O2 -std=c++17 -DARDUINO -I tools/fw_emu -I src src/bms_protocol.cpp src/relay_ctrl.cpp src/web_ui.cpp tools/fw_emu/emu_main.cpp -o fw_emu
+      - run: FW_EMU_PORT=18080 FW_EMU_CTL=18081 ./fw_emu > emu.log 2>&1 & sleep 2
+      - run: python3 tools/fw_emu/drive_emu.py 18080 18081
+      - run: python3 tools/fw_emu/drive_soak.py 18080 18081
   web:
     runs-on: ubuntu-latest
     steps:

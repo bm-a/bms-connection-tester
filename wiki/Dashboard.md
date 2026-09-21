@@ -1,7 +1,10 @@
-# Dashboard field reference (v2.4)
+# Dashboard field reference (v2.5)
 
-Open: join AP **`BMS-Tester`** (`bms12345`) → page pops, else `192.168.4.1`
-(or `bmstester.local` from laptop/desktop). No login — the page is open;
+Open: join AP **`BMS-Tester`** (`bms12345`) → phones get a landing page with
+a big **Open Dashboard** button + Safari/Chrome steps (the mini-browser
+can't hold the live page — open `192.168.4.1` in Safari/Chrome instead;
+laptops use `bmstester.local`). Desktops typing any URL land on the
+dashboard directly. No login — the page is open;
 reboot/reset/upload/saves ask the admin password per request
 (default `admin123`). The 1 s tick refreshes **status only**; your edits are
 never clobbered. Every Save commits to NVS ~1.5 s after the click
@@ -35,7 +38,10 @@ never clobbered. Every Save commits to NVS ~1.5 s after the click
 - R1–R8 names (HORN, LIGHT…): letters/numbers, shown on tiles. Save persists.
 
 ## Fault spoof card
-- **Enable + Trigger GPIO** (safe pins 1, 2, 21, 38–44, 47; else 21).
+- **Enable + Trigger GPIO** (safe pins 1, 2, 21, 38–44, 47; else 21) +
+  **Trigger polarity** (pull LOW = default pull-up wiring, or pull HIGH).
+  **Save trigger** stores the triple without firing — for physical-switch
+  users (previously the only save path was FIRE).
 - **Stage 1 + Stage 2**: V/A/°C (×0.1 units), SOC %, seconds each (1–120).
 - **FIRE now** = save + trigger the two-stage plan. **Save only** = persist
   without firing. **Cancel** = disarm (saves nothing).
@@ -52,10 +58,13 @@ never clobbered. Every Save commits to NVS ~1.5 s after the click
 - **STA uplink**: hotspot SSID/pass (blank = keep), enable flag.
   **Test uplink** joins for ≤ 30 s *without rebooting*, reports
   `joined, RSSI -58 dBm, IP …` or a named failure, drops back to AP-only.
+  Check/Install/URL-join with the saved creds themselves when boot STA is
+  off (on-demand, Tasmota-style) — so test-then-install just works.
   Saved STA applies at boot (Save + reboot).
-- **Backup configuration**: downloads all settings as JSON (passwords never
-  included — back up before every upgrade). **Restore**: upload a backup;
-  values pass the same clamps; passwords must be re-entered by hand.
+- **Backup configuration**: downloads all settings as structured JSON
+  (`docs/CONFIG-SCHEMA.md`: relays/spoof/trigger/network/ota/meta sections,
+  passwords never included). **Restore**: v2 sectioned or v1 flat backups;
+  values pass the same clamps; passwords re-entered by hand.
 
 ## Admin & Wi-Fi AP card
 - AP SSID / Pass (8+, blank = keep) / Channel 1–13; New admin pass (4+).

@@ -67,6 +67,7 @@ class WebServer {
     auto it = cur().args.find(name.stl());
     return it == cur().args.end() ? String() : String(it->second);
   }
+  String uri() { return String(cur().path.c_str()); }
 
   // ---- test driver ----
   static Resp request(const std::string &method, const std::string &path,

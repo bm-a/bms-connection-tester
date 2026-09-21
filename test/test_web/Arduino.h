@@ -63,6 +63,11 @@ class String {
     auto p = s_.find(c, from);
     return p == std::string::npos ? -1 : (int)p;
   }
+  bool endsWith(const char *x) const {
+    if (!x) return false;
+    size_t n = strlen(x);
+    return s_.size() >= n && s_.compare(s_.size() - n, n, x) == 0;
+  }
   String substring(unsigned from) const {
     if (from >= s_.size()) return String();
     return String(s_.substr(from));

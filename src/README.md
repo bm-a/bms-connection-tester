@@ -2,7 +2,7 @@
 
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
-  adaptive tracker, canned frames, `FW_VERSION` (`"2.4"`).
+  adaptive tracker, canned frames, `FW_VERSION` (`"2.5"`).
 - `relay_ctrl.h` / `relay_ctrl.cpp` — hardware-independent bench add-on:
   8-relay sequencer (sequential/all-ON/chase, relay count, 3 button behaviors,
   per-mode holds/sweeps, loop/pause/limit, stagger, direction, QC counters,
@@ -21,7 +21,7 @@
   manual `/update` upload, config backup/restore, custom OTA URL, mDNS.
   Host-tested on stubs (`test_web`).
 - `main.cpp` — Arduino sketch: frozen RS485 RX → parse → reply path, 250 ms
-  LED eval, `STATUS?` (`GREEN 2.4` / `RED 2.4`), plus relay/web/spoof/OTA
+  LED eval, `STATUS?` (`GREEN 2.5` / `RED 2.5`), plus relay/web/spoof/OTA
   handling (all non-blocking, RS485 keeps priority).
 
 Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11, onboard RGB=48 (WS2812,

@@ -22,7 +22,7 @@
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.4\n" / "RED 2.4\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.5\n" / "RED 2.5\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"

@@ -1,4 +1,4 @@
-# test/ — automated tests (134 passing: 93 via pio + 41 web via g++)
+# test/ — automated tests (137 passing: 93 via pio + 44 web via g++)
 
 Each subdirectory is an independent Unity test app (PlatformIO convention),
 also compilable with plain `g++` (see `run_tests.sh` fallback).
@@ -30,17 +30,18 @@ also compilable with plain `g++` (see `run_tests.sh` fallback).
   timing/handoff/cancel/retrigger/rollover, legacy window (frozen) timing.
 - `test_ota/` (6) — version compare (incl. `2.10 > 2.9`), per-variant asset
   pick, download-URL build + tag sanitizing, auto-check gate matrix.
-- `test_web/` (41, g++-only) — real `web_ui.cpp` on host stubs (`Arduino.h`,
+- `test_web/` (44, g++-only) — real `web_ui.cpp` on host stubs (`Arduino.h`,
   `WiFi.h` + STA/RSSI/IP, `WebServer.h` + request/upload drivers incl.
   pass-last order, `Preferences.h` + commit counter, `Update.h` + single-end
   + failure injection, `ESPmDNS.h`, `esp_system.h`): per-request admin
-  password gating, WiFi kill switch + mDNS, NVS v2→v3 migration,
-  validation/clamping + named rejects (R9/R10), deferred-save coalescing +
-  reboot flush, relay count / chase-sweeps / spoof-pin+save / loop / labels /
-  counters / STA + one-shot test / OTA (+install, URL, interval) / Tasmota
-  `/update` upload (gates, rejects, order-independence) / console verbs /
-  backup-restore (secrets never exported) / keep-WiFi reset + bootcount /
-  info fields, POST fuzz, factory reset, portal redirects.
+  password gating, WiFi kill switch + mDNS, portal landing (probes/CNA-UA),
+  NVS v2→v3 migration, validation/clamping + named rejects (R9/R10),
+  whitespace-tolerant JSON, deferred-save coalescing + reboot flush, relay
+  count / chase-sweeps / spoof-pin+save+trigger / loop / labels / counters /
+  STA + one-shot test + on-demand join / OTA (+install, URL, interval) /
+  Tasmota `/update` upload (gates, rejects, order-independence, streamed-only
+  password) / console verbs / backup v2 + restore v1/v2 / keep-WiFi reset +
+  bootcount / info fields, POST fuzz, factory reset, portal redirects.
 - `test_system/` (3) — `select_reply()` matrix (golden/stage-1/stage-2/
   disabled/silent paths) + 24 h office-day sim: 86,400 polls, per-reply
   checksum validation, exact 5 s + 10 s spoof stages, write-silence mid-spoof,
@@ -52,4 +53,4 @@ Plus `tools/check_web_contract.py` — dashboard JS ↔ firmware route/key gate
 per-mode element ids, single-`Update.end(true)` + no-`SIZE_UNKNOWN` rules).
 
 Run: `pio test -e native` (93: all except `test_web`) or `sh ../run_tests.sh`
-(full 134: g++ suites + contract + `test_web` + `test_system` + soak).
+(full 137: g++ suites + contract + `test_web` + `test_system` + soak).

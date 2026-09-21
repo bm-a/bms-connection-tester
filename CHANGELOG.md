@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.5] — 2026-09-22
+### Fixed
+- Multipart upload auth: done handler demanded streamed field AND parsed
+  arg — real servers never populate args for multipart, so every real
+  upload 403'd (host stub masked it by injecting args). Streamed field
+  alone now decides; security unchanged (wrong password still aborts).
+- JSON helpers rejected `"key": value` whitespace (python-requests style);
+  all three (`has`/`jnum`/`jstr`) share a tolerant core now.
+- Test-then-install was broken by design (one-shot STA test drops its link,
+  but installs demanded a live link): check/install/URL now join with saved
+  creds themselves (15 s, Tasmota-style blocking).
+### Added
+- Trigger group (enable + GPIO + polarity + Save-trigger; `sinv` finally
+  wired end to end), captive-portal landing for phones (probes/CNA-UA get
+  button + Safari steps, rest 302s to `/`), structured config schema
+  (`docs/CONFIG-SCHEMA.md`, v1+v2 backups), socket emulation harness
+  (`tools/fw_emu`: real handlers over real HTTP, 54 checks), 48 h
+  end-to-end run (10 checks), 30-day soak (2.59 M polls, 309 k cycles,
+  30 NVS commits), `docs/EMULATION-v2.5.md` per-feature report.
+
 ## [v2.4] — 2026-09-22
 ### Fixed
 - Firmware upload rebuilt Tasmota-style (`src/fw_upload.h` gates, host-tested):
