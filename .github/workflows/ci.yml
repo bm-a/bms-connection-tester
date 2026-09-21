@@ -41,4 +41,5 @@ jobs:
       - run: pio run -e esp32-s3-devkitc-1
       - run: curl -L https://wokwi.com/ci/install.sh | sh
       - run: wokwi-cli wokwi --timeout 90000 --scenario wokwi/sim.yaml
-        env: { WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }} }
+        env:
+          WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
