@@ -11,6 +11,10 @@ Firmware + hardware design for an ESP32-S3 board that impersonates a
 JBD / Xiaoxiang Smart BMS (battery management system) over RS485, so
 compatible meters, displays, or hosts can be exercised without a real battery.
 Two LEDs report link state: green = valid BMS traffic seen, red = bus silent.
+v2.0 adds an 8-relay sequencer (GPIO 5/6/7/8/9/12/13/14, 12 V module, own
+supply), a button (GPIO15, 3 behaviors + 10 s factory reset), a spoof trigger
+(GPIO21: 88.8 V/A/C + 188 % on 0x03 for 10 s), and an always-on AP web
+dashboard with admin login + NVS persistence. v1.x responder core frozen.
 
 Also known as / search terms: JBD BMS emulator, JBD BMS simulator, Xiaoxiang
 BMS tester, smart BMS responder, RS485 BMS spoof, e-rickshaw meter tester,

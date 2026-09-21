@@ -10,14 +10,14 @@
 #endif
 #endif
 
-#define FW_VERSION "1.2"
+#define FW_VERSION "2.0"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
-// v1.2: answers Basic Info (0x03), Cell Voltages (0x04) and Device
-// Name (0x05); stays SILENT on writes/unknown registers (option A).
+// v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and
+// Device Name (0x05); stays SILENT on writes/unknown registers (option A).
 // Green lamp = any well-formed meter frame seen within the adaptive window.
-// v1.2 adds: onboard WS2812 RGB mirror (GPIO48) + ESP32-S3 N16R8 build.
-// Green lamp = any well-formed meter frame seen within the adaptive window.
+// v2.0 adds (additive only): 8-relay sequencer, always-on AP web UI,
+// spoof window — see relay_ctrl.h / web_ui.h.
 
 // Fixed meter request for register 0x03: DD A5 03 00 FF FD 77
 extern const uint8_t BMS_REQUEST[7];

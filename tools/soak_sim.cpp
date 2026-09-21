@@ -1,4 +1,4 @@
-// Week-long soak simulation of the tester firmware logic (v1.2).
+// Week-long soak simulation of the tester firmware logic (v2.0 base frozen).
 // Uses the REAL src/bms_protocol.cpp (parser + dispatcher + tracker),
 // driven exactly like main.cpp's loop: feed poll bytes -> note_poll ->
 // reply via reply_for -> evaluate tracker.active() on a 250 ms grid.

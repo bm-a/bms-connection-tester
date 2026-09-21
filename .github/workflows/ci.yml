@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install platformio
-      - run: pio run -e esp32-s3-devkitc-1
+      - run: pio run -e esp32-s3-devkitc-1 -e s3-n16r8
   soak:
     runs-on: ubuntu-latest
     steps:
