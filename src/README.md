@@ -2,7 +2,7 @@
 
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
-  adaptive tracker, canned frames, `FW_VERSION` (`"2.3"`).
+  adaptive tracker, canned frames, `FW_VERSION` (`"2.3.1"`).
 - `relay_ctrl.h` / `relay_ctrl.cpp` — hardware-independent bench add-on:
   8-relay sequencer (sequential/all-ON/chase, relay count, 3 button behaviors,
   per-mode ms holds, loop/pause/limit, stagger, direction, QC counters),
@@ -11,13 +11,13 @@
 - `ota.h` / `ota.cpp` — hardware-independent OTA decision logic: version
   compare, per-variant asset pick, download URL, auto-check gate.
   Host-tested (`test_ota`); network I/O lives in `main.cpp` (ESP-only).
-- `web_ui.h` / `web_ui.cpp` — ESP-only: always-on AP + captive portal, login
+- `web_ui.h` / `web_ui.cpp` — ESP-only: always-on AP + captive portal, no login wall (admin password per sensitive request)
   (RAM session + persistent NVS slots), dashboard
   (relays/sequence/labels/spoof/OTA/admin), NVS v3 load/save + v2 migration,
   optional STA uplink, manual `/update` upload. Host-tested on stubs
   (`test_web`).
 - `main.cpp` — Arduino sketch: frozen RS485 RX → parse → reply path, 250 ms
-  LED eval, `STATUS?` (`GREEN 2.3` / `RED 2.3`), plus relay/web/spoof/OTA
+  LED eval, `STATUS?` (`GREEN 2.3.1` / `RED 2.3.1`), plus relay/web/spoof/OTA
   handling (all non-blocking, RS485 keeps priority).
 
 Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11, onboard RGB=48 (WS2812,

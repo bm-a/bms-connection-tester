@@ -28,126 +28,11 @@ struct WebIdentity {
 };
 static WebIdentity ident;
 
-// ---- sessions: RAM fast-path + NVS persistent slots (v2.3) ----
-static String session_tok = "";
-static unsigned long session_until = 0;
-#define SESSION_MS (30UL * 60UL * 1000UL)
-#define TOKEN_SLOTS 4
-#define TOKEN_MAX_AGE_S 2592000UL  // 30 days ("remember me")
-
-static String make_token() {
-  uint32_t a = (uint32_t)esp_random();
-  uint32_t b = (uint32_t)esp_random();
-  char buf[17];
-  snprintf(buf, sizeof(buf), "%08x%08x", a, b);
-  return String(buf);
-}
-
-// Extract the BMS2= cookie value (stops at ';', space or end).
-static String cookie_token(const String &c) {
-  int i = c.indexOf("BMS2=");
-  if (i < 0) return String("");
-  String v = c.substring((unsigned)(i + 5));
-  int e = v.indexOf(";");
-  if (e >= 0) v = v.substring(0, (unsigned)e);
-  e = v.indexOf(" ");  // const char* overload (the char overload is stub-UB)
-  if (e >= 0) v = v.substring(0, (unsigned)e);
-  return v;
-}
-
-static void token_slot_key(uint8_t i, bool expiry, char *out, size_t n) {
-  snprintf(out, n, expiry ? "te%u" : "tk%u", i);
-}
-
-// Store a persistent token (evict the oldest slot when full).
-static void token_store(const String &tok, unsigned long exp_ms) {
-  nvs.begin(WEB_NVS_NS, false);
-  char k[8];
-  int victim = -1;
-  unsigned long oldest = 0;
-  for (uint8_t i = 0; i < TOKEN_SLOTS; i++) {
-    token_slot_key(i, false, k, sizeof(k));
-    String t = nvs.getString(k, "");
-    token_slot_key(i, true, k, sizeof(k));
-    unsigned long e = nvs.getUInt(k, 0);
-    if (t.length() == 0 || (long)(millis() - e) >= 0) {
-      victim = i;  // free or expired slot
-      break;
-    }
-    if (victim < 0 || e < oldest) {
-      victim = i;
-      oldest = e;
-    }
-  }
-  if (victim < 0) victim = 0;
-  token_slot_key((uint8_t)victim, false, k, sizeof(k));
-  nvs.putString(k, tok.c_str());
-  token_slot_key((uint8_t)victim, true, k, sizeof(k));
-  nvs.putUInt(k, exp_ms);
-  nvs.end();
-}
-
-// True when tok matches a live NVS slot (reboot-safe login).
-static bool token_valid(const String &tok) {
-  if (tok.length() == 0) return false;
-  bool ok = false;
-  nvs.begin(WEB_NVS_NS, true);
-  char k[8];
-  for (uint8_t i = 0; i < TOKEN_SLOTS; i++) {
-    token_slot_key(i, false, k, sizeof(k));
-    if (nvs.getString(k, "") == tok) {
-      token_slot_key(i, true, k, sizeof(k));
-      unsigned long e = nvs.getUInt(k, 0);
-      if ((long)(e - millis()) > 0) ok = true;
-      break;
-    }
-  }
-  nvs.end();
-  return ok;
-}
-
-static void token_drop(const String &tok) {
-  if (tok.length() == 0) return;
-  nvs.begin(WEB_NVS_NS, false);
-  char k[8];
-  for (uint8_t i = 0; i < TOKEN_SLOTS; i++) {
-    token_slot_key(i, false, k, sizeof(k));
-    if (nvs.getString(k, "") == tok) {
-      nvs.putString(k, "");
-      token_slot_key(i, true, k, sizeof(k));
-      nvs.putUInt(k, 0);
-      break;
-    }
-  }
-  nvs.end();
-}
-
-static String session_cookie(const String &tok, bool persistent) {
-  String c = "BMS2=" + tok + "; Path=/; HttpOnly; SameSite=Lax";
-  if (persistent) c += "; Max-Age=2592000";
-  return c;
-}
-
-static bool authed() {
-  if (!server.hasHeader("Cookie")) return false;
-  String tok = cookie_token(server.header("Cookie"));
-  if (tok.length() == 0) return false;
-  // 1. RAM fast path (sliding 30 min window, both login kinds land here).
-  if (session_tok.length() != 0 && tok == session_tok) {
-    if (millis() > session_until) {
-      session_tok = "";
-      return false;
-    }
-    session_until = millis() + SESSION_MS;
-    return true;
-  }
-  // 2. Persistent NVS slots (survive reboot; 30-day expiry).
-  if (token_valid(tok)) {
-    session_tok = tok;
-    session_until = millis() + SESSION_MS;
-    return true;
-  }
-  return false;
+// ---- v2.3.1: no login wall. The dashboard is open to anyone on the AP
+// (WPA2 password is the gate). Sensitive actions (/update, /api/admin,
+// /api/ota) carry the admin password per request instead of a session.
+static bool admin_ok(const String &pass) {
+  return ident.admin_pass[0] != '\0' && pass == ident.admin_pass;
 }
 
 // ---- NVS load/save (v3; migrates v2 boxes in place) ----
@@ -166,7 +51,7 @@ static void cfg_commit() {
   nvs.putUChar("v", WEB_NVS_VERSION);
   nvs.putUShort("step", c.step_delay_ms);
   nvs.putUInt("hseq", c.hold_seq_ms);  // v3: per-mode holds, ms
-  nvs.putUInt("hch", c.hold_chase_ms);
+  nvs.putUChar("swp", c.chase_sweeps);  // v2.3.1: chase auto-hold sweeps
   nvs.putUInt("hall", c.hold_all_ms);
   nvs.putUChar("nrel", c.relay_count);
   nvs.putUChar("rmode", c.relay_mode);
@@ -186,6 +71,7 @@ static void cfg_commit() {
   nvs.putBool("binv", c.button_invert);
   nvs.putBool("sinv", c.spoof_invert);
   nvs.putBool("sena", c.spoof_enabled);
+  nvs.putUChar("spin", sanitize_spoof_pin(c.spoof_pin));  // v2.3.1 trigger GPIO
   nvs.putUShort("sv", c.spoof_v_tenth);
   nvs.putUShort("sa", c.spoof_a_tenth);
   nvs.putUShort("sc", c.spoof_c_tenth);
@@ -239,13 +125,13 @@ static void cfg_load() {
   c.button_invert = nvs.getBool("binv", c.button_invert);
   c.spoof_invert = nvs.getBool("sinv", c.spoof_invert);
   c.spoof_enabled = nvs.getBool("sena", c.spoof_enabled);
+  c.spoof_pin = sanitize_spoof_pin(nvs.getUChar("spin", c.spoof_pin));
   if (v == 2) {
     // ---- migrate a v2 box ----
     // hold: seconds -> ms, fanned out to all three per-mode holds.
     uint32_t hold_ms = (uint32_t)nvs.getUShort("hold", 30) * 1000UL;
     c.hold_seq_ms = hold_ms;
-    c.hold_chase_ms = hold_ms;
-    c.hold_all_ms = hold_ms;
+    c.hold_all_ms = hold_ms;  // chase: v2 boxes keep default 3 auto-sweeps
     // singles -> STAGE 2 (user's custom values keep working, now second);
     // stage 1 = "100 first" defaults (already in the struct defaults).
     c.s2_v_tenth = nvs.getUShort("sv", c.s2_v_tenth);
@@ -255,7 +141,7 @@ static void cfg_load() {
     c.s2_seconds = nvs.getUShort("ssec", c.s2_seconds);
   } else {
     c.hold_seq_ms = nvs.getUInt("hseq", c.hold_seq_ms);
-    c.hold_chase_ms = nvs.getUInt("hch", c.hold_chase_ms);
+    c.chase_sweeps = nvs.getUChar("swp", c.chase_sweeps);
     c.hold_all_ms = nvs.getUInt("hall", c.hold_all_ms);
     c.relay_count = nvs.getUChar("nrel", c.relay_count);
     c.loop_enabled = nvs.getBool("loop", c.loop_enabled);
@@ -280,6 +166,7 @@ static void cfg_load() {
     c.s2_c_tenth = nvs.getUShort("s2c", c.s2_c_tenth);
     c.s2_soc = nvs.getUChar("s2soc", c.s2_soc);
     c.s2_seconds = nvs.getUShort("s2sec", c.s2_seconds);
+    c.spoof_pin = sanitize_spoof_pin(nvs.getUChar("spin", c.spoof_pin));
     if (G->ota) {
       G->ota->auto_enabled = nvs.getBool("ota_auto", G->ota->auto_enabled);
       G->ota->interval_ms = nvs.getUInt("ota_int", G->ota->interval_ms);
@@ -320,19 +207,8 @@ void web_factory_reset() {
 }
 
 // ---- pages ----
-static const char PAGE_LOGIN[] PROGMEM = R"HTML(
-<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
-<title>BMS Tester login</title><style>body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0}form{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px}input{width:100%;background:#0f172a;border:1px solid #475569;color:#e2e8f0;border-radius:8px;padding:10px;margin:4px 0 12px}input[type=submit]{background:#2563eb;border:0;font-size:15px;cursor:pointer}</style></head><body style="max-width:380px;margin:60px auto;padding:12px">
-<h2>BMS Tester — login</h2>
-<form method=POST action=/login>
-User<br><input name=u style="width:100%"><br><br>
-Password<br><input name=p type=password style="width:100%"><br><br>
-<label><input type=checkbox name=remember value=1 style="width:auto"> Remember this device (30 days)</label><br><br>
-<input type=submit value=Login>
-</form></body></html>)HTML";
-
 static const char PAGE_DASH[] PROGMEM = R"HTML(
-<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>BMS Tester</title><style>
 *{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:12px}
 .wrap{max-width:720px;margin:0 auto}header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
@@ -353,7 +229,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 .rly.lim{opacity:.35;cursor:not-allowed}
 .note{font-size:12px;color:#94a3b8}
 </style></head><body><div class=wrap>
-<header><h2>&#9889; BMS Tester</h2><span class=ver id=fwver></span><span id=link class="pill R">?</span><span id=clk></span><span style="flex:1"></span><a href=/logout>Logout</a></header>
+<header><h2>&#9889; BMS Tester</h2><span class=ver id=fwver></span><span id=link class="pill R">?</span><span id=clk></span></header>
 <div class=card><h3>Relays</h3>
 <div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
 <div class=grid id=relays></div></div>
@@ -362,7 +238,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <label>Relays <input id=nrel size=3></label>
 <label>Step ms <input id=step size=6></label></div>
 <div class=row><label>Hold seq ms (0=&infin;) <input id=hseq size=7></label>
-<label>Hold chase ms <input id=hch size=7></label>
+<label>Chase sweeps (0=&infin;) <input id=swp size=4></label>
 <label>Hold all-on ms <input id=hall size=7></label></div>
 <div class=row><label>Button <select id=bmode><option value=0>Hold X ms, re-press=OFF</option><option value=1>Run to end, ignore presses</option><option value=2>Re-press restarts</option></select></label>
 <label>Logic <select id=alow><option value=1>Active-LOW (SmartElex)</option><option value=0>Active-HIGH</option></select></label>
@@ -376,20 +252,22 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=row id=labels></div>
 <div class=row><button onclick="saveLabels()">Save labels</button><span class=msg id=lblmsg></span></div></div>
 <div class=card><h3>Fault spoof (0x03 test values, stage 1 then 2)</h3>
-<div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><span id=spoofmsg class=spoof-on></span></div>
+<div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><label>Trigger GPIO <input id=spin size=3></label><span id=spoofmsg class=spoof-on></span></div>
+<div class=row><span class=note>GPIO + values save on FIRE. Safe pins: 1, 2, 21, 38-44, 47 (else 21).</span></div>
 <div class=row><label>1: V <input id=sv size=5></label><label>A <input id=sa size=5></label><label>&deg;C <input id=sc size=5></label><label>SOC% <input id=ssoc size=4></label><label>Secs <input id=ssec size=4></label></div>
 <div class=row><label>2: V <input id=s2v size=5></label><label>A <input id=s2a size=5></label><label>&deg;C <input id=s2c size=5></label><label>SOC% <input id=s2soc size=4></label><label>Secs <input id=s2sec size=4></label></div>
 <div class=row><button class=warn onclick="spoof('fire')">FIRE now</button><button onclick="spoof('cancel')">Cancel</button></div></div>
 <div class=card><h3>Firmware update</h3>
 <div class=row><span id=ota_status class=note></span><span id=ota_latest class=note></span></div>
 <div class=row><label><input type=checkbox id=ota_auto> Auto-check GitHub daily (needs STA uplink below)</label>
-<button onclick="ota('check')">Check now</button><a href=/update>Firmware upload</a><span class=msg id=otamsg></span></div>
+<button onclick="ota('check')">Check now</button><button id=otainstall style="display:none" class=warn onclick="ota('install')">Install update</button><a href=/update>Firmware upload</a><span class=msg id=otamsg></span></div>
 <div class=row><label><input type=checkbox id=sta_en> STA uplink (hotspot for internet)</label>
-<label>SSID <input id=sta_ssid size=12></label><label>Pass <input id=sta_pass type=password size=12></label>
+<label>SSID <input id=sta_ssid size=12></label><label>Pass <input id=sta_pass type=password size=12 placeholder="blank = keep"></label>
 <button onclick="saveAdmin()">Save</button><span class=note id=stamsg></span></div></div>
 <div class=card><h3>Admin &amp; Wi-Fi AP</h3>
-<div class=row><label>SSID <input id=ap_ssid size=14></label><label>Pass (8+) <input id=ap_pass size=14></label><label>Ch <input id=ap_ch size=3></label></div>
-<div class=row><label>User <input id=a_user size=10></label><label>New pass <input id=a_pass type=password size=14></label></div>
+<div class=row><label>SSID <input id=ap_ssid size=14></label><label>Pass (8+, blank = keep) <input id=ap_pass type=password size=14 placeholder="blank = keep"></label><label>Ch <input id=ap_ch size=3></label></div>
+<div class=row><label>New admin pass (4+, blank = keep) <input id=a_pass type=password size=14 placeholder="blank = keep"></label></div>
+<div class=row><span class=note>Reboot, factory reset, update upload and these saves ask for the admin password (default admin123).</span></div>
 <div class=row><label><input type=checkbox id=auto> Auto-start sequence on boot (burn-in)</label></div>
 <div class=row><button onclick="saveAdmin()">Save</button>
 <button class=warn onclick="if(confirm('Reboot?'))admin('reboot')">Reboot</button>
@@ -399,7 +277,12 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 async function jget(u){let r=await fetch(u);return r.json();}
 async function jpost(u,b){let r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return r.json();}
 let NREL=8;
-async function refresh(){let s=await jget('/api/state');
+let dirty={};  // fields the user edited since last save: fillForm must not
+function markDirty(e){if(e&&e.target&&e.target.id)dirty[e.target.id]=1;}
+function clean(keys){for(let k of keys)delete dirty[k];}
+document.addEventListener('input',markDirty);
+document.addEventListener('change',markDirty);
+async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return null;}
  document.getElementById('fwver').textContent=s.fw||'';
  let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
  document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
@@ -407,21 +290,26 @@ async function refresh(){let s=await jget('/api/state');
  NREL=s.cfg.nrel||8;
  let d=document.getElementById('relays');d.innerHTML='';
  s.relays.forEach((on,i)=>{let lim=i>=NREL;let nm=(s.cfg['lbl'+i]||('R'+(i+1)));d.innerHTML+=`<button class="rly${on?' on':''}${lim?' lim':''}" ${lim?'disabled':''} onclick="relay(${i},${on?0:1})">${nm}<small>${on?'ON':'OFF'}</small></button>`;});
- let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
- for(let k of ['rmode','nrel','step','hseq','hch','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','ota_auto','sta_en','sta_ssid','sta_pass','ap_ssid','ap_pass','ap_ch','a_user','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=s.cfg[k];}}
  document.getElementById('ota_status').textContent='OTA: '+(s.cfg.ota_status||'');
  document.getElementById('ota_latest').textContent=s.cfg.ota_pending?('update available: '+s.cfg.ota_latest):('latest: '+(s.cfg.ota_latest||'?'));
+ document.getElementById('otainstall').style.display=s.cfg.ota_pending?'':'none';
  document.getElementById('stamsg').textContent=s.cfg.sta===2?'STA online':(s.cfg.sta===1?'STA connecting':'STA off');
+ return s;
 }
+function fillForm(s){if(!s||!s.cfg)return;
+ let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
+ for(let k of ['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','ota_auto','sta_en','sta_ssid','ap_ssid','ap_ch','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&!dirty[k]&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
+}
+async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
 async function relay(i,on){if(i>=NREL)return;await jpost('/api/relay',{i,on});refresh();}
 async function seq(c){await jpost('/api/seq',{cmd:c});refresh();}
-async function saveCfg(){let b={};for(let k of ['rmode','nrel','step','hseq','hch','hall','bmode','alow','dir','cpause','clim','stag']){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR';}
-async function saveLabels(){let b={};for(let i=0;i<8;i++)b['lbl'+i]=document.getElementById('lbl'+i).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';}
-async function spoof(c){let b={cmd:c};if(c==='fire'){for(let k of ['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec'])b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);document.getElementById('spoofmsg').textContent=r.ok?'ok':'ERR';refresh();}
-async function ota(c){let r=await jpost('/api/ota',{cmd:c});document.getElementById('otamsg').textContent=r.ok?'started':'ERR: '+(r.err||'');refresh();}
-async function saveAdmin(){let b={};for(let k of ['ap_ssid','ap_pass','ap_ch','a_user','a_pass','sta_ssid','sta_pass'])b[k]=document.getElementById(k).value;b.sta_en=document.getElementById('sta_en').checked?1:0;b.auto=document.getElementById('auto').checked?1:0;let bb={};for(let k of ['ota_auto'])bb[k]=document.getElementById(k).checked?1:0;await jpost('/api/ota',bb);let r=await jpost('/api/admin',b);document.getElementById('admmsg').textContent=r.ok?'saved (reboot to apply AP/STA)':'ERR: '+r.err;}
-async function admin(c){await jpost('/api/admin',{cmd:c});}
-setInterval(refresh,1000);refresh();
+async function saveCfg(){let ks=['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','cpause','clim','stag'];let b={};for(let k of ks){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);clean(['loop']);loadForm();}refresh();}
+async function saveLabels(){let ks=[];for(let i=0;i<8;i++)ks.push('lbl'+i);let b={};for(let k of ks)b[k]=document.getElementById(k).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);loadForm();}refresh();}
+async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin'];let b={cmd:c};if(c==='fire'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);document.getElementById('spoofmsg').textContent=r.ok?'ok':'ERR';if(r.ok&&c==='fire'){clean(ks);clean(['sena']);loadForm();}refresh();}
+async function ota(c){let p=prompt('Admin password:','');if(p===null)return;document.getElementById('otamsg').textContent=(c==='install'?'installing — box reboots on success':'checking…');let r=await jpost('/api/ota',{cmd:c,pass:p});document.getElementById('otamsg').textContent=r.ok?(c==='install'?'install started':'started'):'ERR: '+(r.err||'');refresh();}
+async function saveAdmin(){let ks=['ap_ssid','ap_pass','ap_ch','a_pass','sta_ssid','sta_pass'];let b={};for(let k of ks)b[k]=document.getElementById(k).value;b.sta_en=document.getElementById('sta_en').checked?1:0;b.auto=document.getElementById('auto').checked?1:0;let p=prompt('Admin password:','');if(p===null)return;b.pass=p;let bb={pass:p};for(let k of ['ota_auto'])bb[k]=document.getElementById(k).checked?1:0;await jpost('/api/ota',bb);let r=await jpost('/api/admin',b);document.getElementById('admmsg').textContent=r.ok?'saved (reboot to apply AP/STA)':'ERR: '+r.err;if(r.ok){clean(ks);clean(['sta_en','auto','ota_auto']);document.getElementById('ap_pass').value='';document.getElementById('a_pass').value='';document.getElementById('sta_pass').value='';loadForm();}refresh();}
+async function admin(c){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/admin',{cmd:c,pass:p});if(!r.ok)alert('ERR: '+(r.err||''));}
+setInterval(refresh,1000);refresh();loadForm();
 </script></body></html>)HTML";
 
 // ---- route helpers ----
@@ -430,43 +318,10 @@ static void send_json(const String &s) {
 }
 
 static void handle_root() {
-  if (!authed()) { server.sendHeader("Location", "/login"); server.send(302); return; }
   server.send_P(200, "text/html", PAGE_DASH);
 }
 
-static void handle_login_page() {
-  server.send_P(200, "text/html", PAGE_LOGIN);
-}
-
-static void handle_login() {
-  String u = server.arg("u"), p = server.arg("p");
-  if (u == ident.admin_user && p == ident.admin_pass) {
-    bool remember = server.arg("remember") == "1";
-    String tok = make_token();
-    session_tok = tok;
-    session_until = millis() + SESSION_MS;
-    if (remember)
-      token_store(tok, millis() + TOKEN_MAX_AGE_S * 1000UL);
-    server.sendHeader("Set-Cookie", session_cookie(tok, remember));
-    server.sendHeader("Location", "/");
-    server.send(302);
-  } else {
-    delay(500);  // slow brute force
-    server.send(401, "text/plain", "bad login");
-  }
-}
-
-static void handle_logout() {
-  if (server.hasHeader("Cookie"))
-    token_drop(cookie_token(server.header("Cookie")));
-  session_tok = "";
-  session_until = 0;
-  server.sendHeader("Location", "/login");
-  server.send(302);
-}
-
 static void handle_state() {
-  if (!authed()) { server.send(401); return; }
   Bms2Config &c = *G->cfg;
   uint8_t stage = G->spoof->stage(millis());
   String s = "{\"fw\":\"" + String(FW_VERSION) + "\"";
@@ -491,7 +346,7 @@ static void handle_state() {
        ",\"nrel\":" + String(c.relay_count) +
        ",\"step\":" + String(c.step_delay_ms) +
        ",\"hseq\":" + String(c.hold_seq_ms) +
-       ",\"hch\":" + String(c.hold_chase_ms) +
+       ",\"swp\":" + String(c.chase_sweeps) +
        ",\"hall\":" + String(c.hold_all_ms) +
        ",\"bmode\":" + String((int)c.button_mode) +
        ",\"alow\":" + String(c.active_low ? 1 : 0) +
@@ -502,6 +357,7 @@ static void handle_state() {
        ",\"dir\":" + String(c.seq_dir) +
        ",\"auto\":" + String(c.boot_autostart ? 1 : 0) +
        ",\"sena\":" + String(c.spoof_enabled ? 1 : 0) +
+       ",\"spin\":" + String(c.spoof_pin) +
        ",\"sv\":" + String(c.spoof_v_tenth) +
        ",\"sa\":" + String(c.spoof_a_tenth) +
        ",\"sc\":" + String(c.spoof_c_tenth) +
@@ -514,8 +370,7 @@ static void handle_state() {
        ",\"s2sec\":" + String(c.s2_seconds) +
        ",\"sta\":" + String(web_sta_state()) +
        ",\"sta_en\":" + String(ident.sta_en ? 1 : 0) +
-       ",\"sta_ssid\":\"" + String(ident.sta_ssid) + "\"" +
-       ",\"sta_pass\":\"" + String(ident.sta_pass) + "\"";
+       ",\"sta_ssid\":\"" + String(ident.sta_ssid) + "\"";
   if (G->ota) {
     s += ",\"ota_auto\":" + String(G->ota->auto_enabled ? 1 : 0) +
          ",\"ota_latest\":\"" + String(G->ota->latest_tag) + "\"" +
@@ -530,9 +385,7 @@ static void handle_state() {
     s += "\"";
   }
   s += ",\"ap_ssid\":\"" + String(ident.ap_ssid) +
-       "\",\"ap_pass\":\"" + String(ident.ap_pass) +
-       "\",\"ap_ch\":" + String(ident.ap_channel) +
-       ",\"a_user\":\"" + String(ident.admin_user) + "\"}}";
+       "\",\"ap_ch\":" + String(ident.ap_channel) + "}}";
   send_json(s);
 }
 
@@ -556,7 +409,6 @@ static bool has(const String &b, const char *key) {
 }
 
 static void handle_relay() {
-  if (!authed()) { server.send(401); return; }
   String b = server.arg("plain");
   int i = (int)jnum(b, "i", -1);
   uint8_t n = G->cfg->relay_count;
@@ -567,7 +419,6 @@ static void handle_relay() {
 }
 
 static void handle_seq() {
-  if (!authed()) { server.send(401); return; }
   String b = server.arg("plain");
   if (jstr(b, "cmd") == "start") G->seq->start(millis());
   else G->seq->stopAll();
@@ -575,7 +426,6 @@ static void handle_seq() {
 }
 
 static void handle_config() {
-  if (!authed()) { server.send(401); return; }
   Bms2Config &c = *G->cfg;
   String b = server.arg("plain");
   if (has(b, "rmode")) {
@@ -586,7 +436,7 @@ static void handle_config() {
     c.relay_count = (uint8_t)constrain(jnum(b, "nrel", 8), 1, RELAY_COUNT);
   if (has(b, "step")) c.step_delay_ms = (uint16_t)constrain(jnum(b, "step", 500), 50, 60000);
   if (has(b, "hseq")) c.hold_seq_ms = (uint32_t)constrain(jnum(b, "hseq", 30000), 0, 3600000);
-  if (has(b, "hch")) c.hold_chase_ms = (uint32_t)constrain(jnum(b, "hch", 30000), 0, 3600000);
+  if (has(b, "swp")) c.chase_sweeps = (uint8_t)constrain(jnum(b, "swp", 3), 0, 100);
   if (has(b, "hall")) c.hold_all_ms = (uint32_t)constrain(jnum(b, "hall", 300000), 0, 3600000);
   if (has(b, "bmode")) {
     long m = jnum(b, "bmode", 0);
@@ -624,7 +474,6 @@ static void handle_config() {
 }
 
 static void handle_spoof() {
-  if (!authed()) { server.send(401); return; }
   Bms2Config &c = *G->cfg;
   String b = server.arg("plain");
   String cmd = jstr(b, "cmd");
@@ -642,6 +491,9 @@ static void handle_spoof() {
   if (has(b, "s2soc")) c.s2_soc = (uint8_t)constrain(jnum(b, "s2soc", 188), 0, 255);
   if (has(b, "s2sec")) c.s2_seconds = (uint16_t)constrain(jnum(b, "s2sec", 10), 1, 120);
   if (has(b, "sena")) c.spoof_enabled = jnum(b, "sena", 1) != 0;
+  // v2.3.1 configurable trigger GPIO (unsafe pins fall back to 21).
+  if (has(b, "spin"))
+    c.spoof_pin = sanitize_spoof_pin((uint8_t)jnum(b, "spin", 21));
   cfg_save();
   if (G->on_config_changed) G->on_config_changed();
   if (cmd == "fire")
@@ -651,8 +503,8 @@ static void handle_spoof() {
 }
 
 static void handle_admin() {
-  if (!authed()) { server.send(401); return; }
   String b = server.arg("plain");
+  if (!admin_ok(jstr(b, "pass"))) { send_json("{\"ok\":0,\"err\":\"admin password required\"}"); return; }
   String cmd = jstr(b, "cmd");
   if (cmd == "reset") {
     send_json("{\"ok\":1}");
@@ -685,11 +537,6 @@ static void handle_admin() {
     long ch = jnum(b, "ap_ch", 6);
     if (ch >= 1 && ch <= 13) ident.ap_channel = (uint8_t)ch;
   }
-  if (has(b, "a_user")) {
-    String v = jstr(b, "a_user");
-    if (v.length() > 0 && v.length() < (int)sizeof(ident.admin_user))
-      v.toCharArray(ident.admin_user, sizeof(ident.admin_user));
-  }
   if (has(b, "a_pass")) {
     String v = jstr(b, "a_pass");
     if (v.length() >= 4 && v.length() < (int)sizeof(ident.admin_pass))
@@ -708,7 +555,7 @@ static void handle_admin() {
   }
   if (has(b, "sta_pass")) {
     String v = jstr(b, "sta_pass");
-    if (v.length() < (int)sizeof(ident.sta_pass))
+    if (v.length() > 0 && v.length() < (int)sizeof(ident.sta_pass))
       v.toCharArray(ident.sta_pass, sizeof(ident.sta_pass));
   }
   // v2.3 boot auto-start lives on the Admin card (applies after reboot).
@@ -718,9 +565,10 @@ static void handle_admin() {
 }
 
 // v2.3 OTA control: auto toggle + manual "check now" (main.cpp does network).
+// Gated like /api/admin: checking/installing can flash firmware.
 static void handle_ota() {
-  if (!authed()) { server.send(401); return; }
   String b = server.arg("plain");
+  if (!admin_ok(jstr(b, "pass"))) { send_json("{\"ok\":0,\"err\":\"admin password required\"}"); return; }
   if (has(b, "ota_auto") && G->ota) {
     G->ota->auto_enabled = jnum(b, "ota_auto", 0) != 0;
     cfg_save();
@@ -731,41 +579,94 @@ static void handle_ota() {
       return;
     }
     if (G->on_ota_check) G->on_ota_check();
+    send_json("{\"ok\":1}");
+    return;
+  }
+  if (jstr(b, "cmd") == "install") {
+    if (!G->ota || !G->ota->update_pending ||
+        G->ota->latest_tag[0] == '\0') {
+      send_json("{\"ok\":0,\"err\":\"no update pending (check first)\"}");
+      return;
+    }
+    if (web_sta_state() != 2) {
+      send_json("{\"ok\":0,\"err\":\"STA offline (set uplink + reboot)\"}");
+      return;
+    }
+    if (G->on_ota_install) G->on_ota_install();  // reboots on success
+    send_json("{\"ok\":1}");
+    return;
   }
   send_json("{\"ok\":1}");
 }
 
 // ---- v2.3 manual firmware upload (works fully offline) ----
 static const char PAGE_UPDATE[] PROGMEM = R"HTML(
-<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>BMS Tester firmware update</title><style>body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0}form{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px}input[type=submit]{background:#b45309;border:0;color:#fff;border-radius:8px;padding:10px 16px;font-size:15px;cursor:pointer}a{color:#60a5fa}</style></head><body style="max-width:480px;margin:60px auto;padding:12px">
 <h2>Firmware update</h2>
 <p>Upload a <b>.bin</b> from the GitHub release matching this box
 (<b>firmware.bin</b> for 8 MB boards, <b>n16r8-firmware.bin</b> for N16R8).
 The box reboots on success. Wrong file = re-flash over USB.</p>
 <form method=POST action=/update enctype=multipart/form-data>
+Admin password<br><input name=pass type=password><br><br>
 <input type=file name=firmware accept=.bin><br><br>
 <input type=submit value="Upload + reboot">
 </form><p><a href=/>Back to dashboard</a></p></body></html>)HTML";
 
 static void handle_update_page() {
-  if (!authed()) { server.sendHeader("Location", "/login"); server.send(302); return; }
   server.send_P(200, "text/html", PAGE_UPDATE);
 }
+
+static String upload_pass = "";
+static bool upload_rejected = false;
+static bool upload_begun = false;
 
 static void handle_update_upload() {
   HTTPUpload &up = server.upload();
   if (up.status == UPLOAD_FILE_START) {
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.end(false);
+    if (up.filename.length() == 0) return;  // form-field part, not the file
+    // The pass field precedes the file in the form, so it is buffered by now.
+    upload_rejected = !admin_ok(upload_pass);
+    if (!upload_rejected) {
+      if (Update.begin(UPDATE_SIZE_UNKNOWN)) upload_begun = true;
+      else upload_rejected = true;
+    }
   } else if (up.status == UPLOAD_FILE_WRITE) {
-    if (Update.write(up.buf, up.currentSize) != up.currentSize) Update.end(false);
+    if (up.filename.length() == 0) {
+      if (up.name == "pass" && upload_pass.length() < 64) {
+        // Append as a 1-char C string: portable across Arduino String and
+        // the host stub (a raw char would bind String(int) on the stub).
+        char ch[2] = {'\0', '\0'};
+        for (size_t i = 0; i < up.currentSize; i++) {
+          ch[0] = (char)up.buf[i];
+          upload_pass += ch;
+        }
+      }
+      return;
+    }
+    if (upload_rejected || !upload_begun) return;  // swallow: commit nothing
+    if (Update.write(up.buf, up.currentSize) != up.currentSize) {
+      Update.end(false);
+      upload_begun = false;
+      upload_rejected = true;
+    }
   } else if (up.status == UPLOAD_FILE_END) {
-    Update.end(true);
+    if (upload_begun && !upload_rejected) Update.end(true);
+    upload_begun = false;
   }
 }
 
 static void handle_update_done() {
-  if (!authed()) { server.send(401); return; }
+  // Both the streamed field and the parsed arg must agree (defense in depth).
+  bool ok = !upload_rejected && admin_ok(upload_pass) &&
+            admin_ok(server.arg("pass"));
+  upload_pass = "";
+  upload_rejected = false;
+  if (upload_begun) { Update.end(ok); upload_begun = false; }
+  if (!ok) {
+    server.send(403, "text/plain", "admin password required");
+    return;
+  }
   if (Update.hasError()) {
     server.send(200, "text/plain", "UPDATE FAILED");
     return;
@@ -803,6 +704,38 @@ static void sta_tick(unsigned long now) {
   if ((now - sta_t0) >= STA_TRY_MS) sta_state = 0;  // AP-only fallback
 }
 
+static bool wifi_is_up = false;
+
+// AP ALWAYS ON (unless the kill switch says otherwise): no timeouts, works
+// with zero office network. Fixed 192.168.4.1 gateway (documented
+// everywhere) + DNS catch-all so any URL on the device resolves to us
+// (captive portal).
+static void wifi_up() {
+  WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1),
+                    IPAddress(255, 255, 255, 0));
+  WiFi.softAP(ident.ap_ssid, ident.ap_pass, ident.ap_channel);
+  dns.start(53, "*", WiFi.softAPIP());
+  sta_begin();  // optional uplink attempt (non-blocking; AP unaffected)
+  server.begin();  // re-begin is safe: routes were registered once in setup
+  wifi_is_up = true;
+}
+
+// v2.3.1 WiFi kill switch: grounding the pin drops everything now;
+// releasing it brings the AP back (same SSID/pass/channel).
+void web_wifi_set(bool on) {
+  if (on == wifi_is_up) return;
+  if (!on) {
+    server.stop();
+    dns.stop();
+    sta_state = 0;
+    WiFi.mode(WIFI_OFF);
+    wifi_is_up = false;
+    return;
+  }
+  wifi_up();
+}
+
 void web_setup(WebCtx &ctx) {
   G = &ctx;
   // Start from compiled defaults, then overlay NVS. (On real hardware the
@@ -820,21 +753,8 @@ void web_setup(WebCtx &ctx) {
   cfg_dirty = false;  // fresh boot: nothing pending
   cfg_load();  // NVS -> cfg + identity (or defaults)
   if (G->on_config_changed) G->on_config_changed();  // build spoof frames
-  // AP ALWAYS ON: no timeouts, works with zero office network.
-  // Fixed 192.168.4.1 gateway (documented everywhere) + DNS catch-all so
-  // any URL on the device resolves to us (captive portal).
-  WiFi.mode(WIFI_AP);
-  WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1),
-                    IPAddress(255, 255, 255, 0));
-  WiFi.softAP(ident.ap_ssid, ident.ap_pass, ident.ap_channel);
-  dns.start(53, "*", WiFi.softAPIP());
-  sta_begin();  // optional uplink attempt (non-blocking; AP unaffected)
-  static const char *HDRS[] = {"Cookie"};
-  server.collectHeaders(HDRS, 1);
+  wifi_up();  // AP + portal + server (kill switch can drop/raise this live)
   server.on("/", handle_root);
-  server.on("/login", HTTP_GET, handle_login_page);
-  server.on("/login", HTTP_POST, handle_login);
-  server.on("/logout", handle_logout);
   server.on("/update", HTTP_GET, handle_update_page);
   server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
   server.on("/api/state", HTTP_GET, handle_state);
@@ -844,9 +764,10 @@ void web_setup(WebCtx &ctx) {
   server.on("/api/spoof", HTTP_POST, handle_spoof);
   server.on("/api/admin", HTTP_POST, handle_admin);
   server.on("/api/ota", HTTP_POST, handle_ota);
-  // Captive portal: any unknown host/path lands on "/" (which itself sends
-  // unauthed browsers to /login). This makes phones pop the login page on
-  // join and keeps "no internet" devices from showing a dead 404.
+  // Captive portal: any unknown host/path lands on the open dashboard.
+  // This makes phones pop the dashboard on join and keeps "no internet"
+  // devices from showing a dead 404. Reboot/reset/upload stay behind the
+  // per-request admin password (no login wall since v2.3.1).
   server.onNotFound([]() {
     server.sendHeader("Location", "/");
     server.send(302);

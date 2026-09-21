@@ -10,31 +10,39 @@
 - Loads: up to 3 A/channel; wire each meter function through NO/COM
   (or NC/COM for fail-safe) per channel.
 
-## Button + spoof inputs
+## Button + spoof + WiFi-kill inputs
 - Button: GPIO15 to GND (internal pull-up). Short press = configured behavior;
   **hold 10 s = factory reset** (wipes AP/admin config, reboots).
-- Spoof: GPIO21 to GND (or dashboard FIRE). Stage 1 (100/100/100/100 %, 5 s)
-  then stage 2 (88.8 V / 88.8 A / 88.8 °C / 188 %, 10 s) on register `0x03`,
+- Spoof: trigger GPIO (default 21) to GND (or dashboard FIRE). Change the pin
+  on the dashboard (safe pins: 1, 2, 21, 38–44, 47; anything else → 21).
+  Stage 1 (100/100/100/100 %, 5 s) then stage 2
+  (88.8 V / 88.8 A / 88.8 °C / 188 %, 10 s) on register `0x03`,
   then auto-revert. Both stages editable.
+- WiFi kill: GPIO18 to GND drops the AP + portal + server at once; release
+  to bring everything back. Default on at boot.
 
 ## Web dashboard (always on, offline OK)
 1. Power the ESP → AP **`BMS-Tester`** appears (no office network needed).
-2. Join it (default password `bms12345`) — the login page pops up by itself;
+2. Join it (default password `bms12345`) — the dashboard pops up by itself;
    if not, open `192.168.4.1`. Phone clutching mobile data instead? Turn
    mobile data OFF (or tap "stay connected") — the box has no internet.
+   No login: the dashboard is open; reboot/reset/upload/saves ask for the
+   admin password (default `admin123`).
 3. **Relays card:** live 8-tile grid (tap to force ON/OFF; relays past the
    count are greyed out), START / STOP ALL. Header shows cycle + actuation
    counters.
 4. **Sequence card:** mode (Sequential 1–N / Chase wave / All ON), relay
-   count, step ms, per-mode hold ms (0 = forever), loop + pause + cycle
+   count, step ms, hold ms (sequential / ALL-ON; 0 = forever), chase sweeps
+   (auto-hold = sweeps × relays × step, 0 = forever), loop + pause + cycle
    limit, ALL-ON stagger, direction, button behavior, logic. Save persists
    to NVS (committed ~1.5 s after the click).
 5. **Relay labels card:** name each relay (HORN, LIGHT…) — tiles show names.
 6. **Fault spoof card:** stage-1 + stage-2 values + seconds each, pin-enable,
-   FIRE now / Cancel.
-7. **Firmware card:** auto-check toggle + Check now, STA uplink (hotspot
-   SSID/pass for internet), offline firmware-upload page link.
-8. **Admin card:** AP SSID/password/channel, admin user/password, boot
+   trigger GPIO, FIRE now / Cancel (values + pin save on FIRE).
+7. **Firmware card:** auto-check toggle + Check now + Install update (when
+   one is found), STA uplink (hotspot SSID/pass for internet), offline
+   firmware-upload page link.
+8. **Admin card:** AP SSID/password/channel, new admin pass, boot
    auto-start, Reboot, Factory reset. AP/STA changes apply after reboot.
 
 ## Button behaviors (Sequence card → Button)
@@ -52,7 +60,7 @@
   Use stage 1 (100) for the realistic demo.
 - Page unreachable: confirm joined to `BMS-Tester` (not office Wi-Fi),
   open `192.168.4.1` (or the gateway IP shown by the OS).
-- Locked out: hold the button 10 s → factory reset → `admin`/`admin123`.
-- Logged out after reboot: tick "Remember this device" at login (30 days).
+- Locked out: hold the button 10 s → factory reset → AP `BMS-Tester`/`bms12345`, admin `admin123`.
+- No WiFi at all: GPIO18 may be grounded (kill switch) — release it.
 - Meter misreads during spoof: expected (stage 1, then the 188 % pattern);
   auto-reverts, `0x04`/`0x05` never change.

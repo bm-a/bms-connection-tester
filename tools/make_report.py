@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Beautiful dad-friendly Word report — v2.3 (multi-scenario release)."""
+"""Beautiful dad-friendly Word report — v2.3.1 (bench-fix patch)."""
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -75,7 +75,7 @@ def callout(title, text, fill="FFF6D6"):
 sec = doc.sections[0]
 fp = sec.footer.paragraphs[0]
 fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = fp.add_run("RS485 Connection Tester v2.3  —  Build & Test Report   |   Page ")
+r = fp.add_run("RS485 Connection Tester v2.3.1  —  Build & Test Report   |   Page ")
 r.font.size = Pt(9)
 r.font.color.rgb = GREY
 fld = OxmlElement("w:fldSimple")
@@ -94,18 +94,18 @@ r.bold = True
 r.font.color.rgb = NAVY
 sp = doc.add_paragraph()
 sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = sp.add_run("Build & Test Report v2.3 — for an electronics engineer, no coding needed")
+r = sp.add_run("Build & Test Report v2.3.1 — for an electronics engineer, no coding needed")
 r.font.size = Pt(13)
 r.italic = True
 r.font.color.rgb = GREY
 doc.add_paragraph()
 table(["Item", "Detail"], [
     ["Board", "ESP32-S3 DevKitC-1 (or N16R8) + MAX485 module + 8-channel relay module"],
-    ["Version", "v2.3 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; sequences first-N relays (or chase wave); 2-stage fault values; serves a config web page + firmware updates"],
-    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.3 only"],
+    ["Version", "v2.3.1 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; sequences first-N relays (or chase wave); 2-stage fault values; serves a config web page + firmware updates"],
+    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.3.1 (patch on v2.3)"],
     ["Date", "September 2026"],
-    ["Firmware", "firmware.bin — v2.3 8 MB build, compiled + verified (SHA in firmware/README.md)"],
-    ["Tests", "105 / 105 passing (protocol + lamps + faults + soak + relay/chase/loop/spoof-stages/OTA/web/login/portal/24h sim)"],
+    ["Firmware", "firmware.bin — v2.3.1 8 MB build, compiled + verified (SHA in firmware/README.md)"],
+    ["Tests", "103 / 103 passing (protocol + lamps + faults + soak + relay/chase/sweeps/spoof-stages/spin/OTA/web/admin-gate/portal/24h sim)"],
     ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Button runs the relay sequence. Phone/laptop + web page configures everything."],
 ], widths=[1.6, 4.6])
 callout("Passwords — keep this file safe: ",
@@ -123,7 +123,7 @@ for item in [
     "1.  What this box does (start here)",
     "2.  Parts list",
     "3.  Wiring — the complete circuit (lamps + relays + button)",
-    "4.  How v2.3 works (every meter type, no code)",
+    "4.  How v2.3.1 works (every meter type, no code)",
     "5.  Using it on the assembly line (lamps, button, web page)",
     "6.  Getting the software onto the board (3 easy methods)",
     "7.  Build & test report (numbers included)",
@@ -198,7 +198,7 @@ callout("12 V rule: ",
         "the ESP is USB-powered, the relay coils are 12 V-powered, and their grounds are tied together. Relays will never click without the 12 V adapter.")
 
 # ================= 4 =================
-doc.add_heading("4. How v2.3 works (the idea, no code)", level=1)
+doc.add_heading("4. How v2.3.1 works (the idea, no code)", level=1)
 for s in [
     "The meter asks questions in the JBD battery language at 9600 baud — usually register 0x03 (voltage/current/charge), sometimes 0x04 (cell voltages) or 0x05 (device name), occasionally configuration writes.",
     "The box checks every incoming message completely (start, command, length, safety checksum, end byte). Random factory noise can never fake one — proven with a million random bytes in testing.",
@@ -280,13 +280,13 @@ doc.add_paragraph(
     "Built with the genuine Espressif Xtensa GCC 8.4.0 toolchain (PlatformIO + Arduino framework): "
     "both S3 profiles compiled SUCCESS (8 MB + N16R8). Binary inspected afterward:")
 table(["Artifact", "Detail"], [
-    ["firmware.bin", "v2.3 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, relay bench (count/chase/loop/labels), AP dashboard, 2-stage spoof, OTA; SHAs in firmware/README.md."],
-    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.3 binaries refreshed; golden bytes + version + AP strings verified inside)"],
+    ["firmware.bin", "v2.3.1 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, relay bench (count/chase/loop/labels), AP dashboard, 2-stage spoof, OTA; SHAs in firmware/README.md."],
+    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.3.1 binaries refreshed; golden bytes + version + AP strings verified inside)"],
     ["bootloader + partitions", "Standard S3 loader and flash layout, refreshed with this build."],
     ["On-target test builds", "All unit-test programs also compile + link for the S3 chip (they execute once a board is plugged in)."],
     ["QEMU S3 boot test", "Not re-run for v2.3 (QEMU cannot start inside the phone sandbox). Known Arduino-guest flash-model gap unchanged since v2.1 — our code is never reached there. Wokwi S3 is the practical Arduino-emulation path."],
 ], widths=[1.7, 4.5])
-doc.add_heading("7.2 Automated tests — 105 / 105 PASS (run_tests.sh)", level=2)
+doc.add_heading("7.2 Automated tests — 103 / 103 PASS (run_tests.sh)", level=2)
 table(["Group", "Tests", "Result"], [
     ["Checksums + golden frame (7)", "FFFD / FCDA / FCA8 / FA86 / F65A (2nd Docklight 0x2A variant), byte-exact 0x03 frame, exact-yes / 7xcorrupt-no.", "7 PASS"],
     ["Lamp logic, adaptive (8)", "Boot red, green fast, red after window, self-heal, slow-poll adapt, 2 s floor / 10 s cap, rollover, legacy compat.", "8 PASS"],
@@ -309,10 +309,12 @@ doc.add_paragraph(
     "checksum success, now covered by test. 2) A hand-written test vector had a wrong checksum (FEEF, not FEFF) — fixed. "
     "3) Arduino's headers define a B1 macro that broke the parser's state names on S3 builds — renamed, S3 build green.", style="List Bullet")
 doc.add_paragraph(
-    "4) v2.3 host stubs: the single-character cookie search returned garbage and cut login tokens "
-    "(2 web tests caught it) — parsing now uses the exact-match search. "
+    "4) Retired login wall (v2.3.1): per-request admin password now gates reboot/reset/upload/OTA-admin; "
+    "the dashboard is open on the WPA2 AP. "
     "5) A stray semicolon ended the dashboard status builder early and dropped the fault-test values "
-    "from the web reply (2 web tests caught it before release).", style="List Bullet")
+    "from the web reply (2 web tests caught it before release). "
+    "6) GitHub OTA check never matched (API pretty-prints a space after the colon) + no dashboard "
+    "install path (host reasoning + new web tests; fixed with tolerant parse + Install button).", style="List Bullet")
 doc.add_paragraph(
     "Carried-over v1.0 finding: reply checksums exclude the echoed command byte (FCDA, not FCD7) — so all canned replies "
     "are frozen literals, never recomputed at runtime.", style="List Bullet")
@@ -361,14 +363,14 @@ table(["Path", "What it is"], [
     ["wokwi/", "Browser simulation + sim.yaml headless scenario (relays, buttons, meter)."],
     ["wiki/", "Online manual mirror (Relays page has the web guide)."],
     ["run_tests.sh", "Runs everything runnable in one command."],
-    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.3 work. Current release: v2.3."],
+    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.3.x work. Current release: v2.3.1."],
 ], widths=[2.6, 3.6])
 doc.add_paragraph()
 ep = doc.add_paragraph()
 ep.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = ep.add_run("— End of report v2.3. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
+r = ep.add_run("— End of report v2.3.1. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
 r.italic = True
 r.font.color.rgb = GREY
 
 doc.save("/data/data/com.termux/files/home/bms-connection-tester/RS485-Tester-Report.docx")
-print("saved v2.3 RS485-Tester-Report.docx")
+print("saved v2.3.1 RS485-Tester-Report.docx")

@@ -12,6 +12,7 @@ enum { UPLOAD_FILE_START = 1, UPLOAD_FILE_WRITE = 2, UPLOAD_FILE_END = 3 };
 struct HTTPUpload {
   int status = 0;
   String filename;
+  String name;
   const uint8_t *buf = nullptr;
   size_t currentSize = 0;
   size_t totalSize = 0;
@@ -38,6 +39,7 @@ class WebServer {
   }
   void onNotFound(HandlerFn h) { notFound() = h; }
   void begin() {}
+  void stop() {}
   void handleClient() {}
   HTTPUpload &upload() { return cur().upload; }
 
@@ -105,19 +107,34 @@ class WebServer {
     a["plain"] = body;
     return request("POST", path, headers, body, a);
   }
-  // Simulate a multipart firmware upload: START + WRITE chunks + END through
-  // the registered upload handler, then the normal POST done-handler.
+  // Simulate a multipart firmware upload: an optional "pass" form-field
+  // part first (like the real /update form), then START + WRITE chunks +
+  // END through the registered upload handler, then the POST done-handler.
   static Resp upload(const std::string &path, const std::string &filename,
                      const std::string &data,
                      const std::map<std::string, std::string> &headers =
+                         std::map<std::string, std::string>(),
+                     const std::map<std::string, std::string> &args =
                          std::map<std::string, std::string>()) {
     Ctx c;
     c.method = HTTP_POST;
     c.path = path;
     c.req_headers = headers;
+    c.args = args;
     cur() = c;
     auto uh = uploads().find(Key(path, HTTP_POST));
     if (uh != uploads().end() && uh->second) {
+      auto fp = args.find("pass");
+      if (fp != args.end()) {
+        // Form-field part (empty filename), as the browser sends it.
+        cur().upload.status = UPLOAD_FILE_WRITE;
+        cur().upload.filename = String("");
+        cur().upload.name = String("pass");
+        cur().upload.buf = (const uint8_t *)fp->second.data();
+        cur().upload.currentSize = fp->second.size();
+        cur().upload.totalSize = fp->second.size();
+        uh->second();
+      }
       cur().upload.status = UPLOAD_FILE_START;
       cur().upload.filename = String(filename);
       cur().upload.buf = nullptr;

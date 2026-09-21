@@ -27,13 +27,13 @@ Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher
 load the three files at the addresses above, flash, done.
 
 ## Verify
-- `firmware.bin` (957,520 bytes)
-  SHA-256: `71d39bd73fee74a83962b206c7956b0f6c00decdca5461d52da2d9f873df36d2`
+- `firmware.bin` (955,392 bytes)
+  SHA-256: `0238aa58db143f514b11a5543bbacc9b85883329376b1a95918252e6c25d1ad5`
 - `bootloader.bin` (15,104 bytes)
   SHA-256: `1776e4dd896a69d0a5c2e79957b0e2a88aa4129b1381d6478683515a1f6af343`
 - `partitions.bin` (3,072 bytes)
   SHA-256: `bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce`
-- Golden reply bytes, `2.3` version, `BMS-Tester` AP name and dashboard
+- Golden reply bytes, `2.3.1` version, `BMS-Tester` AP name and dashboard
   strings verified byte-present inside `firmware.bin`.
 
 Behavior: identical to the 8 MB build — boots red, relays OFF, AP up,

@@ -2,7 +2,9 @@
 #include "relay_ctrl.h"
 #include "ota.h"
 
-// v2.3 web UI: always-on WiFi AP + login + relay/spoof/admin pages + NVS.
+// v2.3 web UI: always-on WiFi AP + relay/spoof/admin pages + NVS.
+// v2.3.1: no login wall (WPA2 is the gate); reboot/reset/upload/OTA-admin
+// carry the admin password per request.
 // ESP-ONLY (needs Arduino WiFi/WebServer/Preferences). Never compiled on host.
 // The v1.x base loop stays untouched — main.cpp just calls web_setup() once
 // and web_tick() every loop; all handlers are short and non-blocking so the
@@ -19,6 +21,7 @@ struct WebCtx {
   void (*on_config_changed)() = nullptr;  // rebuild spoof frames + apply
   OtaState *ota = nullptr;        // v2.3: OTA status surfaced on dashboard
   void (*on_ota_check)() = nullptr;  // v2.3: main.cpp performs a check now
+  void (*on_ota_install)() = nullptr;  // v2.3.1: dashboard Install button
 };
 
 // AP defaults (overridden by NVS once saved).
@@ -33,7 +36,11 @@ struct WebCtx {
 void web_setup(WebCtx &ctx);
 void web_tick(unsigned long now);
 // Long-press fallback (button held 10 s): wipe NVS + reboot. Called by main.
+// Long-press fallback (button held 10 s): wipe NVS + reboot. Called by main.
 void web_factory_reset();
+// v2.3.1 WiFi kill switch (main.cpp polls the pin): false = AP+portal+
+// server fully down now; true = back up (default on at boot).
+void web_wifi_set(bool on);
 // v2.3: STA uplink state for main.cpp's OTA gate. 0 = off, 1 = connecting,
 // 2 = online (has address; internet assumed when online).
 int web_sta_state();

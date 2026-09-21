@@ -18,10 +18,23 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.3** current · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **105 passing** (70 via `pio test -e native` + 29 web + contract, via `sh run_tests.sh`) + 8-day soak |
+| Releases | **v2.3.1** current · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **103 passing** (77 via `pio test -e native` + 26 web + contract, via `sh run_tests.sh`) + 8-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
+
+## What v2.3.1 fixes/adds (bench-driven patch on v2.3)
+
+- **No more login wall.** The dashboard is open on the WPA2 AP; reboot,
+  factory reset, `/update` upload, OTA-admin and AP/admin saves ask for the
+  admin password per request (default `admin123`). Passwords never appear
+  in `/api/state`.
+- **Saves stick.** The 1 s tick is status-only now; form fields fill on load
+  and after saves, never mid-typing. UTF-8 declared on all pages.
+- **Chase auto-hold** (`Chase sweeps`, default 3, 0 = forever) retunes with
+  relay count × step. **Spoof trigger GPIO** configurable (safe pins only).
+- **WiFi kill switch:** ground GPIO18 to drop the AP, release to restore.
+- **OTA that works:** tolerant release-tag parse + dashboard Install button.
 
 ## What v2.3 adds (v1.x base still frozen)
 
@@ -73,11 +86,11 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.3` / `RED 2.3`.
-- Joining the AP pops the login page automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.3.1` / `RED 2.3.1`.
+- Joining the AP pops the dashboard automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
-  dashboard (usually `192.168.4.1`), log in, configure.
+  dashboard (usually `192.168.4.1`), configure. Ground GPIO18 to kill WiFi.
 
 ## Flash it (pick one)
 
@@ -97,21 +110,25 @@ pio test -e native       # 70 Unity tests: checksum, logic, parser, stress, rela
 pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile
 ```
 
-Emulator results for v2.3 (Termux + Debian proot):
-- Native 105/105 (70 pio + 29 web + contract) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
+Emulator results for v2.3.1 (Termux + Debian proot):
+- Native 103/103 (77 pio + 26 web + contract) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
 - Virtual bus (`sh tools/virtual_bus.sh`): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
 - Dashboard JS: `node --check` clean; JS↔firmware contract gate green.
 - Wokwi: discretes + NeoPixel + 8 relay modules (NO indicators) + buttons;
   `sim.yaml` automation ready (needs `WOKWI_CLI_TOKEN` for headless/CI runs).
-- QEMU-S3: not re-run for v2.3 (proot JIT limitation); known Arduino-guest gap
-  (`0x10`/`0x10200C`) unchanged since v2.1 — firmware never reached, no regression.
+- QEMU-S3: Stage-0 harness (`tools/qemu_boot_test.sh`) runs in proot-debian;
+  flash model clean (GD WRSR2-QE + burst-wrap fixes), guest still resets in
+  the 2nd-stage bootloader (SITE1: init returns 0x0a) — parked, see HANDOFF.
 
-`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.3).
+`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.3.1).
 `firmware-n16r8/firmware.bin` SHA-256: see `firmware-n16r8/README.md`.
 
 ## Versions
 
+- **v2.3.1** — bench patch: no login wall (per-request admin password),
+  sticky saves, UTF-8 pages, chase auto-sweeps, spoof trigger GPIO, WiFi
+  kill switch (GPIO18), working OTA check + Install button. 103/103 tests.
 - **v2.3** — relay count + chase, 2-stage spoof, per-mode ms holds, industrial
   pack (loop/pause/limit/stagger/direction/labels/counters/autostart),
   persistent logins, manual + auto OTA, coalesced saves. 105/105 tests.

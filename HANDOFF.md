@@ -1,8 +1,9 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
-> Last updated 2026-09-21 for **v2.3** (relay count/chase, 2-stage spoof,
-> per-mode holds, industrial pack, persistent logins, OTA). Rule going forward:
+> Last updated 2026-09-21 for **v2.3.1** (bench patch: no login wall, sticky
+> saves, UTF-8 pages, chase auto-sweeps, spoof trigger GPIO, WiFi kill
+> switch, working OTA check + Install). Rule going forward:
 > COMPACTION CHECKPOINT 2026-09-21: user compacting Termux storage. All 3
 > repos verified pushed + clean (main `2b23226` + tag `v2.3` upstream, release
 > live, CI green; handbook `ba3ac6f`; emulator `1fd0b2a`). `releases/` (564 KB,
@@ -25,8 +26,13 @@ Two LEDs: green = valid BMS traffic seen, red = bus silent.
 **v2.3 is the relay test bench grown up**: relay count (first N) + chase-wave
 mode, per-mode millisecond holds, loop/pause/cycle-limit burn-in, ALL-ON
 stagger, direction, relay labels, QC counters, boot auto-start; 2-stage spoof
-(100 first, then 88.8/88.8/88.8/188); persistent logins; manual + automatic
+(100 first, then 88.8/88.8/88.8/188); manual + automatic
 OTA; coalesced config saves. No screens needed.
+**v2.3.1 (bench patch)**: login wall REMOVED (per-request admin password for
+reboot/reset/upload/OTA-admin/AP saves); 1 s tick is status-only (forms fill
+on load + after saves); UTF-8 pages; chase auto-hold sweeps (retires `hch`);
+configurable spoof trigger GPIO (safe-list clamped); WiFi kill switch on
+GPIO18; fixed GitHub tag parse + dashboard Install button.
 
 - **Origin story:** user's dad runs an e-rickshaw meter assembly line; workers
   needed the real battery or a laptop to verify RS485 wiring. This box replaces
@@ -34,8 +40,8 @@ OTA; coalesced config saves. No screens needed.
   The Word report for dad keeps the e-rickshaw framing on purpose.)
 - **People:** user = Bhavishya Madan (GitHub `bm-a`). Dad = electronics-strong,
   code-weak; gets status via a WhatsApp Word report, not GitHub.
-- **Current release: v2.3** (tag `v2.3`; relay count/chase, 2-stage spoof,
-  per-mode ms holds, industrial pack, persistent logins, OTA, save coalescing).
+- **Current release: v2.3.1** (bench patch on v2.3; no login wall, sticky
+  saves, UTF-8, chase sweeps, spoof GPIO, GPIO18 kill switch, OTA install).
   v1.x responder core FROZEN (parser, option-A, tracker, golden frames, LEDs,
   STATUS?, original 32 tests byte-identical). v1.0 frozen (ZIP + git tag,
   untouched since).
@@ -46,7 +52,7 @@ OTA; coalesced config saves. No screens needed.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 105 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.3`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3 (7 assets each); wiki live (7 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 103 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.3.1`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3/v2.3.1 (7 assets each); wiki live (7 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -113,6 +119,14 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   baked in: 188-shows-100 = meter-side clamp (proven), relays-stuck-on = hold
   0 = forever (per-mode holds now explicit). **105/105 total** (70 pio +
   29 web + contract).
+- **v2.3.1** (bench patch, this release): login wall REMOVED (per-request
+  admin password gates reboot/reset/`/update`/OTA-admin/AP saves; passwords
+  scrubbed from `/api/state`); 1 s tick is status-only (forms fill on load +
+  after saves; dirty-tracking + fetch-failure tolerance); UTF-8 on all pages;
+  chase auto-hold `swp` (retires `hch`); spoof trigger GPIO configurable
+  (allowlist-clamped, NVS `spin`, live re-arm); WiFi kill switch on GPIO18;
+  fixed GitHub tag parse (space-tolerant) + dashboard Install button.
+  **103/103 total** (77 pio + 26 web + contract).
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
@@ -134,7 +148,8 @@ ESP32 — S3 has no GPIO25; S3 GPIO range is 0–21 + 26–48).
 | S3 GPIO48 | onboard WS2812 RGB (mirrors LEDs, v1.2+) |
 | S3 GPIO5/6/7/8/9/12/13/14 (v2.0) | → relay IN1–IN8 (SmartElex 12 V, own 12 V supply, common GND, active-LOW default) |
 | S3 GPIO15 (v2.0) | → button to GND (pull-up; 10 s hold = factory reset) |
-| S3 GPIO21 (v2.0) | → spoof trigger to GND (pull-up) |
+| S3 GPIO21 (v2.0) | → spoof trigger to GND (pull-up; v2.3.1: configurable, see below) |
+| S3 GPIO18 (v2.3.1) | → WiFi kill to GND (pull-up; grounded = AP+portal+server off) |
 | MAX485 VCC / GND | 3.3 V (NOT 5 V) / common GND with meter |
 | MAX485 A/B | → meter A/B, twisted pair, short run |
 
@@ -201,13 +216,17 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
   tested v2→v3 migration: seconds×1000 fanned to all holds, singles→stage 2).
 - `web_ui` (ESP-only): AP `BMS-Tester` always on (fixed 192.168.4.1 via
   `softAPConfig`, channel changeable), `DNSServer` catch-all captive portal,
-  unknown URLs → 302 `/`, session-cookie login (30 min RAM sliding +
-  remember-me NVS slots ×4, HttpOnly/SameSite), JSON API + single-page dark
-  dashboard with live version + labels + counters (`node --check` clean +
-  `check_web_contract.py` gate), deferred-save coalescing (dirty-flag, 1.5 s
-  flush, sync-flush on reboot/reset), NVS load/save, optional STA uplink
+  unknown URLs → 302 `/`, **no login wall (v2.3.1; WPA2 is the gate)**,
+  per-request admin password gates reboot/reset/`/update`/OTA-admin/AP
+  saves (passwords never in `/api/state`), JSON API + single-page dark
+  dashboard — 1 s tick is status-only, forms fill on load + after saves
+  (`node --check` clean + `check_web_contract.py` gate), deferred-save
+  coalescing (dirty-flag, 1.5 s flush, sync-flush on reboot/reset), NVS
+  load/save, optional STA uplink
   (hotspot, 30 s non-blocking try, AP-only fallback), manual `/update`
-  firmware upload, factory reset + reboot.
+  firmware upload (multipart `pass` field verified BEFORE flash staging),
+  OTA check + dashboard Install button, factory reset + reboot,
+  WiFi kill switch (`web_wifi_set`, GPIO18, debounced in `main.cpp`).
 - `ota` (`ota.h`, host-tested pure logic; network in `main.cpp`): semver
   compare, per-variant asset pick (`-DFW_IS_N16R8=1` on the n16r8 env —
   quoted `-D` strings do not survive the flag pipeline), safe download URLs,
@@ -237,24 +256,26 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 
 ---
 
-## 7. Tests — 105/105 + soak + virtual bus + contract (how to run, what they prove)
+## 7. Tests — 103/103 + soak + virtual bus + contract (how to run, what they prove)
 
 - `pio test -e native` → 8 suites: test_checksum (7), test_logic (8),
-  test_parser (13), test_stress (4), **test_relay (24), test_spoof (11),
-  test_ota (6), test_system (3)**. **Last run: all green (70/70).** Old 32
-  byte-identical since v1.1. `test_web` (29) is g++-only (needs `-DARDUINO` +
-  stubs) → total **105/105** via `sh run_tests.sh`.
-- `test_web` highlights: real `web_ui.cpp` executes on host — login/session/
-  remember-me + expiry + slot eviction, NVS v2→v3 migration, validation/NVS/
+  test_parser (13), test_stress (4), **test_relay (25), test_spoof (11),
+  test_ota (6), test_system (3)**. **Last run: all green (77/77).** Old 32
+  byte-identical since v1.1. `test_web` (26) is g++-only (needs `-DARDUINO` +
+  stubs) → total **103/103** via `sh run_tests.sh`.
+- `test_web` highlights: real `web_ui.cpp` executes on host — per-request
+  admin password gates (admin/OTA/update incl. multipart field plumbing),
+  WiFi kill-switch transitions, spoof-pin clamp + persist, OTA install gate,
+  NVS v2→v3 migration, validation/NVS/
   API/fuzz/reset, deferred-save coalescing (stub flash-commit counter) +
-  reboot flush, count/chase/loop/labels/counters/STA/OTA/`/update` handlers.
+  reboot flush, count/chase-sweeps/loop/labels/counters/STA/OTA/`/update` handlers.
   Stub-fidelity bugs it caught (and fixed): per-TU mock clocks (→ `inline`
   shared clock), NVS `clear()` missing the number store, test isolation via
   static `ident` (→ defaults-reset in `web_setup`, behavior-neutral on
-  hardware), **#4: single-char `String::indexOf(' ')` returns garbage on the
-  stub (truncated auth cookies depending on token content) → cookie parsing
-  uses the `const char*` overload**. All four were test-harness or robustness
-  fixes, never responder logic.
+  hardware), **host `String += char` binds `String(int)` (decimal garbage
+  in the upload password) → firmware appends via 1-char C string**,
+  **v2.3.1: `hch`/`a_user`/login expectations retired with the remodel**.
+  All were test-harness or robustness fixes, never responder logic.
 - `test_ota` highlights: semver matrix (`2.10 > 2.9`, `v`-tolerant, garbage
   fail-closed), per-variant asset pick, URL tag sanitizing, gate matrix
   (auto/STA/sequence/bus-silence/interval/rollover).
@@ -384,8 +405,24 @@ Stage-A trace (`TRACE_EVTS="m25p80_command_decoded"`, full 26-cmd iteration):
 Winbond-style burst-wrap disable (3× dummy `00` + wrap byte `10` = wrap
 DISABLED, fire-and-forget, zero functional damage); `31`=WRSR2,
 `02`=PAGE PROGRAM at boot is suspicious (possible WRSR2-data desync:
-GIGADEVICE consumes 0 data bytes?). Crash cause still unknown — next:
-UART0-debug firmware build (`ARDUINO_USB_CDC_ON_BOOT=0`) to read the panic.
+GIGADEVICE consumes 0 data bytes?).
+Stage-A ROOT CAUSE (GDB + disassembly, 2026-09-21): the `02` is the WRSR2
+*data byte* misdecoded — GD consumed 0 bytes, QE write lost, read-back saw
+QE=0 → `startup.c:328` assert path. Fix (NOT yet upstreamed to the emulator
+repo — patch file `esp32s3-qemu-arm64/patches/` + applied to `/opt/qemu-src`
+working tree only): WRSR2 consumes/persists the QE bit for GIGADEVICE +
+`0x77` consumes 3 dummy + wrap byte. Result: flash model 100 % clean
+(`qemu_boot_test.sh` PASS, 0/0) — **but the guest STILL reset-loops**.
+Deeper GDB: reset is a genuine guest `SW_SYS_RESET` (`esp_restart_noos` at
+bootloader `0x403cdb08`, called from entry+0x15) because **`bootloader_init`
+returns `0x0a`** (SITE1 breakpoint; load-boot-image + index paths never
+reached). So the 2nd-stage bootloader itself bails before the app starts;
+UART0 stays ROM-only (app logs are USB-Serial). PARKED here — bench bugs
+took priority. Resume: figure out which `bootloader_init` step returns
+0x0A (clock? flash-ID? partition-read via XIP?) — disassemble forward from
+`0x403c9938`, or catch the failing call with GDB breakpoints. Temp S3DBG
+`mem_io_pc→cc->get_pc` debug print is UNCOMMITTED in `/opt/qemu-src`
+(`hw/misc/esp32s3_rtc_cntl.c`) — revert before any upstream patch submission.
 Next agent: to continue, decode what `0x10` is in DIO context (possible status-
 register or continuous-read mode byte); or deprioritize — host tests + soak
 already prove the firmware.
@@ -430,16 +467,19 @@ or deprioritize — host tests + soak already prove the firmware.
 
 0. **Post-compaction resume:** say "continue" — todo list is ordered top-down
    (HANDOFF delta → QEMU Stage 0 → A → B → C → D → bench + housekeeping).
-1. **Bench test v2.3 with real meter + SmartElex module** (the one thing that
-   matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) AP
-   `BMS-Tester` visible → login page pops on join (or 192.168.4.1, mobile
-   data off), remember-me survives reboot; (c) button runs relay sequence +
-   chase, count/limit/loop/labels behave, no boot click; (d) spoof shows
+1. **Bench test v2.3.1 with real meter + SmartElex module** (the one thing
+   that matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) AP
+   `BMS-Tester` visible → dashboard pops on join (or 192.168.4.1, mobile
+   data off), NO login wall; (c) button runs relay sequence +
+   chase, count/sweeps/loop/labels behave, no boot click; saves stick
+   without racing; (d) spoof shows
    100/100/100/100 % for 5 s then 88.8/88.8/88.8/188 % for 10 s, then reverts
-   (188-shows-100 = meter clamp, expected); (e) per-mode holds auto-OFF;
-   (f) manual `/update` upload works (offline); auto-OTA only with STA uplink.
-   If the page still won't open: confirm flashed firmware is v2.3
-   (`STATUS?` → `2.3`; v1.x has no WiFi at all), AP visible, exact URL/error.
+   (188-shows-100 = meter clamp, expected); trigger GPIO changeable;
+   (e) per-mode holds + chase sweeps auto-OFF; (f) manual `/update` upload
+   works (offline, needs admin pass); auto-OTA + Install need STA uplink;
+   (g) ground GPIO18 → WiFi dies, release → back.
+   If the page still won't open: confirm flashed firmware is v2.3.1
+   (`STATUS?` → `2.3.1`; v1.x has no WiFi at all), AP visible, exact URL/error.
    Needs: 12 V coil supply with common GND.
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
    firmware headless (button→pins, spoof→`22 B0`); also answers whether
@@ -506,4 +546,4 @@ Resume checklist: `ls /opt/qemu-src/build/qemu-system-xtensa && pio --version`
 (toolchain-alive check — if empty, rebuild per §8) → `git log --oneline |
 head -3` → `git status --short` → `pio test -e native` (Termux) →
 `sh run_tests.sh` → `sh tools/virtual_bus.sh` (in proot) → compare
-against §7 numbers (105/105 + contract).
+against §7 numbers (103/103 + contract).

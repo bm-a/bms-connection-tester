@@ -26,13 +26,13 @@ Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher
 load the three files at the addresses above, flash, done.
 
 ## Verify
-- `firmware.bin` (955,040 bytes)
-  SHA-256: `65eb652e4e0d42ab60ce1fdb8288c68e0dec2d64dd7b0146d679ab75ae35d36a`
+- `firmware.bin` (952,896 bytes)
+  SHA-256: `31a4dca2d35e9a6da153732803125a5ce2341f76113612fb0e84cf4f55851a1c`
 - `bootloader.bin` (15,104 bytes)
   SHA-256: `1776e4dd896a69d0a5c2e79957b0e2a88aa4129b1381d6478683515a1f6af343`
 - `partitions.bin` (3,072 bytes)
   SHA-256: `1d9cca96de0fe07ad7fc0648b9878ddecd9ce565e38b589ad20fea698ed4c80c`
-- Golden reply bytes (`DD 03 00 1B 14 50 … FC DA 77`), `2.3` version,
+- Golden reply bytes (`DD 03 00 1B 14 50 … FC DA 77`), `2.3.1` version,
   `BMS-Tester` AP name and dashboard strings verified byte-present inside
   `firmware.bin`.
 

@@ -19,7 +19,7 @@
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.3\n" / "RED 2.3\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.3.1\n" / "RED 2.3.1\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"
@@ -47,6 +47,9 @@
 
 #define PIN_BUTTON 15
 #define PIN_SPOOF  21
+// v2.3.1 WiFi kill switch (manual, default ON): free DIO, non-strapping,
+// no ADC/boot role. Ground to kill the AP, release to bring it back.
+#define PIN_WIFI_KILL 18
 static const uint8_t RELAY_PINS[RELAY_COUNT] = {5, 6, 7, 8, 9, 12, 13, 14};
 
 #define EVAL_INTERVAL_MS 250UL  // brisk eval so fast/slow polls both feel live
@@ -63,6 +66,8 @@ static RelaySequencer seq;
 static SpoofPlan spoof;  // v2.3: two-stage (100 first, then 88.8/188)
 static DebouncedInput btn_in;
 static DebouncedInput spoof_in;
+static DebouncedInput wifi_in;  // v2.3.1 AP kill switch (ground = WiFi off)
+static uint8_t curSpoofPin = 21;  // v2.3.1: follows cfg.spoof_pin (sanitized)
 static uint8_t spoofFrameA[SPOOF_FRAME_LEN];  // stage 1 ("100")
 static uint8_t spoofFrameB[SPOOF_FRAME_LEN];  // stage 2 (88.8/188 pattern)
 static bool spoofFrameReady = false;
@@ -137,12 +142,23 @@ static void ota_check_now() {
   }
   String body = http.getString();
   http.end();
-  int ti = body.indexOf("\"tag_name\":\"");
+  // GitHub pretty-prints ("tag_name": "v2.3"); tolerate any gap after ':'.
+  int ti = body.indexOf("\"tag_name\"");
   if (ti < 0) {
     ota_set_status("bad api reply");
     return;
   }
-  String tag = body.substring((unsigned)(ti + 12));
+  int ci = body.indexOf(':', (unsigned)(ti + 10));
+  if (ci < 0) {
+    ota_set_status("bad api reply");
+    return;
+  }
+  int q1 = body.indexOf('"', (unsigned)(ci + 1));
+  if (q1 < 0) {
+    ota_set_status("bad api reply");
+    return;
+  }
+  String tag = body.substring((unsigned)(q1 + 1));
   int q = tag.indexOf('"');
   if (q >= 0) tag = tag.substring(0, (unsigned)q);
   if (tag.length() == 0 || tag.length() >= (int)sizeof(ota.latest_tag)) {
@@ -248,8 +264,10 @@ void setup() {
   seq.begin(&cfg);
   btn_in.begin(true);
   spoof_in.begin(true);
+  wifi_in.begin(true);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   pinMode(PIN_SPOOF, INPUT_PULLUP);
+  pinMode(PIN_WIFI_KILL, INPUT_PULLUP);  // idle HIGH = AP on
   static WebCtx wctx;
   wctx.cfg = &cfg;
   wctx.seq = &seq;
@@ -258,6 +276,7 @@ void setup() {
   wctx.on_config_changed = rebuild_spoof_frame;
   wctx.ota = &ota;
   wctx.on_ota_check = ota_check_now;
+  wctx.on_ota_install = ota_install_now;
   web_setup(wctx);  // loads NVS config, builds spoof frames, starts always-on AP
   // v2.3 burn-in: auto-start the configured mode (relays already OFF-first).
   if (cfg.boot_autostart) seq.start(millis());
@@ -300,8 +319,23 @@ void loop() {
     web_factory_reset();  // wipes NVS + reboots; never returns
   }
 
+  // --- v2.3.1: WiFi kill switch (ground PIN_WIFI_KILL = AP off now) ---
+  bool wifiRaw = digitalRead(PIN_WIFI_KILL) == HIGH;  // pull-up idle HIGH
+  wifi_in.update(wifiRaw, now);  // fell = grounded, rose = released
+  if (wifi_in.fell()) web_wifi_set(false);
+  else if (wifi_in.rose()) web_wifi_set(true);
+
   // --- v2.0: spoof trigger input (v2.3: fires the two-stage plan) ---
-  bool spRaw = digitalRead(PIN_SPOOF) == HIGH;
+  // v2.3.1: pin follows cfg.spoof_pin (NVS, sanitized); re-arm on change.
+  uint8_t wantPin = sanitize_spoof_pin(cfg.spoof_pin);
+  if (wantPin != curSpoofPin) {
+    pinMode(curSpoofPin, INPUT);  // release the old pin (no pull)
+    curSpoofPin = wantPin;
+    cfg.spoof_pin = wantPin;
+    pinMode(curSpoofPin, INPUT_PULLUP);
+    spoof_in.begin(true);
+  }
+  bool spRaw = digitalRead(curSpoofPin) == HIGH;
   bool spActive = cfg.spoof_invert ? spRaw : !spRaw;
   spoof_in.update(!spActive, now);
   if (spoof_in.fell() && cfg.spoof_enabled)
