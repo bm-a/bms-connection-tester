@@ -270,3 +270,23 @@ Debian container — see §8 before wiping proot data.
 
 Resume checklist: `git log --oneline | head -3` → `git status --short` →
 `pio test -e native` (Termux) → `sh run_tests.sh` → compare against §7 numbers.
+
+---
+
+## 13. v2.0 addendum (2026-09-22, relay test bench — base frozen)
+
+- v1.x responder core (parser, option-A, tracker, golden frames, LEDs,
+  STATUS?, 32 tests, soak) untouched and re-proven: native **50/50**
+  (old 32 + `test_relay` 12 + `test_spoof` 6), soak green, virtual-bus PASS.
+- New: `src/relay_ctrl.*` (sequencer, 3 button modes, debounce, spoof window
+  + frame builder, config struct), `src/web_ui.*` (always-on AP `BMS-Tester`,
+  login, dark dashboard, NVS `bms2`, factory reset), integrated in
+  `src/main.cpp` (+ identical `.ino`, + IDE tabs). `FW_VERSION` = `"2.0"`.
+- GPIOs added: relays R1–R8 = 5/6/7/8/9/12/13/14 (SmartElex 12 V module, own
+  12 V supply, common GND, active-LOW default), button = 15, spoof = 21.
+- Builds: both envs green in proot (one fix: WebServer 2.0.x `collectHeaders`
+  array form). `firmware/` 761,408 B, `firmware-n16r8/` 763,920 B.
+- Wokwi: +8 relay LEDs + 2 pushbuttons. QEMU: same known `0x10`/`0x10200C`
+  gap (22/84 hits), no regression. Dashboard JS: `node --check` clean.
+- Release: tag `v2.0`; assets = 8 MB triple + `n16r8-` triple
+  (renamed: GitHub forbids duplicate asset names) + docx. Wiki: +`Relays.md`.

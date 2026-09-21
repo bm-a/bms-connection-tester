@@ -1,5 +1,15 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.0] — 2026-09-22
+### Added
+- 8-relay sequencer (sequential/all-ON, 3 button behaviors, boot-safe,
+  polarity toggle); always-on AP dashboard (auth, NVS, admin reset);
+  spoof window (88.8/88.8/88.8/188 on `0x03`, configurable, auto-revert).
+- 18 new tests (**50/50**); Wokwi relay LEDs + buttons; CI builds both envs.
+### Changed
+- `FW_VERSION`/`STATUS?` → `2.0`; radio on (AP always broadcasting).
+  v1.x responder core frozen and re-proven.
+
 ## [v1.2] — 2026-09-21
 ### Added
 - Onboard WS2812 RGB mirror (GPIO48, built-in `neopixelWrite`, brightness 32):

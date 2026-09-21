@@ -37,6 +37,15 @@ g++ -O2 -std=c++17 -I src -I .unity src/bms_protocol.cpp test/test_stress/test_s
 ./.test_stress
 rm -f .test_stress
 
+echo "=== native: test_relay (Unity, v2 sequencer) ==="
+g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/test_relay/test_relay.cpp .unity/unity.c -o .test_relay
+./.test_relay
+
+echo "=== native: test_spoof (Unity, v2 spoof frame + window) ==="
+g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/test_spoof/test_spoof.cpp .unity/unity.c -o .test_spoof
+./.test_spoof
+rm -f .test_relay .test_spoof
+
 echo "=== soak: 8-day continuous-run simulation ==="
 g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o .soak_sim
 ./.soak_sim

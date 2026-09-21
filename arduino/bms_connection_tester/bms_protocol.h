@@ -10,12 +10,14 @@
 #endif
 #endif
 
-#define FW_VERSION "1.1"
+#define FW_VERSION "2.0"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
-// v1.1: answers Basic Info (0x03), Cell Voltages (0x04) and Device
-// Name (0x05); stays SILENT on writes/unknown registers (option A).
+// v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and
+// Device Name (0x05); stays SILENT on writes/unknown registers (option A).
 // Green lamp = any well-formed meter frame seen within the adaptive window.
+// v2.0 adds (additive only): 8-relay sequencer, always-on AP web UI,
+// spoof window — see relay_ctrl.h / web_ui.h.
 
 // Fixed meter request for register 0x03: DD A5 03 00 FF FD 77
 extern const uint8_t BMS_REQUEST[7];
@@ -46,7 +48,7 @@ inline bool connection_active(unsigned long now_ms, unsigned long last_valid_ms)
   return (now_ms - last_valid_ms) < 2000UL;
 }
 
-// ---- v1.1: streaming JBD request parser ----
+// ---- streaming JBD request parser (since v1.1) ----
 #define JBD_MAX_DATA 64
 
 struct JbdFrame {
@@ -74,10 +76,10 @@ class JbdParser {
   void restart();
 };
 
-// ---- v1.1: reply dispatcher (option A: silence unless known read) ----
+// ---- reply dispatcher (option A: silence unless known read) ----
 const uint8_t *reply_for(uint8_t reg, bool is_write, size_t &out_len);
 
-// ---- v1.1: adaptive green window ----
+// ---- adaptive green window (since v1.1) ----
 struct PollTracker {
   unsigned long last = 0;
   bool seen = false;

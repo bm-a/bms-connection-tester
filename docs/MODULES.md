@@ -10,7 +10,8 @@
 - Arduino core 2.0.x provides `Serial` (USB/UART0 console) and `Serial2`,
   which the GPIO matrix can route to any pins — here RX = GPIO16, TX = GPIO17.
 - GPIOs used: **4** (RS485 direction), **10/11** (LEDs), **16/17** (UART2),
-  **48** (onboard WS2812 RGB, output-only).
+  **48** (onboard WS2812 RGB, output-only), **5/6/7/8/9/12/13/14** (relays R1–R8),
+  **15** (button), **21** (spoof trigger).
   All avoid strapping (0/3/45/46), USB-JTAG (19/20), flash/PSRAM (26–37)
   and the UART0 console (43/44). (Classic-ESP32 GPIO25 does not exist on S3.)
 
@@ -37,7 +38,30 @@
   the discretes: green = talking, red = silent. No extra library needed.
   Boot red on both; green ≤ 1 s after first valid frame; red ≤ window after silence.
 
-## 4. Power
+## 4. Relay outputs (v2.0)
 
-- USB 5 V (charger or power bank). The whole point of the device is that the
-  traction/battery pack is never needed. Idle draw ≈ 0.3–0.5 W (radio off).
+- R1–R8 → GPIO **5, 6, 7, 8, 9, 12, 13, 14** → relay module IN1–IN8.
+- Module: SmartElex 12 V 8-channel (3 A/channel), optoisolated inputs,
+  ESP 3.3 V compatible. **Coils need a separate 12 V supply** (USB cannot
+  drive them); tie the 12 V supply GND to the ESP GND. Default active-LOW
+  (LOW = ON); flip in the web UI if the module jumpers say HIGH.
+- Firmware drives the OFF level *before* `pinMode`, so no relay clicks at boot.
+- Loads switch up to 3 A/channel (module rating); use NO/COM/NC per channel
+  to the meter functions under test.
+
+## 5. Button + spoof inputs (v2.0)
+
+- Button → GPIO15 to GND (internal pull-up; press = LOW, web-invertible),
+  30 ms debounce. Short press runs the configured relay behavior; **hold
+  10 s = factory reset** (wipes Wi-Fi/admin config, reboots).
+- Spoof trigger → GPIO21 to GND (internal pull-up, web-invertible) or the
+  web FIRE button: meter sees 88.8 V / 88.8 A / 88.8 °C / 188 % on `0x03`
+  for the configured window (default 10 s), then auto-reverts to golden.
+
+## 6. Power
+
+- USB 5 V (charger or power bank) for the ESP + MAX485. The whole point of the
+  device is that the traction/battery pack is never needed.
+- v2.0 keeps Wi-Fi AP always on: idle draw rises (radio active, roughly
+  1 W-class depending on clients) — still USB-powered, but use a real
+  charger, not a weak laptop port. Relay coils are on their own 12 V supply.

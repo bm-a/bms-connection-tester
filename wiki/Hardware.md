@@ -1,4 +1,4 @@
-# Hardware (v1.2)
+# Hardware (v2.0)
 
 ## MCU
 ESP32-S3 DevKitC-1 (8 MB) or N16R8 (16 MB flash + 8 MB octal PSRAM),
@@ -16,6 +16,9 @@ Firmware envs: `esp32-s3-devkitc-1` vs `s3-n16r8`
 | S3 GPIO10 | → 220 Ω → green LED → GND |
 | S3 GPIO11 | → 220 Ω → red LED → GND |
 | S3 GPIO48 | onboard WS2812 RGB (no wiring; mirrors green/red via `neopixelWrite`, brightness 32) |
+| S3 GPIO5/6/7/8/9/12/13/14 | → relay module IN1–IN8 (v2.0; 12 V coils, own supply, common GND) |
+| S3 GPIO15 | → button to GND (v2.0; internal pull-up) |
+| S3 GPIO21 | → spoof trigger to GND (v2.0; internal pull-up) |
 | MAX485 VCC / GND | 3.3 V (NOT 5 V) / common GND with meter |
 | MAX485 A/B | → meter A/B, twisted pair; 120 Ω across A–B on long runs |
 
@@ -29,5 +32,7 @@ library and runs from the 250 ms eval, never the hot RX loop, so 9600-baud
 timing is unaffected.
 
 ## Power
-USB 5 V only — never the traction pack. Idle ≈ 0.3–0.5 W (radio off).
-Full module background: `docs/MODULES.md`.
+USB 5 V for the ESP + MAX485 — never the traction pack. v2.0: Wi-Fi AP is
+always on (radio active, ~1 W-class — use a real charger) and relay coils
+run on their own 12 V supply (common GND with the ESP).
+Full module background: `docs/MODULES.md`. Relay/web details: [[Relays]].

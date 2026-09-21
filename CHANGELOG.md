@@ -3,6 +3,30 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.0] — 2026-09-22
+### Added
+- 8-relay sequencer (`src/relay_ctrl.*`, host-tested): SEQUENTIAL R1→R8 with
+  configurable step delay, or ALL-ON mode; 3 web-selectable button behaviors
+  (hold-X-s + re-press abort / run-to-completion locked / re-press restarts);
+  web per-relay overrides + START/STOP ALL; boot-safe OFF-before-pinMode;
+  active-LOW default with web polarity toggle (SmartElex 12 V class).
+- Always-on WiFi AP web UI (`src/web_ui.*`, ESP-only): dark professional
+  dashboard (relays grid, sequence config, fault spoof, admin), login session
+  with configurable admin user/password, NVS persistence, factory reset via
+  Admin page or 10 s button long-press. AP defaults `BMS-Tester`/`bms12345`,
+  channel 6 — all changeable; works fully offline (no office network needed).
+- Spoof window: pin (GPIO21) or web FIRE shows 88.8 V / 88.8 A / 88.8 °C /
+  188 % on `0x03` for a configurable 1–120 s (default 10 s), then auto-reverts;
+  values/duration/source all web-configurable; frozen checksum rule applied.
+- 18 new tests (`test_relay` 12, `test_spoof` 6): **50/50 passing**; old 32
+  untouched. Wokwi relay LEDs + buttons; CI builds both firmware envs.
+### Changed
+- `FW_VERSION`/`STATUS?` report `2.0`. Radio now on (AP always broadcasting);
+  power guidance updated. v1.x responder behavior frozen and re-proven
+  (native + virtual-bus + soak all green on the same source).
+### Fixed
+- WebServer 2.0.x `collectHeaders` array-form call (caught by firmware build).
+
 ## [v1.2] — 2026-09-21
 ### Added
 - Onboard WS2812 RGB mirror (GPIO48 via built-in `neopixelWrite`, no extra

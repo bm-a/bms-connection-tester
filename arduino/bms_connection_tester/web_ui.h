@@ -1,0 +1,35 @@
+#pragma once
+#include "relay_ctrl.h"
+
+// v2.0 web UI: always-on WiFi AP + login + relay/spoof/admin pages + NVS.
+// ESP-ONLY (needs Arduino WiFi/WebServer/Preferences). Never compiled on host.
+// The v1.x base loop stays untouched — main.cpp just calls web_setup() once
+// and web_tick() every loop; all handlers are short and non-blocking so the
+// 9600-baud RS485 path keeps real-time priority.
+
+#ifdef ARDUINO
+
+// Shared context owned by main.cpp.
+struct WebCtx {
+  Bms2Config *cfg = nullptr;
+  RelaySequencer *seq = nullptr;
+  SpoofWindow *spoof = nullptr;
+  const bool *link_green = nullptr;  // live LED state for the dashboard
+  void (*on_config_changed)() = nullptr;  // rebuild spoof frame + apply
+};
+
+// AP defaults (overridden by NVS once saved).
+#define WEB_AP_SSID_DEFAULT "BMS-Tester"
+#define WEB_AP_PASS_DEFAULT "bms12345"
+#define WEB_AP_CHANNEL_DEFAULT 6
+
+// NVS namespace + version tag.
+#define WEB_NVS_NS "bms2"
+#define WEB_NVS_VERSION 2
+
+void web_setup(WebCtx &ctx);
+void web_tick(unsigned long now);
+// Long-press fallback (button held 10 s): wipe NVS + reboot. Called by main.
+void web_factory_reset();
+
+#endif  // ARDUINO

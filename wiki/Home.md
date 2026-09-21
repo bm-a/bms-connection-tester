@@ -11,9 +11,10 @@ over RS485, so compatible meters, displays, or hosts can be exercised
   (option A) while still counting them as live traffic.
 - Targets: ESP32-S3 DevKitC-1 (8 MB) and N16R8 (16 MB + OPI PSRAM), MAX485,
   external LEDs (GPIO10/11) plus onboard WS2812 RGB (GPIO48) mirroring both.
-- `STATUS?` over USB serial replies `GREEN 1.2` / `RED 1.2` (automation hook).
+- `STATUS?` over USB serial replies `GREEN 2.0` / `RED 2.0` (automation hook).
+- v2.0: 8-relay sequencer + always-on AP dashboard + fault spoof — see [[Relays]].
 
 Start here: [[Flashing]] to load it, [[Hardware]] to wire it,
-[[Protocol]] for the byte format, [[Emulators]] to test without hardware,
-[[Versions]] for what changed in each release.
+[[Protocol]] for the byte format, [[Relays]] for the test bench,
+[[Emulators]] to test without hardware, [[Versions]] for per-release changes.
 Companion electronics handbook: https://github.com/bm-a/jbd-bms-rs485-handbook

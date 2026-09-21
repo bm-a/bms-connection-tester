@@ -46,7 +46,7 @@ def status(cdc):
     cdc.write(b"STATUS?\n")
     cdc.flush()
     line = cdc.readline().decode(errors="replace").strip()
-    return line.split()[0] if line else line  # "GREEN 1.2" -> "GREEN"
+    return line.split()[0] if line else line  # "GREEN 2.0" -> "GREEN"
 
 
 @need_hw
