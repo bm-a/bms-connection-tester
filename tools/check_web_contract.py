@@ -49,6 +49,26 @@ def main() -> int:
         if dead in src:
             fail(f"login remnant still present: {dead}")
 
+    # v2.4 surface: new endpoints routed, per-mode rows + cards present,
+    # progress endpoint referenced by the /update page.
+    for route in ['"/api/sta"', '"/api/cmd"', '"/api/backup"',
+                  '"/api/restore"', '"/api/uprog"']:
+        if route not in src:
+            fail(f"missing route {route}")
+    for rid in ["row_step", "row_seqonly", "row_chaseonly", "row_allonly",
+                "row_dir", "info_fw", "info_mem", "info_net", "cmdout",
+                "sta_test_msg", "restoremsg", "spoofsave", "otaurlmsg",
+                "otainstall", "restorefile"]:
+        if f"id={rid}" not in src:
+            fail(f"missing dashboard element id={rid}")
+    if "showMode()" not in src:
+        fail("per-mode menu needs showMode()")
+    # Single-end rule: exactly one Update.end(true) in web_ui.cpp.
+    if src.count("Update.end(true)") != 1:
+        fail("expected exactly one Update.end(true) (single-end rule)")
+    if "UPDATE_SIZE_UNKNOWN" in src:
+        fail("UPDATE_SIZE_UNKNOWN banned (explicit budget only)")
+
     # 2. element ids
     html_ids = set(re.findall(r"id=([A-Za-z_]+)", html))
     for eid in sorted(set(re.findall(r"getElementById\(['\"]([^'\"]+)['\"]", js))):
@@ -81,6 +101,10 @@ def main() -> int:
               "fw"):
         if f"s.{k}" in js or f"s.cfg.{k}" in js:
             js_keys.add(k)
+    # v2.4: refresh() reads info/STA fields straight off s.cfg (not via
+    # fillForm), so scrape those uses too.
+    for m in re.finditer(r"s\.cfg\.([a-z_]+)", js):
+        js_keys.add(m.group(1))
     for k in sorted(js_keys):
         # relays/link/etc are top-level; cfg.* live under cfg:{...}
         # lbl0-7 are emitted by a builder loop (",\"lbl" + i), not literally.
@@ -107,17 +131,30 @@ def main() -> int:
                        "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena", "spin"],
         "/api/admin": ["cmd", "pass", "ap_ssid", "ap_pass", "ap_ch",
                        "a_pass", "sta_en", "sta_ssid", "sta_pass", "auto"],
-        "/api/ota": ["cmd", "pass", "ota_auto"],
+        "/api/ota": ["cmd", "pass", "ota_auto", "ota_url", "ota_int_h"],
+        "/api/sta": ["cmd", "pass", "ssid", "sta_pass"],
+        "/api/cmd": ["cmd", "pass"],
+        "/api/restore": ["pass", "backup", "nrel", "sv", "ap_ssid",
+                         "ota_url"],
     }
     handlers = {
         "/api/relay": "handle_relay", "/api/seq": "handle_seq",
         "/api/config": "handle_config", "/api/spoof": "handle_spoof",
         "/api/admin": "handle_admin", "/api/ota": "handle_ota",
+        "/api/sta": "handle_sta", "/api/cmd": "handle_cmd",
+        "/api/restore": "handle_restore",
     }
     for ep, keys in posts.items():
         hname = handlers[ep]
         body = src.split(f"static void {hname}()", 1)[1].split(
             "\n}\n", 1)[0]
+        if ep in ("/api/restore", "/api/config", "/api/spoof"):
+            # These reuse the shared appliers: keys land in THEIR bodies.
+            for helper in ("apply_cfg_keys", "apply_spoof_keys"):
+                body += src.split(f"static bool {helper}", 1)[1].split(
+                    "\n}\n", 1)[0] if f"static bool {helper}" in src else ""
+                body += src.split(f"static void {helper}", 1)[1].split(
+                    "\n}\n", 1)[0] if f"static void {helper}" in src else ""
         for k in keys:
             if re.fullmatch(r"lbl[0-7]", k):
                 # Dynamic keys, consumed via the snprintf(k,"lbl%u") loop.

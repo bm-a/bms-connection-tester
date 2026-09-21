@@ -18,10 +18,35 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.3.1** current · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **103 passing** (77 via `pio test -e native` + 26 web + contract, via `sh run_tests.sh`) + 8-day soak |
+| Releases | **v2.4** current · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **134 passing** (93 via `pio test -e native` + 41 web, via `sh run_tests.sh`) + 8-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
+
+## What v2.4 adds (Tasmota-grade update + relay review R1–R31)
+
+- **Firmware upload rebuilt Tasmota-style** (`/update` works fully offline):
+  exact variant-asset match (no 8 MB ↔ N16R8 cross-flash), explicit sketch
+  budget (never `SIZE_UNKNOWN`), `0xE9` magic + flash-size-vs-chip gate on
+  the first bytes, ONE finalize in the done handler, progress bar, and every
+  failure names its cause. A wrong file or password changes nothing — the box
+  keeps running. OTA-pull installs enforce the same gates; custom firmware
+  URL (Tasmota OtaUrl) + Upgrade-from-URL supported.
+- **Per-mode relay menu**: the Sequence card shows only the active mode's
+  fields (Sequential: step/hold/dir; Chase: step/sweeps/dir; All-ON:
+  hold/stagger). Chase gains a fixed 20 ms break-before-make (release is
+  slower than pull-in); START is refused 0.5 s after STOP (relay settle);
+  mode switch needs IDLE; loop needs a finite hold; count-shrink acts
+  immediately (stale forces cleared, never resurrected); RESTART keeps tile
+  forces. Timing floors: step ≥ 100 ms (default 250), stagger default 50 ms,
+  pause 500–60000 ms (default 2000).
+- **Spoof Save-only** (stage values without firing), **web console**
+  (`START STOP FIRE CANCEL STATUS UPTIME VERSION REBOOT RESET HELP`),
+  **config backup/restore** JSON (passwords never exported), **one-shot STA
+  uplink test** (joins ≤ 30 s without rebooting, reports RSSI/IP, drops back
+  to AP-only), **Information card** (variant/flash/sketch/heap/uptime/boot
+  count/reset reason/RSSI/pin map), **mDNS** (`bmstester.local`), keep-WiFi
+  reset, boot-counter reset, editable OTA check cadence.
 
 ## What v2.3.1 fixes/adds (bench-driven patch on v2.3)
 
@@ -86,7 +111,7 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.3.1` / `RED 2.3.1`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.4` / `RED 2.4`.
 - Joining the AP pops the dashboard automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
@@ -105,27 +130,29 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 ## Verify it
 
 ```sh
-sh run_tests.sh          # full 105: g++ suites + web contract + test_web + test_ota + soak (always); HIL when attached
-pio test -e native       # 70 Unity tests: checksum, logic, parser, stress, relay, spoof, ota, system
-pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile
+sh run_tests.sh          # full 134: g++ suites + web contract + test_web + test_upload + soak (always); HIL when attached
+pio test -e native       # 93 Unity tests: checksum, logic, parser, stress, relay, spoof, system, ota, upload
+pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile (run inside proot-debian: glibc toolchain)
 ```
 
-Emulator results for v2.3.1 (Termux + Debian proot):
-- Native 103/103 (77 pio + 26 web + contract) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
-- Virtual bus (`sh tools/virtual_bus.sh`): 03/04/05 golden, silences,
+Emulator results for v2.4 (Termux + Debian proot):
+- Native 134/134 (88 pio + 41 web + 5 upload + contract) + web-contract PASS + soak — PASS (frozen v1.x untouched).
+- Virtual bus (`sh tools/virtual_bus.sh`, in proot-debian for /tmp): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
-- Dashboard JS: `node --check` clean; JS↔firmware contract gate green.
-- Wokwi: discretes + NeoPixel + 8 relay modules (NO indicators) + buttons;
-  `sim.yaml` automation ready (needs `WOKWI_CLI_TOKEN` for headless/CI runs).
-- QEMU-S3: Stage-0 harness (`tools/qemu_boot_test.sh`) runs in proot-debian;
-  flash model clean (GD WRSR2-QE + burst-wrap fixes), guest still resets in
-  the 2nd-stage bootloader (SITE1: init returns 0x0a) — parked, see HANDOFF.
+- Dashboard JS (both pages): `node --check` clean; JS↔firmware contract gate green (incl. single-end rule + no-SIZE_UNKNOWN rule).
+- Wokwi: diagram DUT pins verified against firmware (relays 5,6,7,8,9,12,13,14 · LEDs 10,11 · RGB 48 · UART 16,17 · button 15 · spoof 21);
+  headless run needs `WOKWI_CLI_TOKEN` (CI-gated).
+- QEMU-S3: parked (Stage-0 flash model clean; guest resets in 2nd-stage bootloader SITE1) — see HANDOFF.
 
-`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.3.1).
+`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.4).
 `firmware-n16r8/firmware.bin` SHA-256: see `firmware-n16r8/README.md`.
 
 ## Versions
 
+- **v2.4** — Tasmota-grade update path, per-mode relay menu (chase BBM, stop
+  dead-band, timing floors), spoof save-only, console, backup/restore,
+  custom OTA URL, STA uplink test, info card, mDNS, keep-WiFi/bootcount
+  resets. 134/134 tests.
 - **v2.3.1** — bench patch: no login wall (per-request admin password),
   sticky saves, UTF-8 pages, chase auto-sweeps, spoof trigger GPIO, WiFi
   kill switch (GPIO18), working OTA check + Install button. 103/103 tests.

@@ -24,8 +24,17 @@ inline uint32_t esp_random() {
   s = s * 1664525u + 1013904223u;
   return s;
 }
+// v2.4 info-card APIs (test-driven globals).
+inline uint32_t g_esp_free_heap = 200000;
+inline uint32_t g_esp_free_sketch = 0x800000;
+inline uint32_t g_esp_flash_size = 0x800000;
+inline uint32_t g_esp_psram = 0;
 struct EspStub {
   void restart() { g_restart_requested = true; }
+  uint32_t getFreeHeap() { return g_esp_free_heap; }
+  uint32_t getFreeSketchSpace() { return g_esp_free_sketch; }
+  uint32_t getFlashChipSize() { return g_esp_flash_size; }
+  uint32_t getPsramSize() { return g_esp_psram; }
 };
 inline EspStub ESP;
 
@@ -84,6 +93,8 @@ class String {
   }
   bool operator==(const String &o) const { return s_ == o.s_; }
   bool operator==(const char *o) const { return s_ == (o ? o : ""); }
+  bool operator!=(const String &o) const { return s_ != o.s_; }
+  bool operator!=(const char *o) const { return s_ != (o ? o : ""); }
   friend String operator+(const String &a, const String &b) {
     return String(a.s_ + b.s_);
   }

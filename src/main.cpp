@@ -1,11 +1,14 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.3.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.4.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
 // AP web UI (config + admin auth, NVS), spoof window (test values on 0x03).
 // v2.3 ADDS: relay count (first N) + chase-wave mode, 2-stage spoof
 // (100-first then 88.8/188, both stages editable, timings per stage),
-// hold in milliseconds, persistent logins, manual + automatic OTA.
+// hold in milliseconds, manual + automatic OTA.
+// v2.4 ADDS: Tasmota-grade update gates, per-mode relay menu (chase BBM +
+// stop dead-band + new timing floors), spoof save-only, console, config
+// backup/restore, custom OTA URL, STA uplink test, info card, mDNS.
 //
 // Wiring (ESP32-S3-DevKitC-1 / S3 N16R8):
 //   GPIO17 (TX) -> MAX485 DI | GPIO16 (RX) -> MAX485 RO
@@ -19,10 +22,11 @@
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.3.1\n" / "RED 2.3.1\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.4\n" / "RED 2.4\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"
+#include "fw_upload.h"  // v2.4 shared update gates (host-tested)
 #include "relay_ctrl.h"
 #include "web_ui.h"
 #include "ota.h"
@@ -170,12 +174,32 @@ static void ota_check_now() {
   ota_set_status(ota.update_pending ? "update available" : "up to date");
 }
 
-// Download + install the pending release. Streams the asset straight into
-// flash (no 700 KB RAM copy — the 8 MB board has no PSRAM). Reboots on
-// success; returns only on failure (box keeps running the old firmware).
+// Download + install the pending release (or the custom URL from the
+// dashboard). Streams the asset straight into flash (no 700 KB RAM copy —
+// the 8 MB board has no PSRAM) under the SAME Tasmota-grade gates as the
+// manual upload: exact variant asset, explicit budget, image-head check.
+// Reboots on success; returns only on failure (old firmware keeps running).
 static void ota_install_now() {
   char url[160];
-  if (!ota_download_url(ota.latest_tag, FW_VARIANT, url, sizeof(url))) {
+  if (web_ota_url()[0] != '\0') {
+    // Custom URL (dashboard-validated http(s) .bin on save; re-checked).
+    if (strncmp(web_ota_url(), "http", 4) != 0) {
+      ota_set_status("bad custom url");
+      return;
+    }
+    strncpy(url, web_ota_url(), sizeof(url) - 1);
+    url[sizeof(url) - 1] = '\0';
+    // The custom file must still be this variant's asset (no cross-flash).
+    const char *tail = url;
+    for (const char *p = url; *p; p++) {
+      if (*p == '/') tail = p + 1;
+    }
+    if (!fw_filename_ok(tail, FW_VARIANT)) {
+      ota_set_status(fw_err_str(FW_WRONG_FILE));
+      return;
+    }
+  } else if (!ota_download_url(ota.latest_tag, FW_VARIANT, url,
+                               sizeof(url))) {
     ota_set_status("bad url");
     return;
   }
@@ -198,12 +222,42 @@ static void ota_install_now() {
     return;
   }
   int len = http.getSize();
-  if (!Update.begin(len > 0 ? (size_t)len : UPDATE_SIZE_UNKNOWN)) {
-    ota_set_status("update begin failed");
+  uint32_t max_space =
+      fw_max_sketch_space((uint32_t)ESP.getFreeSketchSpace());
+  if (!fw_size_ok(len > 0 ? (uint32_t)len : 0, max_space)) {
+    ota_set_status(fw_err_str(FW_TOO_BIG));
     http.end();
     return;
   }
-  size_t written = Update.writeStream(http.getStream());
+  if (!Update.begin(max_space)) {
+    ota_set_status(fw_err_str(FW_BEGIN_FAIL));
+    http.end();
+    return;
+  }
+  // Gate the stream head before committing (read 4, check, write 4, rest).
+  WiFiClient &stream = http.getStream();
+  uint8_t head[4];
+  size_t hn = 0;
+  while (hn < 4) {
+    int c = stream.read();
+    if (c < 0) break;
+    head[hn++] = (uint8_t)c;
+  }
+  FwUploadErr gg =
+      fw_gate_image_head(head, hn, (uint32_t)ESP.getFlashChipSize());
+  if (gg != FW_OK) {
+    ota_set_status(fw_err_str(gg));
+    Update.end(false);
+    http.end();
+    return;
+  }
+  if (Update.write(head, hn) != hn) {
+    ota_set_status(fw_err_str(FW_WRITE_FAIL));
+    Update.end(false);
+    http.end();
+    return;
+  }
+  size_t written = hn + Update.writeStream(stream);
   http.end();
   if (written == 0 || Update.hasError() || !Update.end(true)) {
     ota_set_status("install failed");
@@ -279,7 +333,8 @@ void setup() {
   wctx.on_ota_install = ota_install_now;
   web_setup(wctx);  // loads NVS config, builds spoof frames, starts always-on AP
   // v2.3 burn-in: auto-start the configured mode (relays already OFF-first).
-  if (cfg.boot_autostart) seq.start(millis());
+  // (void): boot start is always outside the post-stop dead-band (R12).
+  if (cfg.boot_autostart) (void)seq.start(millis());
   // Relays: drive OFF level BEFORE pinMode so nothing clicks at boot.
   for (uint8_t i = 0; i < RELAY_COUNT; i++) {
     uint8_t off = relay_pin_level(false, cfg.active_low);

@@ -15,6 +15,7 @@ class IPAddress {
     snprintf(buf, sizeof(buf), "%u.%u.%u.%u", b_[0], b_[1], b_[2], b_[3]);
     return buf;
   }
+  String toString() const { return String(str().c_str()); }
 
  private:
   uint8_t b_[4];

@@ -2,9 +2,11 @@
 #include "relay_ctrl.h"
 #include "ota.h"
 
-// v2.3 web UI: always-on WiFi AP + relay/spoof/admin pages + NVS.
+// v2.4 web UI: always-on WiFi AP + relay/spoof/admin pages + NVS.
 // v2.3.1: no login wall (WPA2 is the gate); reboot/reset/upload/OTA-admin
 // carry the admin password per request.
+// v2.4: Tasmota-grade update path, per-mode relay menu, console, config
+// backup/restore, custom OTA URL, STA uplink test, info card, mDNS.
 // ESP-ONLY (needs Arduino WiFi/WebServer/Preferences). Never compiled on host.
 // The v1.x base loop stays untouched — main.cpp just calls web_setup() once
 // and web_tick() every loop; all handlers are short and non-blocking so the
@@ -38,6 +40,13 @@ void web_tick(unsigned long now);
 // Long-press fallback (button held 10 s): wipe NVS + reboot. Called by main.
 // Long-press fallback (button held 10 s): wipe NVS + reboot. Called by main.
 void web_factory_reset();
+// v2.4: the ONE reboot path (flush NVS, grace beat, restart). All reboot/
+// reset/update-success flows funnel through here.
+void web_reboot_now();
+// v2.4: boot counter reset (Tasmota Reset-99; no reboot needed).
+void web_bootcount_reset();
+// v2.4: custom firmware URL (Tasmota OtaUrl; "" = GitHub releases default).
+const char *web_ota_url();
 // v2.3.1 WiFi kill switch (main.cpp polls the pin): false = AP+portal+
 // server fully down now; true = back up (default on at boot).
 void web_wifi_set(bool on);

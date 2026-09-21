@@ -115,7 +115,8 @@ class WebServer {
                      const std::map<std::string, std::string> &headers =
                          std::map<std::string, std::string>(),
                      const std::map<std::string, std::string> &args =
-                         std::map<std::string, std::string>()) {
+                         std::map<std::string, std::string>(),
+                     bool pass_first = true) {
     Ctx c;
     c.method = HTTP_POST;
     c.path = path;
@@ -123,7 +124,7 @@ class WebServer {
     c.args = args;
     cur() = c;
     auto uh = uploads().find(Key(path, HTTP_POST));
-    if (uh != uploads().end() && uh->second) {
+    auto send_pass_field = [&]() {
       auto fp = args.find("pass");
       if (fp != args.end()) {
         // Form-field part (empty filename), as the browser sends it.
@@ -135,6 +136,9 @@ class WebServer {
         cur().upload.totalSize = fp->second.size();
         uh->second();
       }
+    };
+    if (uh != uploads().end() && uh->second) {
+      if (pass_first) send_pass_field();
       cur().upload.status = UPLOAD_FILE_START;
       cur().upload.filename = String(filename);
       cur().upload.buf = nullptr;
@@ -153,6 +157,7 @@ class WebServer {
       cur().upload.buf = nullptr;
       cur().upload.currentSize = 0;
       uh->second();
+      if (!pass_first) send_pass_field();
     }
     auto &rt = routes();
     auto it = rt.find(Key(path, HTTP_POST));

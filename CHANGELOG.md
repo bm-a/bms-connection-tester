@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.4] — 2026-09-22
+### Fixed
+- Firmware upload rebuilt Tasmota-style (`src/fw_upload.h` gates, host-tested):
+  exact variant-asset basename match (the old suffix idea would cross-flash —
+  caught by its own unit test), explicit sketch budget instead of
+  `UPDATE_SIZE_UNKNOWN`, `0xE9` magic + flash-size-vs-chip head gate, ONE
+  `Update.end()` in the done handler (the old double-end lied about success),
+  order-independent password collection, progress bar, named errors. A wrong
+  file or password stages nothing and changes nothing.
+- Relay review R1–R31 folded in: chase break-before-make (20 ms all-OFF gap;
+  release is slower than pull-in), 500 ms post-stop start dead-band, live
+  count-shrink safety, force-in-chase idles the wave, RESTART keeps forces,
+  run-register snapshots (mid-cycle edits apply next cycle), timing floors
+  (step ≥ 100 ms, stagger default 50, pause 500–60000 ms).
+- Real firmware builds caught two host-stub lies: `Update.write` takes
+  non-const (fixed + stub aligned), and this Arduino core has no
+  `ESP.getResetReason()` (now `esp_reset_reason()` + vocabulary).
+### Changed
+- Dashboard shows only the active mode's fields; spoof FIRE split into
+  Save-only vs Fire; OTA check cadence editable; Save + reboot button.
+- Test counts: 134/134 (36 relay, 41 web, 5 upload gates) + contract
+  (single-end + no-SIZE_UNKNOWN rules) + soak + virtual-bus + both PIO envs.
+### Added
+- Web console, config backup/restore (passwords never exported), custom OTA
+  URL + Upgrade-from-URL, one-shot STA uplink test, Information card,
+  mDNS `bmstester.local`, keep-WiFi reset, boot-counter reset, reset-reason
+  tracking. New wiki [[Dashboard]] page; [[Relays]] rewritten per-mode.
+
 ## [v2.3.1] — 2026-09-21
 ### Fixed
 - Dashboard save race: the 1 s state refresh overwrote any field the moment

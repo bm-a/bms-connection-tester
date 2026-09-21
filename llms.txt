@@ -20,7 +20,12 @@ password for reboot/reset/upload/OTA-admin). v2.2 adds a captive portal
 2-stage spoof (100 first, then 88.8/188), per-mode ms holds, industrial pack
 (loop/pause/limit, stagger, direction, labels, counters, autostart),
 and manual + automatic OTA. v2.3.1 adds chase auto-sweeps, spoof trigger GPIO,
-WiFi kill switch (GPIO18), and a working OTA check + Install button. v1.x responder core frozen.
+WiFi kill switch (GPIO18), and a working OTA check + Install button. v2.4 adds
+a Tasmota-grade update path (exact asset match, explicit budget, image-head
+gate, single finalize, named errors), per-mode relay menu (chase
+break-before-make, stop dead-band, timing floors), spoof save-only, web
+console, config backup/restore, custom OTA URL, one-shot STA uplink test,
+info card, mDNS, keep-WiFi/bootcount resets. v1.x responder core frozen.
 
 Also known as / search terms: JBD BMS emulator, JBD BMS simulator, Xiaoxiang
 BMS tester, smart BMS responder, RS485 BMS spoof, e-rickshaw meter tester,
@@ -43,16 +48,17 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.3.1` / `RED 2.3.1`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.4` / `RED 2.4`.
 
 ## Code map
 
 - `src/bms_protocol.{h,cpp}` — checksum, streaming parser, dispatcher, tracker, canned frames (FROZEN since v1.x).
-- `src/relay_ctrl.{h,cpp}` — sequencer (sequential/ALL-ON/chase, count, loop/pause/limit, stagger, direction, counters), debounce, 2-stage spoof plan/builder, config (host-tested).
+- `src/relay_ctrl.{h,cpp}` — sequencer (sequential/ALL-ON/chase, count, loop/pause/limit, stagger, direction, counters, chase BBM, stop dead-band), debounce, 2-stage spoof plan/builder, config (host-tested).
+- `src/fw_upload.h` — update gates: explicit budget, asset match, image-head check, error vocabulary (host-tested).
 - `src/ota.{h,cpp}` — OTA decision logic: version compare, asset pick, download URL, auto-check gate (host-tested, no Arduino deps).
-- `src/web_ui.{h,cpp}` — always-on AP dashboard (no login wall; per-request admin password for sensitive actions), NVS v3 + migration, captive portal, STA uplink, manual `/update` upload + OTA check/install (ESP-only).
+- `src/web_ui.{h,cpp}` — always-on AP dashboard (no login wall; per-request admin password for sensitive actions), per-mode menu, NVS v3 + migration, captive portal, STA uplink + test, Tasmota-grade manual `/update` upload + OTA check/install/URL, console, backup/restore, mDNS (ESP-only).
 - `src/main.cpp` — Arduino loop: frozen RS485 path + relay/web/spoof/OTA handling.
-- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_ota|test_system` — 77 Unity tests (pio) + `test_web` (26, g++ host stubs) + `tools/check_web_contract.py` gate.
+- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_ota|test_upload|test_system` — 93 Unity tests (pio) + `test_web` (41, g++ host stubs) + `tools/check_web_contract.py` gate.
 - `tools/virtual_meter.py` — host-side meter simulator with scenario modes.
 - `wokwi/sim.yaml` — headless automation scenario (needs WOKWI_CLI_TOKEN).
 - `tools/dut_emu.cpp` + `tools/raw_meter.py` + `tools/virtual_bus.sh` — PTY virtual-bus emulation (no ESP32).

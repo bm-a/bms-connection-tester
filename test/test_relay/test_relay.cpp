@@ -12,6 +12,7 @@ static Bms2Config def_cfg() {
   Bms2Config c;
   c.step_delay_ms = 500;
   c.hold_seq_ms = 30000;
+  c.allon_stagger_ms = 0;  // legacy tests: true at-once unless stated
   c.relay_count = 8;
   c.relay_mode = RELAY_SEQUENTIAL;
   c.button_mode = BTN_HOLD_ABORT;
@@ -135,7 +136,7 @@ void test_seq_manual_override(void) {
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
   s.start(10000);  // sequence runs alongside forced relay
   TEST_ASSERT_TRUE(s.relayOn(7));
-  s.stopAll();  // clears forces too
+  s.stopAll(30000);  // clears forces too
   TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
 }
 
@@ -200,21 +201,56 @@ void test_seq_chase_wave(void) {
   s.start(10000);
   TEST_ASSERT_TRUE(s.relayOn(0));
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());  // single lit relay
-  s.tick(10500);  // step: R1 off, R2 on
+  s.tick(10500);  // grid advance -> BBM gap (R15): all off...
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(10500 + CHASE_BBM_MS);  // ...then R2 lights, R1 stays off
   TEST_ASSERT_FALSE(s.relayOn(0));
   TEST_ASSERT_TRUE(s.relayOn(1));
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
-  s.tick(11000);
+  s.tick(11000);  // next advance parks all-OFF again...
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(11000 + CHASE_BBM_MS);  // ...then R3
   TEST_ASSERT_TRUE(s.relayOn(2));
-  // Full sweep wraps R8 -> R1 (8 steps from start).
-  s.tick(10000 + 8 * 500);
+  // Full sweep wraps R8 -> R1 (one grid step per tick: resolve, then gap,
+  // then light — the wave never skips, it just steps once per tick call).
+  for (int k = 3; k <= 7; k++) {
+    s.tick(10000 + k * 500);  // advance -> gap
+    TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+    s.tick(10000 + k * 500 + CHASE_BBM_MS);  // gap over -> exactly R(k+1)
+    TEST_ASSERT_TRUE(s.relayOn((uint8_t)k));
+    TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
+  }
+  s.tick(10000 + 8 * 500);  // 8th advance -> gap
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(10000 + 8 * 500 + CHASE_BBM_MS);  // wraps to R1
   TEST_ASSERT_TRUE(s.relayOn(0));
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
   // Runs forever with hold 0; STOP ALL ends it.
   s.tick(1000000);
   TEST_ASSERT_TRUE(s.running());
-  s.stopAll();
+  s.stopAll(1000000);
   TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+}
+
+void test_seq_chase_bbm_gap(void) {
+  // R15/R19: release is slower than pull-in, so every chase advance parks
+  // all-OFF for CHASE_BBM_MS. Bitmask weight: 1 while lit, 0 in the gap.
+  Bms2Config c = def_cfg();
+  c.relay_mode = RELAY_CHASE;
+  c.chase_sweeps = 0;
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(10000);
+  TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
+  s.tick(10499);
+  TEST_ASSERT_EQUAL_UINT8(1, s.onCount());  // still R1
+  s.tick(10500);  // grid advance -> BBM gap, nothing lit
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(10519);
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(10520);  // gap over -> exactly R2
+  TEST_ASSERT_TRUE(s.relayOn(1));
+  TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
 }
 
 void test_seq_chase_count_wrap_and_hold(void) {
@@ -225,11 +261,17 @@ void test_seq_chase_count_wrap_and_hold(void) {
   RelaySequencer s;
   s.begin(&c);
   s.start(10000);  // hold expires at 13000
-  s.tick(10500);
+  s.tick(10500);  // first advance -> BBM gap
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(10500 + CHASE_BBM_MS);
   TEST_ASSERT_TRUE(s.relayOn(1));
-  s.tick(11000);
+  s.tick(11000);  // gap again...
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(11000 + CHASE_BBM_MS);
   TEST_ASSERT_TRUE(s.relayOn(2));
-  s.tick(11500);  // wraps within first 3
+  s.tick(11500);  // gap...
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(11500 + CHASE_BBM_MS);  // ...wraps within first 3
   TEST_ASSERT_TRUE(s.relayOn(0));
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
   TEST_ASSERT_FALSE(s.relayOn(3));  // beyond count never lights
@@ -392,7 +434,9 @@ void test_reverse_direction(void) {
   c.chase_sweeps = 0;
   s.start(20000);
   TEST_ASSERT_TRUE(s.relayOn(3));
-  s.tick(20500);
+  s.tick(20500);  // advance -> BBM gap
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(20500 + CHASE_BBM_MS);
   TEST_ASSERT_TRUE(s.relayOn(2));
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
 }
@@ -432,12 +476,173 @@ void test_counters(void) {
   TEST_ASSERT_EQUAL_UINT(8, s.actuations());
   s.tick(13500 + 30000);  // hold_seq default 30000 -> cycle done
   TEST_ASSERT_EQUAL_UINT(1, s.cyclesDone());
-  s.stopAll();  // stop preserves QC counters; begin resets them
+  s.stopAll(50000);  // stop preserves QC counters; begin resets them
   TEST_ASSERT_EQUAL_UINT(1, s.cyclesDone());
   TEST_ASSERT_EQUAL_UINT(8, s.actuations());
   s.begin(&c);
   TEST_ASSERT_EQUAL_UINT(0, s.cyclesDone());
   TEST_ASSERT_EQUAL_UINT(0, s.actuations());
+}
+
+// R30: mandatory all-OFF dead-band between stop and next start.
+void test_start_deadband_after_stop(void) {
+  Bms2Config c = def_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  TEST_ASSERT_TRUE(s.start(10000));
+  TEST_ASSERT_TRUE(s.running());
+  s.stopAll(20000);
+  TEST_ASSERT_FALSE(s.running());
+  TEST_ASSERT_FALSE(s.start(20000));  // immediate restart refused
+  TEST_ASSERT_FALSE(s.start(20499));
+  TEST_ASSERT_FALSE(s.running());
+  TEST_ASSERT_TRUE(s.start(20500));  // dead-band elapsed
+  TEST_ASSERT_TRUE(s.running());
+  TEST_ASSERT_TRUE(s.relayOn(0));
+}
+
+// R29: forcing a tile mid-chase idles the wave first — never two ON at once.
+void test_force_in_chase_idles_wave(void) {
+  Bms2Config c = def_cfg();
+  c.relay_mode = RELAY_CHASE;
+  c.chase_sweeps = 0;
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(10000);
+  s.tick(10500 + CHASE_BBM_MS);
+  TEST_ASSERT_TRUE(s.running());
+  s.setForced(5, true);  // wave drops to IDLE, tile becomes the only ON
+  TEST_ASSERT_FALSE(s.running());
+  TEST_ASSERT_TRUE(s.relayOn(5));
+  TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
+  TEST_ASSERT_EQUAL_UINT(0, s.cyclesDone());  // no phantom cycle counted
+}
+
+// R22: count shrink mid-run drops out-of-range outputs the same tick.
+void test_count_shrink_live_drop(void) {
+  Bms2Config c = def_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(10000);
+  s.tick(13500);
+  TEST_ASSERT_EQUAL_UINT8(8, s.onCount());
+  c.relay_count = 4;  // edited live, no countChanged() call
+  s.tick(13600);
+  for (uint8_t i = 4; i < RELAY_COUNT; i++) TEST_ASSERT_FALSE(s.relayOn(i));
+  TEST_ASSERT_EQUAL_UINT8(4, s.onCount());
+}
+
+// R8: countChanged() clears out-of-range forces + clamps the step pointer.
+void test_count_changed_clears_forces(void) {
+  Bms2Config c = def_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  s.setForced(6, true);
+  s.setForced(2, true);
+  s.start(10000);
+  c.relay_count = 4;
+  s.countChanged();
+  TEST_ASSERT_FALSE(s.relayOn(6));  // stale force gone
+  TEST_ASSERT_TRUE(s.relayOn(2));   // in-range force kept
+}
+
+// R23: regrow after a shrink must not resurrect a stale force.
+void test_count_regrow_no_resurrect(void) {
+  Bms2Config c = def_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  s.setForced(6, true);
+  c.relay_count = 4;
+  s.countChanged();
+  TEST_ASSERT_FALSE(s.relayOn(6));
+  c.relay_count = 8;
+  s.countChanged();
+  s.tick(50000);
+  TEST_ASSERT_FALSE(s.relayOn(6));  // stays off: no new operator action
+}
+
+// R24 (sequencer half): hold 0 never expires even with loop on.
+// (The web layer rejects hold==0 && loop at save time; the sequencer just
+// never produces a cycle from an unterminated hold.)
+void test_hold0_loop_never_cycles(void) {
+  Bms2Config c = def_cfg();
+  c.hold_seq_ms = 0;
+  c.loop_enabled = true;
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(10000);
+  s.tick(13500);
+  s.tick(10000000);
+  TEST_ASSERT_TRUE(s.running());
+  TEST_ASSERT_EQUAL_UINT(0, s.cyclesDone());
+}
+
+// R31: RESTART preserves manual forces (only STOP ALL clears them).
+void test_restart_preserves_forces(void) {
+  Bms2Config c = def_cfg();
+  c.button_mode = BTN_RESTART;
+  RelaySequencer s;
+  s.begin(&c);
+  s.setForced(7, true);
+  handle_button_press(s, c, 10000);
+  s.tick(12000);
+  handle_button_press(s, c, 12000);  // restart from R1, tile kept
+  TEST_ASSERT_TRUE(s.relayOn(7));
+  TEST_ASSERT_TRUE(s.relayOn(0));
+  TEST_ASSERT_EQUAL_UINT8(2, s.onCount());
+}
+
+// R11: mid-cycle timing edits apply next cycle, never mid-flight.
+void test_midcycle_edit_latched(void) {
+  Bms2Config c = def_cfg();
+  c.hold_seq_ms = 1000;
+  c.loop_enabled = true;
+  c.cycle_pause_ms = 2000;
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(10000);
+  s.tick(13500);  // steps done on the 500 ms grid, hold 13500 -> 14500
+  c.step_delay_ms = 50;  // edit mid-cycle: must not disturb this cycle
+  c.hold_seq_ms = 9000;
+  s.tick(14500);  // cycle 1 ends on the ORIGINAL hold
+  TEST_ASSERT_EQUAL_UINT(1, s.cyclesDone());
+  s.tick(16500);  // pause elapsed -> cycle 2 starts...
+  // ...on the NEW 50 ms grid: R2 asserts at 16550, not 17000.
+  s.tick(16549);
+  TEST_ASSERT_FALSE(s.relayOn(1));
+  s.tick(16550);
+  TEST_ASSERT_TRUE(s.relayOn(1));
+}
+
+// Start while running restarts immediately (no stop => no dead-band).
+void test_start_while_running_restarts(void) {
+  Bms2Config c = def_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  TEST_ASSERT_TRUE(s.start(10000));
+  s.tick(13000);
+  TEST_ASSERT_EQUAL_UINT8(7, s.onCount());
+  TEST_ASSERT_TRUE(s.start(14000));
+  TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
+  TEST_ASSERT_TRUE(s.relayOn(0));
+}
+
+// R5: fresh boxes stagger ALL-ON by default (never slam 8 contactors).
+void test_allon_default_stagger_ramps(void) {
+  Bms2Config c;  // struct defaults: stagger 50 ms
+  TEST_ASSERT_EQUAL_UINT16(50, c.allon_stagger_ms);
+  TEST_ASSERT_EQUAL_UINT16(250, c.step_delay_ms);
+  TEST_ASSERT_EQUAL_UINT32(2000, c.cycle_pause_ms);
+  c.relay_mode = RELAY_ALL_ON;
+  c.relay_count = 4;
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(10000);
+  TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
+  s.tick(10050);
+  TEST_ASSERT_EQUAL_UINT8(2, s.onCount());
+  s.tick(10150);
+  TEST_ASSERT_EQUAL_UINT8(4, s.onCount());
 }
 
 void run_all() {
@@ -466,6 +671,17 @@ void run_all() {
   RUN_TEST(test_reverse_direction);
   RUN_TEST(test_allon_stagger_ramps);
   RUN_TEST(test_counters);
+  RUN_TEST(test_seq_chase_bbm_gap);
+  RUN_TEST(test_start_deadband_after_stop);
+  RUN_TEST(test_force_in_chase_idles_wave);
+  RUN_TEST(test_count_shrink_live_drop);
+  RUN_TEST(test_count_changed_clears_forces);
+  RUN_TEST(test_count_regrow_no_resurrect);
+  RUN_TEST(test_hold0_loop_never_cycles);
+  RUN_TEST(test_restart_preserves_forces);
+  RUN_TEST(test_midcycle_edit_latched);
+  RUN_TEST(test_start_while_running_restarts);
+  RUN_TEST(test_allon_default_stagger_ramps);
 }
 
 #ifdef ARDUINO

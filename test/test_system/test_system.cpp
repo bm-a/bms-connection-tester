@@ -74,6 +74,7 @@ void test_office_day_24h(void) {
   c.step_delay_ms = 500;
   c.hold_seq_ms = 120000;
   c.hold_all_ms = 120000;
+  c.allon_stagger_ms = 0;  // this sim's T18 probe is the at-once slam case
   c.relay_count = 8;
   c.relay_mode = RELAY_SEQUENTIAL;
   c.button_mode = BTN_HOLD_ABORT;
