@@ -341,8 +341,10 @@ back them up separately if they matter:
 3. Meson sniffs Termux's bionic headers (`-I…/termux/files/usr/include` baked
    into build.ninja) → configure AND build with sanitized
    `PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`.
-4. QEMU JIT cannot run inside proot (glib `g_quark_init` abort in prebuilt;
-   source-built binary runs but see §9). Build in proot, RUN on real Linux.
+4. ~~QEMU JIT cannot run inside proot~~ STALE 2026-09-21: QEMU 9.2.2
+   source-built DOES execute guests inside proot-debian on this phone
+   (ESP-ROM output + guest_errors captured). Only the official prebuilt
+   aborts (static-glib `g_quark_init`). Build AND run in proot-debian.
 5. v2.3 build lessons: quoted `-D` strings do not survive `platformio.ini`
    (`-DFW_VARIANT="n16r8"` arrives unquoted → numeric `-DFW_IS_N16R8=1`
    instead); Arduino-ESP32 2.0.x `HTTPUpdate` has no `followRedirects` →
@@ -367,14 +369,24 @@ Traced with `-d guest_errors` + fixed two REAL upstream flash-model bugs
 1. RDID `0x90`/`0xAB` unanswered for non-SST parts → now generic (JEDEC-based).
 2. GD25Q64 (8 MB image part) had no SFDP → `0x5A` failed → added 256-B table.
 3. `0x77` Set-Burst-with-Wrap → accept-and-ignore (trace-confirmed gone).
-After all three, remaining trace per boot loop: `M25P80: Unknown cmd 0x10`
-(~22–25×) + `Invalid read at addr 0x10200C … region 'er'` (~84–99×) → still asserts.
-Re-confirmed with the v2.0 8 MB image (22/84) — identical signature, no regression.
+Stage-0 baseline 2026-09-21 (`tools/qemu_boot_test.sh`, v2.3 n16r8 image,
+45 s, IN proot-debian — JIT-stale note above is dead): **81×
+`Unknown cmd 0x10` (QEMU prints `%x` without prefix — "10" IS 0x10),
+0× `0x10200C`, 1 POWERON + 81 RTC_SW resets** — i.e. exactly ONE cmd-0x10
+per boot attempt, then crash-loop; the 0x77 patch killed the whole 0x10200C
+class. UART0 shows only ROM output (repeating `mode:DIO … entry 0x403c98d0`).
+Observability constraint: firmware `STATUS?`/logs live on USB-Serial, NOT
+UART0 — so Stage-A pass = zero flash errors + reboot loop STOPS (+ Stage-B
+GPIO proof), not a literal `STATUS?→RED` over UART0.
+Next agent: to continue, decode what `0x10` is in DIO context (possible status-
+register or continuous-read mode byte); or deprioritize — host tests + soak
+already prove the firmware.
 Hypothesis: DIO-era command bytes hitting the single-line SSI model + an
 unmodeled register region. IDF-based guests are unaffected per Espressif CI;
 Arduino guests were never QEMU-supported. Verdict: **emulator gap, not firmware
 — our code is never reached.** Re-confirmed on v2.1 image (same signature);
-not re-run for v2.3 (QEMU cannot start inside the phone sandbox — optional).
+v2.3 baseline above via `tools/qemu_boot_test.sh` (exact test: PASS iff zero
+0x10 + zero 0x10200C; `BASELINE=1` records signature).
 Practical emulation = Wokwi (`wokwi/` v2.1: verified pins, relay modules,
 `sim.yaml` automation; browser run manual, headless needs `WOKWI_CLI_TOKEN`).
 `tools/run_qemu_s3.sh` = one-command boot test for real Linux/Mac.
