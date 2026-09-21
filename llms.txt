@@ -18,10 +18,12 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 
 ## Hardware
 
-- MCU: ESP32-S3 DevKitC-1 (Arduino core). UART2 at 9600 8N1: TX GPIO17, RX GPIO16.
+- MCU: ESP32-S3 DevKitC-1 (8 MB) or N16R8 (16 MB flash + 8 MB OPI PSRAM,
+  PIO env `s3-n16r8`). UART2 at 9600 8N1: TX GPIO17, RX GPIO16.
 - Transceiver: MAX485 / SP3485 module. DI←TX, RO→RX, DE+RE←GPIO4 (HIGH=TX, LOW=RX),
   10 kΩ pull-down on GPIO4, VCC 3.3 V, common ground, A/B twisted pair to meter.
-- LEDs: green GPIO10, red GPIO11 (220 Ω to GND), driven as strict opposites.
+- LEDs: green GPIO10, red GPIO11 (220 Ω to GND), driven as strict opposites,
+  plus onboard WS2812 RGB on GPIO48 mirroring both (`neopixelWrite`, no extra lib).
 
 ## Protocol (JBD UART over RS485, 9600 8N1)
 
@@ -31,12 +33,12 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 1.1` / `RED 1.1`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 1.2` / `RED 1.2`.
 
 ## Code map
 
 - `src/bms_protocol.{h,cpp}` — checksum, streaming parser, dispatcher, tracker, canned frames.
-- `src/main.cpp` — Arduino loop: parse → reply → LEDs → STATUS?.
+- `src/main.cpp` — Arduino loop: parse → reply → LEDs (discretes + RGB) → STATUS?.
 - `test/test_checksum|test_logic|test_parser|test_stress` — 32 Unity tests.
 - `tools/virtual_meter.py` — host-side meter simulator with scenario modes.
 - `tools/soak_sim.cpp` — 8-day continuous-run proof. `firmware/*.bin` — flash-ready.

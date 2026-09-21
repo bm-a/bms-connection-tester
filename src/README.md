@@ -6,8 +6,10 @@
   canned frames (`BMS_RESPONSE` 0x03 golden, `BMS_RESPONSE_CELLS` 0x04,
   `BMS_RESPONSE_NAME` 0x05), `FW_VERSION`.
 - `main.cpp` — Arduino sketch for ESP32-S3: RS485 RX → parse → reply,
-  DE/RE direction control, 250 ms LED evaluation, `STATUS?` debug command
-  (`GREEN 1.1` / `RED 1.1`).
+  DE/RE direction control, 250 ms LED evaluation (discretes + onboard RGB),
+  `STATUS?` debug command (`GREEN 1.2` / `RED 1.2`).
 
-Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11. UART2 @ 9600 8N1.
-Compiles with `pio run -e esp32-s3-devkitc-1`.
+Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11, onboard RGB=48 (WS2812,
+`neopixelWrite`, no extra library). UART2 @ 9600 8N1.
+Compiles with `pio run -e esp32-s3-devkitc-1` (8 MB, Wokwi) or
+`pio run -e s3-n16r8` (16 MB flash + OPI PSRAM).

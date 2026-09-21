@@ -8,6 +8,7 @@
     { "type": "wokwi-led", "id": "ledR", "top": -20, "left": 200, "attrs": { "color": "red" } },
     { "type": "wokwi-resistor", "id": "rG", "top": -50, "left": 160, "attrs": { "value": "220" } },
     { "type": "wokwi-resistor", "id": "rR", "top": -10, "left": 160, "attrs": { "value": "220" } },
+    { "type": "wokwi-neopixel", "id": "rgb1", "top": 60, "left": 200, "attrs": {} },
     { "type": "board-esp32-s3-devkitc-1", "id": "meter", "top": 200, "left": 0, "attrs": {} }
   ],
   "connections": [
@@ -17,6 +18,9 @@
     [ "dut:11", "rR:1", "red", [] ],
     [ "rR:2", "ledR:A", "red", [] ],
     [ "ledR:C", "dut:GND.1", "black", [] ],
+    [ "dut:48", "rgb1:DIN", "green", [] ],
+    [ "dut:VCC", "rgb1:VCC", "red", [] ],
+    [ "dut:GND.1", "rgb1:GND", "black", [] ],
     [ "dut:17", "meter:16", "orange", [] ],
     [ "dut:16", "meter:17", "yellow", [] ],
     [ "dut:GND.1", "meter:GND.1", "black", [] ]
