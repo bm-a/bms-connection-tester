@@ -5,8 +5,9 @@
 
 class Preferences {
  public:
-  bool begin(const char *ns, bool) {
+  bool begin(const char *ns, bool read_only) {
     ns_ = ns ? ns : "";
+    if (!read_only) commits()++;  // count flash write sessions (tests)
     return true;
   }
   void end() {}
@@ -20,6 +21,9 @@ class Preferences {
   uint16_t getUShort(const char *k, uint16_t d) {
     return (uint16_t)getNum(k, d);
   }
+  uint32_t getUInt(const char *k, uint32_t d) {
+    return (uint32_t)getNum(k, d);
+  }
   bool getBool(const char *k, bool d) { return getNum(k, d ? 1 : 0) != 0; }
   String getString(const char *k, const char *d) {
     auto &m = store()[ns_];
@@ -29,13 +33,21 @@ class Preferences {
   }
   void putUChar(const char *k, uint8_t v) { putNum(k, v); }
   void putUShort(const char *k, uint16_t v) { putNum(k, v); }
+  void putUInt(const char *k, uint32_t v) { putNum(k, v); }
   void putBool(const char *k, bool v) { putNum(k, v ? 1 : 0); }
   void putString(const char *k, const char *v) {
     store()[ns_][k ? k : ""] = v ? v : "";
   }
+  // Test-only: flash write-session counter (proves save coalescing).
+  static unsigned nvs_commits() { return commits(); }
+  static void nvs_commits_reset() { commits() = 0; }
 
  private:
   std::string ns_;
+  static unsigned &commits() {
+    static unsigned n = 0;
+    return n;
+  }
   static std::map<std::string, std::map<std::string, unsigned long>> &nums() {
     static std::map<std::string, std::map<std::string, unsigned long>> m;
     return m;

@@ -41,8 +41,9 @@ def main() -> int:
         if not ok:
             fail(f"JS fetches {ep} with no server.on route")
 
-    # login/logout form wiring
-    for token in ['action=/login', 'href=/logout']:
+    # login/logout form wiring (+ manual firmware upload page)
+    for token in ['action=/login', 'href=/logout', 'href=/update',
+                  'action=/update']:
         if token not in src:
             fail(f"missing {token}")
     if ("/login", "POST") not in [(p, m) for (p, m) in routes] and \
@@ -54,6 +55,13 @@ def main() -> int:
     # 2. element ids
     html_ids = set(re.findall(r"id=([A-Za-z_]+)", html))
     for eid in sorted(set(re.findall(r"getElementById\(['\"]([^'\"]+)['\"]", js))):
+        if eid == "lbl":
+            # Dynamic tile ids lbl0-7 (built in JS loops, inputs in #labels).
+            ok = "labels" in html_ids
+            print(f"element #lblN: {'OK (dynamic)' if ok else 'MISSING'}")
+            if not ok:
+                fail("JS builds #lblN inputs with no id=labels container")
+            continue
         ok = eid in html_ids
         print(f"element #{eid}: {'OK' if ok else 'MISSING id='}")
         if not ok:
@@ -71,11 +79,19 @@ def main() -> int:
     for m in re.finditer(r"for\(let k of \[(.*?)\]\)", refresh_fn):
         js_keys |= set(re.findall(r"'([a-z_]+)'", m.group(1)))
     # top-level flags used directly
-    for k in ("link", "running", "spoof", "relays"):
-        if f"s.{k}" in js:
+    for k in ("link", "running", "spoof", "relays", "cycles", "acts", "stage",
+              "fw"):
+        if f"s.{k}" in js or f"s.cfg.{k}" in js:
             js_keys.add(k)
     for k in sorted(js_keys):
         # relays/link/etc are top-level; cfg.* live under cfg:{...}
+        # lbl0-7 are emitted by a builder loop (",\"lbl" + i), not literally.
+        if re.fullmatch(r"lbl[0-7]", k):
+            ok = "'\"lbl\"'" in state_fn or '",\\"lbl"' in state_fn
+            print(f"state key {k}: {'OK (builder loop)' if ok else 'NOT EMITTED'}")
+            if not ok:
+                fail(f"JS reads state key '{k}' not emitted by handle_state()")
+            continue
         ok = (k in emitted) or (f'"{k}"' in state_fn) or (f"\\{k}" in state_fn)
         print(f"state key {k}: {'OK' if ok else 'NOT EMITTED'}")
         if not ok:
@@ -85,20 +101,33 @@ def main() -> int:
     posts = {
         "/api/relay": ["i", "on"],
         "/api/seq": ["cmd"],
-        "/api/config": ["rmode", "step", "hold", "bmode", "alow"],
-        "/api/spoof": ["cmd", "sv", "sa", "sc", "ssoc", "ssec", "sena"],
-        "/api/admin": ["cmd", "ap_ssid", "ap_pass", "ap_ch", "a_user", "a_pass"],
+        "/api/config": ["rmode", "nrel", "step", "hseq", "hch", "hall",
+                        "bmode", "alow", "dir", "loop", "cpause", "clim",
+                        "stag", "lbl0", "lbl1", "lbl2", "lbl3", "lbl4",
+                        "lbl5", "lbl6", "lbl7"],
+        "/api/spoof": ["cmd", "sv", "sa", "sc", "ssoc", "ssec",
+                       "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena"],
+        "/api/admin": ["cmd", "ap_ssid", "ap_pass", "ap_ch", "a_user",
+                       "a_pass", "sta_en", "sta_ssid", "sta_pass", "auto"],
+        "/api/ota": ["cmd", "ota_auto"],
     }
     handlers = {
         "/api/relay": "handle_relay", "/api/seq": "handle_seq",
         "/api/config": "handle_config", "/api/spoof": "handle_spoof",
-        "/api/admin": "handle_admin",
+        "/api/admin": "handle_admin", "/api/ota": "handle_ota",
     }
     for ep, keys in posts.items():
         hname = handlers[ep]
         body = src.split(f"static void {hname}()", 1)[1].split(
             "\n}\n", 1)[0]
         for k in keys:
+            if re.fullmatch(r"lbl[0-7]", k):
+                # Dynamic keys, consumed via the snprintf(k,"lbl%u") loop.
+                ok = '"lbl%u"' in body
+                print(f"POST {ep} key {k}: {'OK (builder loop)' if ok else 'NOT CONSUMED'}")
+                if not ok:
+                    fail(f"{ep} JS posts '{k}' but {hname} never reads it")
+                continue
             ok = (f'"{k}"' in body)
             print(f"POST {ep} key {k}: {'OK' if ok else 'NOT CONSUMED'}")
             if not ok:

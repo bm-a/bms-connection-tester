@@ -1,10 +1,10 @@
-# Emulators — test everything without the battery (v2.1 results)
+# Emulators — test everything without the battery (v2.3 results)
 
 ## Layer 1 — native tests + soak + contract (Termux, always)
-`sh run_tests.sh` (g++ + local Unity fallback) and `pio test -e native` (52):
-checksum (7), logic (8), parser (13), stress (4), relay (12), spoof (6),
-system (2) = **52/52 pio**; plus `test_web` (14, g++ host stubs) and the
-`check_web_contract.py` gate = **66/66 total**, plus `tools/soak_sim.cpp`
+`sh run_tests.sh` (g++ + local Unity fallback) and `pio test -e native` (70):
+checksum (7), logic (8), parser (13), stress (4), relay (24), spoof (11),
+ota (6), system (3) = **70/70 pio**; plus `test_web` (29, g++ host stubs) and
+the `check_web_contract.py` gate = **105/105 total**, plus `tools/soak_sim.cpp`
 8-day run (`691040 polls / 691040 replies`, millis-wrap crossed,
 green-on-resume) — PASS. Protocol core untouched since v1.x; dashboard JS
 passes `node --check`.
@@ -34,9 +34,10 @@ Pin names verified against docs.wokwi.com (this caught real bugs: VCC/GND and
 
 ## Layer 4 — QEMU-S3 (boot only, known gap)
 Built per `bm-a/esp32s3-qemu-arm64` (source build in proot, sanitized PATH,
-RDID/SFDP patches). v2.0 8 MB image merged with `--fill-flash-size 8MB`:
-boot reproduces the documented Arduino-guest gap — `M25P80: Unknown cmd 0x10`
-(~22×) + `Invalid read at addr 0x10200C` (~84×), flash-init assert loop.
+RDID/SFDP patches). Not re-run for v2.3 (QEMU cannot start in the phone
+sandbox); last re-confirm on the v2.1 image reproduces the documented
+Arduino-guest gap — `M25P80: Unknown cmd 0x10` (~22×) +
+`Invalid read at addr 0x10200C` (~84×), flash-init assert loop.
 Verdict unchanged: **emulator gap, not firmware** — our code is never reached;
 QEMU also models neither RMT/WS2812 nor discrete LEDs. Functional proof = Wokwi.
 `tools/run_qemu_s3.sh` remains the one-command boot check for real Linux/Mac
@@ -45,6 +46,6 @@ QEMU also models neither RMT/WS2812 nor discrete LEDs. Functional proof = Wokwi.
 ## Layer 5 — hardware-in-loop (real board, when available)
 `tools/test_hardware.py` (pytest, `HIL_BUS_PORT` + `HIL_CDC_PORT`):
 golden exact + `GREEN ≤ 1 s` → `RED` after ~2.6 s silence via `STATUS?`.
-Auto-skips without hardware. Bench expectation for v2.0: meter shows
-≈ 52 V / 100 %, discretes + RGB agree; relay sequence + 10 s spoof
-(88.8 / 88.8 / 88.8 / 188 %) verified on the meter. See [[Relays]].
+Auto-skips without hardware. Bench expectation for v2.3: meter shows
+≈ 52 V / 100 %, discretes + RGB agree; relay sequence + chase + 2-stage spoof
+(100 first, then 88.8 / 88.8 / 88.8 / 188 %) verified on the meter. See [[Relays]].
