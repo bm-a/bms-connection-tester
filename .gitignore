@@ -5,3 +5,4 @@
 tc.json
 __pycache__/
 releases/
+emu_results.json

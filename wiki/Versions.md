@@ -1,5 +1,22 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.5] — 2026-09-22
+### Fixed
+- Multipart upload auth: the done handler demanded streamed field AND parsed
+  arg, but real servers never populate args for multipart — every real
+  upload 403'd (host stub had masked it). Streamed field alone now decides.
+- JSON parser rejected `"key": value` whitespace (python-requests style) —
+  same bug class as the v2.3.1 tag-space parse. All helpers tolerant now.
+- On-demand STA join: check/install/URL join with saved creds themselves
+  (test-then-install finally works end to end).
+### Added
+- Trigger group (enable + GPIO + polarity + Save-trigger), captive-portal
+  landing page for phones, structured config schema (`docs/CONFIG-SCHEMA.md`,
+  v1+v2 backups), socket emulation harness (`tools/fw_emu`, 64/64 over real
+  HTTP), 30-day soak (2.59 M polls, 309 k cycles, 30 NVS commits),
+  `docs/EMULATION-v2.5.md` per-feature report.
+- 135/135 host tests (44 web) + contract + soak + virtual-bus + both PIO envs.
+
 ## [v2.4] — 2026-09-22
 ### Fixed
 - Firmware upload rebuilt Tasmota-style: exact variant-asset match, explicit

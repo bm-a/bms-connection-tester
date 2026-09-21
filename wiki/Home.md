@@ -21,6 +21,11 @@ over RS485, so compatible meters, displays, or hosts can be exercised
 - v2.4: Tasmota-grade update path, per-mode relay menu (chase BBM + stop
   dead-band), spoof save-only, console, config backup/restore, custom OTA
   URL, STA uplink test, info card, mDNS — see [[Dashboard]].
+- v2.5: trigger save (pin + enable + polarity, no firing), captive-portal
+  landing (phones get an Open-Dashboard page for Safari/Chrome), structured
+  config schema (v1+v2 backups), on-demand STA join, whitespace-tolerant
+  JSON, socket emulation harness + 64/64 report — see [[Dashboard]] and
+  `docs/EMULATION-v2.5.md`.
 
 Start here: [[Flashing]] to load it, [[Hardware]] to wire it,
 [[Protocol]] for the byte format, [[Relays]] for the test bench,

@@ -50,15 +50,21 @@ def main() -> int:
             fail(f"login remnant still present: {dead}")
 
     # v2.4 surface: new endpoints routed, per-mode rows + cards present,
-    # progress endpoint referenced by the /update page.
+    # progress endpoint referenced by the /update page. v2.5: portal
+    # landing for OS probes / mini-browsers.
     for route in ['"/api/sta"', '"/api/cmd"', '"/api/backup"',
                   '"/api/restore"', '"/api/uprog"']:
         if route not in src:
             fail(f"missing route {route}")
+    for token in ["hotspot-detect.html", "generate_204",
+                  "CaptiveNetworkSupport", "Open Dashboard", "bmstester.local",
+                  "handle_portal", "collectHeaders"]:
+        if token not in src:
+            fail(f"missing portal surface: {token}")
     for rid in ["row_step", "row_seqonly", "row_chaseonly", "row_allonly",
                 "row_dir", "info_fw", "info_mem", "info_net", "cmdout",
                 "sta_test_msg", "restoremsg", "spoofsave", "otaurlmsg",
-                "otainstall", "restorefile"]:
+                "otainstall", "restorefile", "trigmsg", "sinv"]:
         if f"id={rid}" not in src:
             fail(f"missing dashboard element id={rid}")
     if "showMode()" not in src:
@@ -128,7 +134,8 @@ def main() -> int:
                         "stag", "lbl0", "lbl1", "lbl2", "lbl3", "lbl4",
                         "lbl5", "lbl6", "lbl7"],
         "/api/spoof": ["cmd", "sv", "sa", "sc", "ssoc", "ssec",
-                       "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena", "spin"],
+                       "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena", "sinv",
+                       "spin"],
         "/api/admin": ["cmd", "pass", "ap_ssid", "ap_pass", "ap_ch",
                        "a_pass", "sta_en", "sta_ssid", "sta_pass", "auto"],
         "/api/ota": ["cmd", "pass", "ota_auto", "ota_url", "ota_int_h"],

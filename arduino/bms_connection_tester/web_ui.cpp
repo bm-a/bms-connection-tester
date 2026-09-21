@@ -330,7 +330,8 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=row><button onclick="saveLabels()">Save labels</button><span class=msg id=lblmsg></span></div></div>
 <div class=card><h3>Fault spoof (0x03 test values, stage 1 then 2)</h3>
 <div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><label>Trigger GPIO <input id=spin size=3></label><span id=spoofmsg class=spoof-on></span></div>
-<div class=row><span class=note>GPIO + values save on FIRE. Safe pins: 1, 2, 21, 38-44, 47 (else 21).</span></div>
+<div class=row><label>Trigger polarity <select id=sinv title="which edge on the trigger pin fires the plan"><option value=0>Pull LOW to fire (pull-up)</option><option value=1>Pull HIGH to fire</option></select></label><button onclick="saveTrig()">Save trigger</button><span class=msg id=trigmsg></span></div>
+<div class=row><span class=note>Safe trigger pins: 1, 2, 21, 38-44, 47 (anything else falls back to 21). Trigger save stores pin + enable + polarity without firing (for physical-switch users).</span></div>
 <div class=row><label>1: V <input id=sv size=5></label><label>A <input id=sa size=5></label><label>&deg;C <input id=sc size=5></label><label>SOC% <input id=ssoc size=4></label><label>Secs <input id=ssec size=4></label></div>
 <div class=row><label>2: V <input id=s2v size=5></label><label>A <input id=s2a size=5></label><label>&deg;C <input id=s2c size=5></label><label>SOC% <input id=s2soc size=4></label><label>Secs <input id=s2sec size=4></label></div>
 <div class=row><button class=warn onclick="spoof('fire')">FIRE now</button><button onclick="spoof('save')">Save only</button><button onclick="spoof('cancel')">Cancel</button><span class=msg id=spoofsave></span></div>
@@ -406,7 +407,7 @@ function showMode(){let m=+document.getElementById('rmode').value;
 }
 function fillForm(s){if(!s||!s.cfg)return;
  let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
-  for(let k of ['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','ota_auto','ota_int_h','ota_url','sta_en','sta_ssid','ap_ssid','ap_ch','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&!dirty[k]&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
+  for(let k of ['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sinv','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','ota_auto','ota_int_h','ota_url','sta_en','sta_ssid','ap_ssid','ap_ch','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&!dirty[k]&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
   showMode();
 }
 async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
@@ -414,7 +415,8 @@ async function relay(i,on){if(i>=NREL)return;await jpost('/api/relay',{i,on});re
 async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
 async function saveCfg(){let ks=['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','cpause','clim','stag'];let b={};for(let k of ks){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(ks);clean(['loop']);loadForm();}refresh();}
 async function saveLabels(){let ks=[];for(let i=0;i<8;i++)ks.push('lbl'+i);let b={};for(let k of ks)b[k]=document.getElementById(k).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);loadForm();}refresh();}
-async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin'];let b={cmd:c};if(c==='fire'||c==='save'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);let m=r.ok?(c==='cancel'?'cancelled':(c==='save'?'saved':'ok')):('ERR: '+(r.err||''));document.getElementById('spoofmsg').textContent=m;document.getElementById('spoofsave').textContent=m;if(r.ok&&(c==='fire'||c==='save')){clean(ks);clean(['sena']);loadForm();}refresh();}
+async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','sinv'];let b={cmd:c};if(c==='fire'||c==='save'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);let m=r.ok?(c==='cancel'?'cancelled':(c==='save'?'saved':'ok')):('ERR: '+(r.err||''));document.getElementById('spoofmsg').textContent=m;document.getElementById('spoofsave').textContent=m;if(r.ok&&(c==='fire'||c==='save')){clean(ks);clean(['sena']);loadForm();}refresh();}
+async function saveTrig(){let b={cmd:'trig'};b.sena=document.getElementById('sena').checked?1:0;b.spin=+document.getElementById('spin').value;b.sinv=+document.getElementById('sinv').value;let r=await jpost('/api/spoof',b);document.getElementById('trigmsg').textContent=r.ok?'trigger saved':'ERR: '+(r.err||'');if(r.ok){clean(['sena','spin','sinv']);loadForm();}refresh();}
 async function staTest(){let p=prompt('Admin password:','');if(p===null)return;let b={cmd:'test',pass:p};b.ssid=document.getElementById('sta_ssid').value;b.sta_pass=document.getElementById('sta_pass').value;let r=await jpost('/api/sta',b);document.getElementById('sta_test_msg').textContent=r.ok?'testing… (watch this line)':'ERR: '+(r.err||'');refresh();}
 async function saveOtaUrl(){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/ota',{ota_url:document.getElementById('ota_url').value,ota_int_h:+document.getElementById('ota_int_h').value,pass:p});document.getElementById('otaurlmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(['ota_url','ota_int_h']);loadForm();}refresh();}
 async function cmd(){let c=document.getElementById('cmd').value;let priv=/^(start|stop|fire|cancel|reboot|reset)\b/i.test(c);let b={cmd:c};if(priv){let p=prompt('Admin password:','');if(p===null)return;b.pass=p;}let r=await jpost('/api/cmd',b);document.getElementById('cmdout').textContent=r.ok?(r.out||'ok'):'ERR: '+(r.err||'');refresh();}
@@ -478,6 +480,7 @@ static void handle_state() {
        ",\"dir\":" + String(c.seq_dir) +
        ",\"auto\":" + String(c.boot_autostart ? 1 : 0) +
        ",\"sena\":" + String(c.spoof_enabled ? 1 : 0) +
+       ",\"sinv\":" + String(c.spoof_invert ? 1 : 0) +
        ",\"spin\":" + String(c.spoof_pin) +
        ",\"sv\":" + String(c.spoof_v_tenth) +
        ",\"sa\":" + String(c.spoof_a_tenth) +
@@ -545,23 +548,40 @@ static void handle_state() {
   send_json(s);
 }
 
-// Minimal JSON int/string getters (no extra library).
+// Minimal JSON int/string getters (no extra library). Whitespace-tolerant:
+// real HTTP clients (python requests, curl --data, pretty printers) emit
+// `"key": value` with gaps — the old exact-match broke on any space (same
+// bug class as the v2.3.1 OTA tag-space parse). Values themselves are still
+// simple (numbers, plain strings, no escapes).
+static int jval(const String &b, const char *key) {
+  String q = String("\"") + key + "\"";
+  int i = b.indexOf(q);
+  if (i < 0) return -1;
+  const char *s = b.c_str();
+  unsigned p = (unsigned)(i + (int)q.length());
+  unsigned n = (unsigned)b.length();
+  while (p < n && (s[p] == ' ' || s[p] == '\t' || s[p] == '\r' || s[p] == '\n')) p++;
+  if (p >= n || s[p] != ':') return -1;
+  p++;
+  while (p < n && (s[p] == ' ' || s[p] == '\t' || s[p] == '\r' || s[p] == '\n')) p++;
+  return (int)p;
+}
 static long jnum(const String &b, const char *key, long dflt) {
-  String k = String("\"") + key + "\":";
-  int i = b.indexOf(k);
-  if (i < 0) return dflt;
-  return b.substring(i + k.length()).toInt();
+  int p = jval(b, key);
+  if (p < 0) return dflt;
+  return b.substring((unsigned)p).toInt();
 }
 static String jstr(const String &b, const char *key) {
-  String k = String("\"") + key + "\":\"";
-  int i = b.indexOf(k);
-  if (i < 0) return "";
-  int j = b.indexOf('"', i + k.length());
+  int p = jval(b, key);
+  if (p < 0) return "";
+  const char *s = b.c_str();
+  if (s[p] != '"') return "";
+  int j = b.indexOf('"', (unsigned)(p + 1));
   if (j < 0) return "";
-  return b.substring(i + k.length(), j);
+  return b.substring((unsigned)(p + 1), (unsigned)j);
 }
 static bool has(const String &b, const char *key) {
-  return b.indexOf(String("\"") + key + "\"") >= 0;
+  return jval(b, key) >= 0;
 }
 
 static void handle_relay() {
@@ -690,6 +710,8 @@ static void apply_spoof_keys(const String &b) {
   if (has(b, "s2soc")) c.s2_soc = (uint8_t)constrain(jnum(b, "s2soc", 188), 0, 255);
   if (has(b, "s2sec")) c.s2_seconds = (uint16_t)constrain(jnum(b, "s2sec", 10), 1, 120);
   if (has(b, "sena")) c.spoof_enabled = jnum(b, "sena", 1) != 0;
+  // v2.5 trigger polarity (was NVS-only, unchangeable without reflash).
+  if (has(b, "sinv")) c.spoof_invert = jnum(b, "sinv", 0) != 0;
   // v2.3.1 configurable trigger GPIO (unsafe pins fall back to 21).
   if (has(b, "spin"))
     c.spoof_pin = sanitize_spoof_pin((uint8_t)jnum(b, "spin", 21));
@@ -702,8 +724,9 @@ static void handle_spoof() {
   if (cmd == "cancel") { G->spoof->cancel(); send_json("{\"ok\":1}"); return; }
   // v2.4: explicit Save persists values+pin+enable WITHOUT firing (the old
   // FIRE-always-saved left no way to stage values). FIRE = save + trigger.
+  // v2.5: trig persists ONLY the trigger triple (enable/pin/polarity).
   bool want_fire = (cmd == "fire");
-  if (cmd != "save" && !want_fire && cmd.length() != 0) {
+  if (cmd != "save" && cmd != "trig" && !want_fire && cmd.length() != 0) {
     send_json("{\"ok\":0,\"err\":\"unknown spoof cmd\"}");
     return;
   }
@@ -803,6 +826,39 @@ static void handle_admin() {
   send_json("{\"ok\":1}");
 }
 
+// v2.5 on-demand STA join for the check/install/URL actions. The one-shot
+// test drops its link by design and boot STA may be off, so these actions
+// join with the SAVED credentials themselves (15 s budget) instead of
+// demanding a live link first. Tasmota's upgrade flow blocks the same way.
+// Returns true when online. Call sta_ondemand_drop() afterwards when this
+// call joined (joined_here) and the install did NOT reboot us away.
+static bool sta_joined_here = false;
+
+static bool sta_ondemand() {
+  if (web_sta_state() == 2) return true;  // boot uplink already online
+  sta_joined_here = false;
+  if (ident.sta_ssid[0] == '\0') return false;  // nothing saved to join
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ident.sta_ssid, ident.sta_pass);
+  for (int i = 0; i < 150; i++) {
+    delay(100);  // yields on hardware; advances the mock clock on host
+    if (WiFi.status() == WL_CONNECTED) {
+      sta_joined_here = true;
+      return true;
+    }
+  }
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_AP);
+  return false;
+}
+
+static void sta_ondemand_drop() {
+  if (!sta_joined_here) return;
+  sta_joined_here = false;
+  WiFi.disconnect(true);  // test/install-only link: back to AP-only
+  WiFi.mode(WIFI_AP);
+}
+
 // v2.3 OTA control: auto toggle + manual "check now" (main.cpp does network).
 // Gated like /api/admin: checking/installing can flash firmware.
 static void handle_ota() {
@@ -837,11 +893,12 @@ static void handle_ota() {
     }
   }
   if (jstr(b, "cmd") == "check") {
-    if (web_sta_state() != 2) {
-      send_json("{\"ok\":0,\"err\":\"STA offline (set uplink + reboot)\"}");
+    if (!sta_ondemand()) {
+      send_json("{\"ok\":0,\"err\":\"STA offline (save uplink creds first)\"}");
       return;
     }
     if (G->on_ota_check) G->on_ota_check();
+    sta_ondemand_drop();  // check-only link: back to AP-only
     send_json("{\"ok\":1}");
     return;
   }
@@ -851,26 +908,28 @@ static void handle_ota() {
       send_json("{\"ok\":0,\"err\":\"no update pending (check first)\"}");
       return;
     }
-    if (web_sta_state() != 2) {
-      send_json("{\"ok\":0,\"err\":\"STA offline (set uplink + reboot)\"}");
+    if (!sta_ondemand()) {
+      send_json("{\"ok\":0,\"err\":\"STA offline (save uplink creds first)\"}");
       return;
     }
     if (G->on_ota_install) G->on_ota_install();  // reboots on success
+    sta_ondemand_drop();  // reached only when install did NOT reboot
     send_json("{\"ok\":1}");
     return;
   }
-  // v2.4 Upgrade-from-URL (Tasmota u1 box): needs STA online; the install
+  // v2.4 Upgrade-from-URL (Tasmota u1 box) + v2.5 on-demand join: the install
   // path enforces the same magic/size/variant gates as file upload.
   if (jstr(b, "cmd") == "url_upgrade") {
     if (ident.ota_url[0] == '\0') {
       send_json("{\"ok\":0,\"err\":\"set a custom firmware URL first\"}");
       return;
     }
-    if (web_sta_state() != 2) {
-      send_json("{\"ok\":0,\"err\":\"STA offline (test the uplink first)\"}");
+    if (!sta_ondemand()) {
+      send_json("{\"ok\":0,\"err\":\"STA offline (save uplink creds first)\"}");
       return;
     }
     if (G->on_ota_install) G->on_ota_install();  // reboots on success
+    sta_ondemand_drop();  // reached only when install did NOT reboot
     send_json("{\"ok\":1}");
     return;
   }
@@ -1018,8 +1077,12 @@ static void handle_update_upload() {
 }
 
 static void handle_update_done() {
-  // Both the streamed field and the parsed arg must agree (defense in depth).
-  bool pass_ok = admin_ok(up_pass) && admin_ok(server.arg("pass"));
+  // The streamed multipart field is the ONLY password source: real servers
+  // (Arduino or this shim) never populate server.arg() for multipart forms,
+  // so requiring arg agreement bricks every real upload (the host stub did
+  // populate it, which masked this — caught by the socket harness).
+  // Security is unchanged: wrong password aborts the staged bytes.
+  bool pass_ok = admin_ok(up_pass);
   if (!pass_ok) {
     if (up_begun) Update.end(false);  // staged bytes never boot: abort
     FwUploadErr e = up_err;
@@ -1164,8 +1227,11 @@ static void handle_cmd() {
     return;
   }
   if (strcmp(verb, "start") == 0) {
-    if (!G->seq->start(millis())) out = "refused: 500 ms post-stop dead-band";
-    else out = "started";
+    if (!G->seq->start(millis())) {
+      send_json("{\"ok\":0,\"err\":\"relays settling — wait a beat, then START\"}");
+      return;
+    }
+    out = "started";
   } else if (strcmp(verb, "stop") == 0) {
     G->seq->stopAll(millis());
     out = "stopped";
@@ -1209,14 +1275,17 @@ static void handle_cmd() {
   send_json("{\"ok\":1,\"out\":\"" + out + "\"}");
 }
 
-// v2.4 config backup (Tasmota pre-upgrade ritual): whole NVS config as JSON.
-// Passwords NEVER leave the box (ap/admin/sta secrets excluded by design).
+// v2.4 config backup (Tasmota pre-upgrade ritual), v2.5 sectioned shape:
+// {"config":2,"relays":{...},"spoof":{...},"trigger":{...},"network":{...},
+//  "ota":{...},"meta":{...}} — see docs/CONFIG-SCHEMA.md. Whole NVS config
+// as JSON. Passwords NEVER leave the box (they are in no section, by design).
 static void handle_backup() {
   Bms2Config &c = *G->cfg;
   char num[32];
-  String s = "{\"backup\":1,\"fw\":\"" + String(FW_VERSION) + "\"";
+  String s = "{\"config\":2,\"fw\":\"" + String(FW_VERSION) + "\"";
+  s += ",\"relays\":{";
   snprintf(num, sizeof(num), "%u", c.step_delay_ms);
-  s += ",\"step\":"; s += num;
+  s += "\"step\":"; s += num;
   snprintf(num, sizeof(num), "%lu", (unsigned long)c.hold_seq_ms);
   s += ",\"hseq\":"; s += num;
   snprintf(num, sizeof(num), "%u", c.chase_sweeps);
@@ -1240,11 +1309,13 @@ static void handle_backup() {
   snprintf(num, sizeof(num), "%u", c.seq_dir);
   s += ",\"dir\":"; s += num;
   s += ",\"auto\":"; s += String(c.boot_autostart ? 1 : 0);
-  s += ",\"sena\":"; s += String(c.spoof_enabled ? 1 : 0);
-  snprintf(num, sizeof(num), "%u", c.spoof_pin);
-  s += ",\"spin\":"; s += num;
+  for (uint8_t i = 0; i < RELAY_COUNT; i++) {
+    s += ",\"lbl"; s += String(i); s += "\":\"";
+    s += String(c.relay_label[i]); s += "\"";
+  }
+  s += "},\"spoof\":{";
   snprintf(num, sizeof(num), "%u", c.spoof_v_tenth);
-  s += ",\"sv\":"; s += num;
+  s += "\"sv\":"; s += num;
   snprintf(num, sizeof(num), "%u", c.spoof_a_tenth);
   s += ",\"sa\":"; s += num;
   snprintf(num, sizeof(num), "%u", c.spoof_c_tenth);
@@ -1263,23 +1334,29 @@ static void handle_backup() {
   s += ",\"s2soc\":"; s += num;
   snprintf(num, sizeof(num), "%u", c.s2_seconds);
   s += ",\"s2sec\":"; s += num;
-  for (uint8_t i = 0; i < RELAY_COUNT; i++) {
-    s += ",\"lbl"; s += String(i); s += "\":\"";
-    s += String(c.relay_label[i]); s += "\"";
-  }
-  s += ",\"ap_ssid\":\""; s += String(ident.ap_ssid); s += "\"";
+  s += "},\"trigger\":{";
+  s += "\"sena\":"; s += String(c.spoof_enabled ? 1 : 0);
+  s += ",\"sinv\":"; s += String(c.spoof_invert ? 1 : 0);
+  snprintf(num, sizeof(num), "%u", c.spoof_pin);
+  s += ",\"spin\":"; s += num;
+  s += "},\"network\":{";
+  s += "\"ap_ssid\":\""; s += String(ident.ap_ssid); s += "\"";
   snprintf(num, sizeof(num), "%u", ident.ap_channel);
   s += ",\"ap_ch\":"; s += num;
   s += ",\"sta_en\":"; s += String(ident.sta_en ? 1 : 0);
   s += ",\"sta_ssid\":\""; s += String(ident.sta_ssid); s += "\"";
-  s += ",\"ota_auto\":"; s += String((G->ota && G->ota->auto_enabled) ? 1 : 0);
+  s += "},\"ota\":{";
+  s += "\"ota_auto\":"; s += String((G->ota && G->ota->auto_enabled) ? 1 : 0);
   if (G->ota) {
     snprintf(num, sizeof(num), "%lu",
              (unsigned long)(G->ota->interval_ms / 3600UL / 1000UL));
     s += ",\"ota_int_h\":"; s += num;
   }
   s += ",\"ota_url\":\""; s += String(ident.ota_url); s += "\"";
-  s += "}";
+  s += "},\"meta\":{";
+  snprintf(num, sizeof(num), "%u", web_boot_count);
+  s += "\"boot\":"; s += num;
+  s += "}}";
   server.send(200, "application/json", s);
 }
 
@@ -1289,7 +1366,7 @@ static void handle_backup() {
 static void handle_restore() {
   String b = server.arg("plain");
   if (!admin_ok(jstr(b, "pass"))) { send_json("{\"ok\":0,\"err\":\"admin password required\"}"); return; }
-  if (jnum(b, "backup", 0) != 1) {
+  if (jnum(b, "backup", 0) != 1 && jnum(b, "config", 0) != 2) {
     send_json("{\"ok\":0,\"err\":\"not a bms-tester backup file\"}");
     return;
   }
@@ -1330,6 +1407,43 @@ static void handle_restore() {
   cfg_save();
   if (G->on_config_changed) G->on_config_changed();
   send_json("{\"ok\":1,\"note\":\"passwords not restored — re-enter + reboot to apply AP/STA\"}");
+}
+
+// ---- v2.5 captive-portal landing (phones first, Safari/Chrome second) ----
+// OS connectivity probes + mini-browser UAs get a slim page with a big
+// "Open Dashboard" button + manual steps; everything else 302s to the
+// dashboard as before. Why: iOS CNA / Android portal views can't hold a
+// live dashboard (dismissing them kills the session), but Safari/Chrome can.
+static const char PAGE_PORTAL[] PROGMEM = R"HTML(
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>BMS Tester — open dashboard</title><style>body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:20px}.btn{display:block;text-align:center;background:#2563eb;color:#fff;border-radius:12px;padding:16px;font-size:19px;font-weight:700;text-decoration:none;margin:14px 0}li{margin:8px 0;font-size:15px}.note{font-size:13px;color:#94a3b8}b{color:#fff}</style></head><body style="max-width:480px;margin:0 auto">
+<h2>&#9889; BMS Tester</h2>
+<p>You joined the <b>BMS-Tester</b> Wi-Fi. This popup can't hold the dashboard — open it in your real browser:</p>
+<p><a class=btn href="http://192.168.4.1/" target="_blank">Open Dashboard</a></p>
+<ol><li>Open <b>Safari</b> (iPhone) or <b>Chrome</b> (Android).</li><li>Go to <b>192.168.4.1</b> (laptops: <b>bmstester.local</b>).</li><li>Stay on BMS-Tester Wi-Fi — "no internet" is normal. Turn mobile data off if the page won't load.</li></ol>
+<p class=note>No login. Admin password (default admin123) only for reboot, reset, upload and saves.</p></body></html>)HTML";
+
+// True for OS connectivity probes (any platform) and mini-browser UAs.
+static bool portal_is_probe(const String &uri, const String &ua) {
+  if (uri == "/hotspot-detect.html") return true;        // Apple CNA probe
+  if (uri.endsWith("/success.html")) return true;        // Apple success probe
+  if (uri == "/generate_204" || uri == "/gen_204") return true;  // Android
+  if (uri == "/connecttest.txt" || uri == "/redirect") return true;  // Windows
+  if (ua.indexOf("CaptiveNetworkSupport") >= 0) return true;  // Apple CNA UA
+  if (ua.indexOf("captive") >= 0 || ua.indexOf("Captive") >= 0) return true;
+  return false;
+}
+
+static void handle_portal() {
+  String uri = server.uri();
+  String ua = server.header("User-Agent");
+  if (portal_is_probe(uri, ua)) {
+    server.send_P(200, "text/html", PAGE_PORTAL);
+    return;
+  }
+  // Any other unknown host/path lands on the open dashboard.
+  server.sendHeader("Location", "/");
+  server.send(302);
 }
 
 static bool wifi_is_up = false;
@@ -1401,14 +1515,14 @@ void web_setup(WebCtx &ctx) {
   server.on("/api/backup", HTTP_GET, handle_backup);  // v2.4 config export
   server.on("/api/restore", HTTP_POST, handle_restore);  // v2.4 import
   server.on("/api/uprog", HTTP_GET, handle_uprog);  // v2.4 upload progress
-  // Captive portal: any unknown host/path lands on the open dashboard.
-  // This makes phones pop the dashboard on join and keeps "no internet"
-  // devices from showing a dead 404. Reboot/reset/upload stay behind the
-  // per-request admin password (no login wall since v2.3.1).
-  server.onNotFound([]() {
-    server.sendHeader("Location", "/");
-    server.send(302);
-  });
+  // Captive portal: OS probes + mini-browsers get the landing page (open
+  // in Safari/Chrome); any other unknown host/path lands on the dashboard.
+  // User-Agent collection is what lets us tell a CNA probe from a person.
+  {
+    static const char *keys[] = {"User-Agent"};
+    server.collectHeaders(keys, 1);
+  }
+  server.onNotFound(handle_portal);
   server.begin();
 }
 

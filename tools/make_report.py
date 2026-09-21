@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Beautiful dad-friendly Word report — v2.4 (Tasmota-grade update + relay review)."""
+"""Beautiful dad-friendly Word report — v2.5 (trigger save, portal landing, emulation)."""
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -75,7 +75,7 @@ def callout(title, text, fill="FFF6D6"):
 sec = doc.sections[0]
 fp = sec.footer.paragraphs[0]
 fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = fp.add_run("RS485 Connection Tester v2.4  —  Build & Test Report   |   Page ")
+r = fp.add_run("RS485 Connection Tester v2.5  —  Build & Test Report   |   Page ")
 r.font.size = Pt(9)
 r.font.color.rgb = GREY
 fld = OxmlElement("w:fldSimple")
@@ -94,18 +94,18 @@ r.bold = True
 r.font.color.rgb = NAVY
 sp = doc.add_paragraph()
 sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = sp.add_run("Build & Test Report v2.4 — for an electronics engineer, no coding needed")
+r = sp.add_run("Build & Test Report v2.5 — for an electronics engineer, no coding needed")
 r.font.size = Pt(13)
 r.italic = True
 r.font.color.rgb = GREY
 doc.add_paragraph()
 table(["Item", "Detail"], [
     ["Board", "ESP32-S3 DevKitC-1 (or N16R8) + MAX485 module + 8-channel relay module"],
-    ["Version", "v2.4 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; per-mode relay bench (sequential/chase/all-on); 2-stage fault values; config web page + Tasmota-grade firmware updates"],
-    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.4 (update + relay review on v2.3.1)"],
+    ["Version", "v2.5 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; per-mode relay bench; 2-stage fault values + trigger save; phone-friendly portal landing; config web page + Tasmota-grade firmware updates"],
+    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.5 (trigger/portal/schema/emulation on v2.4)"],
     ["Date", "September 2026"],
-    ["Firmware", "firmware.bin — v2.4 8 MB build, compiled + verified (SHA in firmware/README.md)"],
-    ["Tests", "134 / 134 passing (protocol + lamps + faults + soak + relay/BBM/dead-band/spoof-save/console/backup/OTA-URL/upload-gates/web/admin-gate/portal/24h sim)"],
+    ["Firmware", "firmware.bin — v2.5 8 MB build, compiled + verified (SHA in firmware/README.md)"],
+    ["Tests", "137 / 137 passing + socket harness 64/64 (protocol + lamps + faults + 30-day soak + relay/BBM/dead-band/spoof-save+trigger/console/backup-v2/OTA-URL+ondemand/upload-gates/portal-landing/whitespace-JSON) + w3m page renders"],
     ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Button runs the relay sequence. Phone/laptop + web page configures everything."],
 ], widths=[1.6, 4.6])
 callout("Passwords — keep this file safe: ",
@@ -123,7 +123,7 @@ for item in [
     "1.  What this box does (start here)",
     "2.  Parts list",
     "3.  Wiring — the complete circuit (lamps + relays + button)",
-    "4.  How v2.4 works (every meter type, no code)",
+    "4.  How v2.5 works (every meter type, no code)",
     "5.  Using it on the assembly line (lamps, button, web page)",
     "6.  Getting the software onto the board (3 easy methods)",
     "7.  Build & test report (numbers included)",
@@ -198,7 +198,7 @@ callout("12 V rule: ",
         "the ESP is USB-powered, the relay coils are 12 V-powered, and their grounds are tied together. Relays will never click without the 12 V adapter.")
 
 # ================= 4 =================
-doc.add_heading("4. How v2.4 works (the idea, no code)", level=1)
+doc.add_heading("4. How v2.5 works (the idea, no code)", level=1)
 for s in [
     "The meter asks questions in the JBD battery language at 9600 baud — usually register 0x03 (voltage/current/charge), sometimes 0x04 (cell voltages) or 0x05 (device name), occasionally configuration writes.",
     "The box checks every incoming message completely (start, command, length, safety checksum, end byte). Random factory noise can never fake one — proven with a million random bytes in testing.",
@@ -280,13 +280,13 @@ doc.add_paragraph(
     "Built with the genuine Espressif Xtensa GCC 8.4.0 toolchain (PlatformIO + Arduino framework): "
     "both S3 profiles compiled SUCCESS (8 MB + N16R8). Binary inspected afterward:")
 table(["Artifact", "Detail"], [
-    ["firmware.bin", "v2.4 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, per-mode relay bench, AP dashboard + console, 2-stage spoof, Tasmota-grade OTA; SHAs in firmware/README.md."],
-    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.4 binaries refreshed; golden bytes + version + AP strings verified inside)"],
+    ["firmware.bin", "v2.5 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, per-mode relay bench, AP dashboard + console, 2-stage spoof + trigger save, phone landing page, Tasmota-grade OTA; SHAs in firmware/README.md."],
+    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.5 binaries refreshed; golden bytes + version + AP strings verified inside)"],
     ["bootloader + partitions", "Standard S3 loader and flash layout, refreshed with this build."],
     ["On-target test builds", "All unit-test programs also compile + link for the S3 chip (they execute once a board is plugged in)."],
     ["QEMU S3 boot test", "Parked at v2.4: Stage-0 flash model clean (GD WRSR2-QE + burst-wrap fixes banked), guest resets in the 2nd-stage bootloader (init returns 0x0a) — emulator gap, not firmware. Wokwi S3 + virtual-bus PTY emulation are the practical paths."],
 ], widths=[1.7, 4.5])
-doc.add_heading("7.2 Automated tests — 134 / 134 PASS (run_tests.sh)", level=2)
+doc.add_heading("7.2 Automated tests — 137 / 137 PASS (run_tests.sh) + socket harness 64/64", level=2)
 table(["Group", "Tests", "Result"], [
     ["Checksums + golden frame (7)", "FFFD / FCDA / FCA8 / FA86 / F65A (2nd Docklight 0x2A variant), byte-exact 0x03 frame, exact-yes / 7xcorrupt-no.", "7 PASS"],
     ["Lamp logic, adaptive (8)", "Boot red, green fast, red after window, self-heal, slow-poll adapt, 2 s floor / 10 s cap, rollover, legacy compat.", "8 PASS"],
@@ -295,7 +295,9 @@ table(["Group", "Tests", "Result"], [
     ["Relay bench (36)", "Boot OFF, stepping, per-mode holds, ALL-ON (+ default stagger ramp), chase + 20 ms break-before-make, count live-shrink safety, loop/pause/limit, direction, counters, button behaviors, force-in-chase, RESTART keeps forces, stop dead-band, mid-cycle latching, polarity, rollover, debounce.", "36 PASS"],
     ["Spoof 2-stage (11)", "Stage-1 ‘100’ + stage-2 88.8/88.8/88.8/188 bytes, checksum validity, custom values, stage handoff/cancel/retrigger, rollover.", "11 PASS"],
     ["OTA logic (6)", "Version compare (2.10 > 2.9), per-board file pick, safe download links, idle-only auto-check gate.", "6 PASS"],
-    ["Website, host-executed (41)", "No login wall (per-request passwords), NVS migration, portal redirect, validation + named rejects, coalesced saves, per-mode config, spoof save/fire, Tasmota upload gates + rejects, console, backup/restore, STA test, OTA URL/interval/install, mDNS, keep-WiFi/bootcount resets, info fields, fuzz, factory reset.", "41 PASS"],
+    ["Website, host-executed (44)", "No login wall (per-request passwords), NVS migration, portal landing + redirect, validation + named rejects, whitespace-tolerant JSON, coalesced saves, per-mode config, spoof save/fire/trigger, Tasmota upload gates + rejects, console, backup v2 + restore v1/v2, STA test + on-demand join, OTA URL/interval/install, mDNS, keep-WiFi/bootcount resets, info fields, fuzz, factory reset.", "44 PASS"],
+    ["Socket harness, real HTTP (54+10)", "drive_emu.py: portal, relay flows, spoof/trigger, uploads, backup/restore, console, resets, STA/OTA, info — over the real handlers. drive_soak.py: 48 virtual hours looped, counters exact, NVS coalescing, spoof mid-run, clean stop.", "64 PASS"],
+    ["Month soak (pure logic)", "30 virtual days from day 40 across the millis() wrap: 2.59 M polls answered, 309 k looped cycles, exact stage/force/stop behavior, 30 NVS commits, silence → red → green, no reset.", "SOAK PASS"],
     ["Update gates (5)", "Explicit sketch budget, variant asset pick, exact filename match (suffix-trap proof), image-head magic + flash-size matrix, error vocabulary.", "5 PASS"],
     ["System 24 h sim (3)", "Reply-selection matrix + 86,400-poll office day: every reply checksum-validated, exact 5 s + 10 s spoof stages, relay + chase schedule, loop cycles, noise, green all day.", "3 PASS"],
 ], widths=[2.3, 2.9, 0.9])
@@ -364,14 +366,14 @@ table(["Path", "What it is"], [
     ["wokwi/", "Browser simulation + sim.yaml headless scenario (relays, buttons, meter)."],
     ["wiki/", "Online manual mirror (Relays page has the web guide)."],
     ["run_tests.sh", "Runs everything runnable in one command."],
-    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.x work. Current release: v2.4."],
+    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.x work. Current release: v2.5."],
 ], widths=[2.6, 3.6])
 doc.add_paragraph()
 ep = doc.add_paragraph()
 ep.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = ep.add_run("— End of report v2.4. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
+r = ep.add_run("— End of report v2.5. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
 r.italic = True
 r.font.color.rgb = GREY
 
 doc.save("/data/data/com.termux/files/home/bms-connection-tester/RS485-Tester-Report.docx")
-print("saved v2.4 RS485-Tester-Report.docx")
+print("saved v2.5 RS485-Tester-Report.docx")

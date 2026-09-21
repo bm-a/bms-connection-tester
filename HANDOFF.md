@@ -1,9 +1,9 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
-> Last updated 2026-09-22 for **v2.4** (Tasmota-grade update path, per-mode
-> relay menu R1–R31, spoof save-only, console, backup/restore, custom OTA
-> URL, STA uplink test, info card, mDNS, keep-WiFi/bootcount resets).
+> Last updated 2026-09-22 for **v2.5** (trigger save, portal landing,
+> structured config, on-demand STA, tolerant JSON, socket harness 64/64,
+> 30-day soak).
 > COMPACTION CHECKPOINT 2026-09-21: user compacting Termux storage. All 3
 > repos verified pushed + clean (main `2b23226` + tag `v2.3` upstream, release
 > live, CI green; handbook `ba3ac6f`; emulator `1fd0b2a`). `releases/` (564 KB,
@@ -52,7 +52,7 @@ GPIO18; fixed GitHub tag parse + dashboard Install button.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 134 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.4`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3/v2.3.1/v2.4 (7 assets each); wiki live (8 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 137 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.5`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3/v2.3.1/v2.4/v2.5 (7 assets each); wiki live (8 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -137,6 +137,15 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   uptime/bootcount/reset-reason/RSSI/pin map); mDNS `bmstester.local`;
   keep-WiFi + bootcount resets; editable OTA cadence.
   **134/134 total** (93 pio + 41 web, incl. 5 upload-gate tests).
+- **v2.5** (this release): trigger group (enable+GPIO+polarity+Save, `sinv`
+  wired end to end); captive-portal landing (probes/CNA-UA get button +
+  Safari steps, rest 302s to `/`); structured config (`docs/CONFIG-SCHEMA.md`,
+  v2 sectioned + v1 flat backups); on-demand STA join for check/install/URL;
+  whitespace-tolerant JSON core; socket harness (`tools/fw_emu`, 54 checks)
+  + 48 h run (10 checks) + 30-day soak (2.59 M polls, 309 k cycles, 30 NVS
+  commits) + `docs/EMULATION-v2.5.md`. Harness-caught fixes: multipart-arg
+  403s, whitespace rejects, test-then-install gap, missing `seq.begin()` in
+  emu, console ok-masking. **137/137 total** (93 pio + 44 web).
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
@@ -242,6 +251,8 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
   console, config backup/restore (no passwords), info card, mDNS
   `bmstester.local`, factory reset + keep-WiFi reset + bootcount reset +
   reboot (one `web_reboot_now` path), boot counter + reset reason,
+  portal landing for probes/CNA (button + Safari steps, rest 302s),
+  on-demand STA join for check/install/URL, whitespace-tolerant JSON,
   WiFi kill switch (`web_wifi_set`, GPIO18, debounced in `main.cpp`).
 - `ota` (`ota.h`, host-tested pure logic; network in `main.cpp`): semver
   compare, per-variant asset pick (`-DFW_IS_N16R8=1` on the n16r8 env —
@@ -272,13 +283,17 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 
 ---
 
-## 7. Tests — 134/134 + soak + virtual bus + contract (how to run, what they prove)
+## 7. Tests — 137/137 + soak + virtual bus + contract + socket emu (how to run, what they prove)
 
 - `pio test -e native` → 9 suites: test_checksum (7), test_logic (8),
   test_parser (13), test_stress (4), **test_relay (36), test_spoof (11),
   test_ota (6), test_upload (5), test_system (3)**. **Last run: all green
-  (93/93).** Old 32 byte-identical since v1.1. `test_web` (41) is g++-only
-  (needs `-DARDUINO` + stubs) → total **134/134** via `sh run_tests.sh`.
+  (93/93).** Old 32 byte-identical since v1.1. `test_web` (44) is g++-only
+  (needs `-DARDUINO` + stubs) → total **137/137** via `sh run_tests.sh`.
+- `tools/fw_emu/`: socket harness (real handlers, real HTTP, virtual time):
+  `drive_emu.py` 54 checks + `drive_soak.py` 10 checks (48 virtual hours).
+  Boot `fw_emu` (built from `emu_main.cpp`), run both drivers. `w3m -dump`
+  renders verify pages. See `docs/EMULATION-v2.5.md`.
 - `test_web` highlights: real `web_ui.cpp` executes on host — per-request
   admin password gates (admin/OTA/update incl. multipart field plumbing),
   WiFi kill-switch transitions, spoof-pin clamp + persist, OTA install gate,
@@ -508,20 +523,17 @@ or deprioritize — host tests + soak already prove the firmware.
 
 0. **Post-compaction resume:** say "continue" — todo list is ordered top-down
    (HANDOFF delta → QEMU Stage 0 → A → B → C → D → bench + housekeeping).
-1. **Bench test v2.4 with real meter + SmartElex module** (the one thing
-   that matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) AP
-   `BMS-Tester` visible → dashboard pops on join (or 192.168.4.1, mobile
-   data off), NO login wall; (c) per-mode menu shows only the mode's fields;
-   chase visibly steps with no double-lit overlap; START refused < 0.5 s
-   after STOP ("relays settling"); mode switch refused mid-run; (d) spoof
-   Save-only stages without firing, FIRE fires, Cancel disarms; (e) `/update`
-   with a WRONG file names its error and changes nothing; right file shows
-   progress → reboots → `STATUS?` → `2.4`; (f) console HELP/STATUS free,
-   START needs password; backup downloads, restore round-trips (passwords
-   re-entered); STA Test-uplink reports RSSI/IP without rebooting;
-   (g) ground GPIO18 → WiFi dies, release → back.
-   If the page still won't open: confirm flashed firmware is v2.4
-   (`STATUS?` → `2.4`; v1.x has no WiFi at all), AP visible, exact URL/error.
+1. **Bench test v2.5 with real meter + SmartElex module** (the one thing
+   that matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) join
+   from an iPhone → mini-browser shows the landing page → Open Dashboard in
+   Safari works (or manual 192.168.4.1); Android same via Chrome; (c) trigger
+   Save stores pin/enable/polarity with no fire; polarity flip changes the
+   physical-switch sense; (d) per-mode menu + chase + dead-band + rejects as
+   v2.4; (e) wrong-file upload names its error, right file progresses →
+   reboots → `STATUS?` → `2.5`; (f) STA test → on-demand URL upgrade installs;
+   (g) GPIO18 kill still kills.
+   If the page still won't open: confirm flashed firmware is v2.5
+   (`STATUS?` → `2.5`; v1.x has no WiFi at all), AP visible, exact URL/error.
    Needs: 12 V coil supply with common GND; 48 V rail per relay COM, each NO
    to its OWN load (never two outputs on different potentials).
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
@@ -560,7 +572,9 @@ Wiki canonical sources live in `wiki/` (Home, Flashing, Hardware, Protocol,
 Emulators, Versions, Relays, Dashboard) and are pushed to the `.wiki.git` backend.
 `src/ota.*` (OTA decisions) + `test/test_ota/` + `test/test_web/Update.h`
 (upload stub) are v2.3 additions; v2.4 adds `src/fw_upload.h` +
-`test/test_upload/` + stubs `ESPmDNS.h`/`esp_system.h` (info card/mDNS).
+`test/test_upload/` + stubs `ESPmDNS.h`/`esp_system.h` (info card/mDNS);
+v2.5 adds `tools/fw_emu/` (socket harness + drivers) + `docs/CONFIG-SCHEMA.md`
++ `docs/EMULATION-v2.5.md` + stub `uri()` (portal tests).
 Termux home `archive/` — pre-existing clutter, leave alone.
 Emulator work (`/opt/qemu-src` 1.1 GB, `/opt/qemu-s3` 94 MB, `/opt/pioenv`
 76 MB, `/root/.platformio` large) is inside the Debian container — see §8
@@ -587,6 +601,7 @@ while README/CHANGELOG moved on — never again):**
 Resume checklist: `ls /opt/qemu-src/build/qemu-system-xtensa && pio --version`
 (toolchain-alive check — if empty, rebuild per §8) → `git log --oneline |
 head -3` → `git status --short` → `pio test -e native` (Termux) →
-`sh run_tests.sh` → `sh tools/virtual_bus.sh` (in proot — /tmp) → compare
-against §7 numbers (134/134 + contract). Firmware builds run ONLY in
-proot-debian per §8 (Termux pio = host tests only).
+`sh run_tests.sh` → `sh tools/virtual_bus.sh` (in proot — /tmp) → emu
+drivers (`fw_emu` + `drive_emu.py` + `drive_soak.py`, ports 18080/18081) →
+compare against §7 numbers (137/137 + contract + 64/64 emu). Firmware builds
+run ONLY in proot-debian per §8 (Termux pio = host tests only).

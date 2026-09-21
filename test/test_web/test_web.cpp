@@ -92,8 +92,8 @@ void test_root_open_dashboard(void) {
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "id=relays"));
   TEST_ASSERT_TRUE(has(r.body, "FIRE now") || has(r.body, "FIRE"));
-  // Unknown paths still land on the dashboard (captive portal), not a 404.
-  r = WebServer::get("/generate_204");
+  // Unknown non-probe URLs 302 to "/" (OS probes get the landing page).
+  r = WebServer::get("/not-a-probe");
   TEST_ASSERT_EQUAL_INT(302, r.code);
   TEST_ASSERT_TRUE(r.headers["Location"] == "/");
 }
@@ -123,7 +123,7 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"rmode\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"ssec\":5"));
   TEST_ASSERT_TRUE(has(r.body, "\"s2sec\":10"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.4\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.5\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
@@ -290,8 +290,9 @@ void test_factory_reset_clears(void) {
 
 void test_portal_redirect_flow(void) {
   fresh_env();
-  // Captive-portal probes (any unknown URL) land on "/" ...
-  WebServer::Resp r = WebServer::get("/generate_204");
+  // Unknown URLs typed by a person still 302 to "/" (probes get the
+  // landing page instead — see test_portal_landing) ...
+  WebServer::Resp r = WebServer::get("/some-page");
   TEST_ASSERT_EQUAL_INT(302, r.code);
   TEST_ASSERT_TRUE(r.headers["Location"] == "/");
   // ... which serves the open dashboard (no login wall since v2.3.1).
@@ -776,7 +777,7 @@ void test_console_verbs(void) {
   r = WebServer::post("/api/cmd", "{\"cmd\":\"status\"}");
   TEST_ASSERT_TRUE(has(r.body, "LINK RED"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"version\"}");
-  TEST_ASSERT_TRUE(has(r.body, "2.4"));
+  TEST_ASSERT_TRUE(has(r.body, "2.5"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"bogus\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   // Privileged verbs need the password...
@@ -799,10 +800,13 @@ void test_backup_restore(void) {
   WebServer::post("/api/config",
                   "{\"rmode\":1,\"nrel\":4,\"step\":1000,\"stag\":60}");
   WebServer::post("/api/spoof", "{\"cmd\":\"save\",\"sv\":520}");
-  // Backup exports everything but secrets.
+  // Backup exports everything but secrets, in v2 sections.
   WebServer::Resp r = WebServer::get("/api/backup");
   TEST_ASSERT_EQUAL_INT(200, r.code);
-  TEST_ASSERT_TRUE(has(r.body, "\"backup\":1"));
+  TEST_ASSERT_TRUE(has(r.body, "\"config\":2"));
+  TEST_ASSERT_TRUE(has(r.body, "\"relays\":{"));
+  TEST_ASSERT_TRUE(has(r.body, "\"trigger\":{"));
+  TEST_ASSERT_TRUE(has(r.body, "\"sinv\":"));
   TEST_ASSERT_TRUE(has(r.body, "\"nrel\":4"));
   TEST_ASSERT_TRUE(has(r.body, "\"sv\":520"));
   TEST_ASSERT_FALSE(has(r.body, "bms12345"));  // AP secret never leaves
@@ -823,6 +827,11 @@ void test_backup_restore(void) {
   r = admin_post("/api/restore", "{\"nrel\":2}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   TEST_ASSERT_TRUE(has(r.body, "not a bms-tester backup"));
+  // v1 flat backups still restore (migrated through the same table).
+  r = admin_post("/api/restore",
+                 "{\"backup\":1,\"pass\":\"admin123\",\"nrel\":6}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_EQUAL_INT(6, cfg.relay_count);
 }
 
 void test_reset_keepwifi(void) {
@@ -914,10 +923,84 @@ void test_mdns_follows_wifi(void) {
   TEST_ASSERT_TRUE(g_mdns_up);  // release brings it back
 }
 
+void test_spoof_trigger_save(void) {
+  fresh_env();
+  // v2.5 trigger save: pin + enable + polarity persist WITHOUT firing.
+  WebServer::Resp r = WebServer::post(
+      "/api/spoof", "{\"cmd\":\"trig\",\"sena\":1,\"spin\":2,\"sinv\":1}");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(cfg.spoof_enabled);
+  TEST_ASSERT_EQUAL_INT(2, cfg.spoof_pin);
+  TEST_ASSERT_TRUE(cfg.spoof_invert);
+  TEST_ASSERT_EQUAL_UINT8(0, spoof.stage(g_mock_millis));
+  // Polarity + pin survive a simulated reboot (NVS round-trip).
+  web_tick(g_mock_millis + 2000);
+  cfg.spoof_invert = false;
+  cfg.spoof_pin = 21;
+  web_setup(ctx);
+  TEST_ASSERT_TRUE(cfg.spoof_invert);
+  TEST_ASSERT_EQUAL_INT(2, cfg.spoof_pin);
+  // State + backup expose the trigger triple; restore brings it back.
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"sinv\":1"));
+  r = WebServer::get("/api/backup");
+  TEST_ASSERT_TRUE(has(r.body, "\"sinv\":1"));
+}
+
+void test_portal_landing(void) {
+  fresh_env();
+  // OS probes get the landing page (button + Safari steps), not a redirect.
+  for (const char *probe :
+       {"/hotspot-detect.html", "/generate_204", "/gen_204",
+        "/connecttest.txt", "/redirect", "/library/test/success.html"}) {
+    WebServer::Resp r = WebServer::get(probe);
+    TEST_ASSERT_EQUAL_INT(200, r.code);
+    TEST_ASSERT_TRUE(has(r.body, "Open Dashboard"));
+    TEST_ASSERT_TRUE(has(r.body, "192.168.4.1"));
+  }
+  // Apple CNA user agent on any path: landing, not dashboard.
+  std::map<std::string, std::string> ua;
+  ua["User-Agent"] = "CaptiveNetworkSupport/1.0 wispr";
+  WebServer::Resp r = WebServer::get("/whatever", ua);
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "Open Dashboard"));
+  // A person typing an unknown URL still lands on the dashboard.
+  r = WebServer::get("/whatever");
+  TEST_ASSERT_EQUAL_INT(302, r.code);
+  TEST_ASSERT_TRUE(r.headers["Location"] == "/");
+  // The dashboard itself is untouched.
+  r = WebServer::get("/");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "id=relays"));
+}
+
+void test_ota_ondemand_join(void) {
+  fresh_env();
+  // Saved creds + dead link: check joins on demand (stub links instantly),
+  // runs, then drops back to AP-only.
+  admin_post("/api/admin", "{\"sta_ssid\":\"Hot\",\"sta_pass\":\"pw\"}");
+  web_tick(g_mock_millis + 2000);
+  TEST_ASSERT_EQUAL_INT(0, web_sta_state());
+  g_wifi_status = WL_CONNECTED;
+  WebServer::Resp r = admin_post("/api/ota", "{\"cmd\":\"check\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(ota_check_called);
+  TEST_ASSERT_FALSE(g_wifi_begun);  // joined, checked, dropped back
+  // No creds saved at all: named refusal, no radio touched.
+  fresh_env();
+  g_wifi_status = WL_CONNECTED;
+  r = admin_post("/api/ota", "{\"cmd\":\"check\"}");
+  TEST_ASSERT_TRUE(has(r.body, "STA offline"));
+  TEST_ASSERT_FALSE(ota_check_called);
+  TEST_ASSERT_FALSE(g_wifi_begun);
+}
+
 void run_all() {
   RUN_TEST(test_root_open_dashboard);
   RUN_TEST(test_state_public_no_secrets);
   RUN_TEST(test_portal_redirect_flow);
+  RUN_TEST(test_portal_landing);
   RUN_TEST(test_state_defaults);
   RUN_TEST(test_relay_override);
   RUN_TEST(test_seq_start_stop);
@@ -938,6 +1021,7 @@ void run_all() {
   RUN_TEST(test_update_rejects);
   RUN_TEST(test_update_pass_order_independent);
   RUN_TEST(test_spoof_save_only);
+  RUN_TEST(test_spoof_trigger_save);
   RUN_TEST(test_config_loop_hold_reject);
   RUN_TEST(test_config_mode_switch_needs_idle);
   RUN_TEST(test_config_pause_floor);
@@ -949,6 +1033,7 @@ void run_all() {
   RUN_TEST(test_bootcount_info);
   RUN_TEST(test_info_fields);
   RUN_TEST(test_ota_url_flow);
+  RUN_TEST(test_ota_ondemand_join);
   RUN_TEST(test_mdns_follows_wifi);
   RUN_TEST(test_sta_uplink);
   RUN_TEST(test_save_coalescing);

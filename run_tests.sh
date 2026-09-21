@@ -69,8 +69,8 @@ g++ -O2 -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test
 ./.test_system
 rm -f .test_system
 
-echo "=== soak: 8-day continuous-run simulation ==="
-g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o .soak_sim
+echo "=== soak: 30-day continuous-run simulation ==="
+g++ -O2 -std=c++17 -I src src/bms_protocol.cpp src/relay_ctrl.cpp tools/soak_sim.cpp -o .soak_sim
 ./.soak_sim
 rm -f .soak_sim .test_checksum .test_logic .test_parser
 
