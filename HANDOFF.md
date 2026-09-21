@@ -378,6 +378,14 @@ class. UART0 shows only ROM output (repeating `mode:DIO … entry 0x403c98d0`).
 Observability constraint: firmware `STATUS?`/logs live on USB-Serial, NOT
 UART0 — so Stage-A pass = zero flash errors + reboot loop STOPS (+ Stage-B
 GPIO proof), not a literal `STATUS?→RED` over UART0.
+Stage-A trace (`TRACE_EVTS="m25p80_command_decoded"`, full 26-cmd iteration):
+`AB 9F 05 05 9F 5A 05 05 35 00 05 05 35 00 06 31 02 05 35 00 77 00 00 00 10 04`
+— driver runs init TO COMPLETION (ends WRDI `04`); `77 00 00 00 10` =
+Winbond-style burst-wrap disable (3× dummy `00` + wrap byte `10` = wrap
+DISABLED, fire-and-forget, zero functional damage); `31`=WRSR2,
+`02`=PAGE PROGRAM at boot is suspicious (possible WRSR2-data desync:
+GIGADEVICE consumes 0 data bytes?). Crash cause still unknown — next:
+UART0-debug firmware build (`ARDUINO_USB_CDC_ON_BOOT=0`) to read the panic.
 Next agent: to continue, decode what `0x10` is in DIO context (possible status-
 register or continuous-read mode byte); or deprioritize — host tests + soak
 already prove the firmware.
