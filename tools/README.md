@@ -10,4 +10,10 @@
 - `run_qemu_s3.sh` — boots `firmware/firmware.bin` on an emulated ESP32-S3
   (Espressif QEMU fork) and checks `STATUS?`. Needs a **real Linux/Mac** — QEMU's JIT
   cannot start inside phone proot sandboxes (documented abort in static glib init).
+- `dut_emu.cpp` + `raw_meter.py` + `virtual_bus.sh` — virtual-bus emulation
+  without any ESP32 (Debian/proot or Linux, needs socat + g++): `dut_emu`
+  links the real `src/bms_protocol.cpp` and speaks JBD over a PTY;
+  `raw_meter.py` runs every scenario over raw-fd I/O (pyserial's modem ioctls
+  fail on proot PTYs, so no pyserial here); `sh tools/virtual_bus.sh` runs
+  the whole cycle in one shell and asserts RED→GREEN→RED. Exit 0 = PASS.
 - `make_report.py` — generates the Word report (`RS485-Tester-Report.docx`).
