@@ -9,6 +9,8 @@
 # zero flash errors + reboot loop STOPS (Stage B adds GPIO proof).
 # Usage: sh tools/qemu_boot_test.sh [n16r8|plain] [timeout_s]
 #   BASELINE=1  record current failure signature, always exit 0.
+#   TRACE_EVTS="m25p80_command_decoded"  log every flash transaction
+#               (via -d trace:, the reliable route) to $LOGDIR/trace.log.
 #   default     EXACT TEST: PASS iff zero 'Unknown cmd 0x10' AND zero '0x10200C'
 #               in guest_errors (Stage-A gate), exit 1 otherwise.
 # Env overrides: QEMU_BIN, ESPTOOL, LOGDIR, PORT (tcp serial, off by default).
@@ -50,11 +52,16 @@ echo "flash image: $SIZE bytes (expect 8388608 for GD25Q64 selection)"
 
 SERIAL="file:$UARTLOG"
 [ -n "$PORT" ] && SERIAL="tcp::$PORT,server,nowait"
+DOPTS="guest_errors"
+if [ -n "${TRACE_EVTS:-}" ]; then
+  EVTS=$(printf "%s" "$TRACE_EVTS" | tr ',' '\n' | sed 's/^/trace:/' | paste -sd,)
+  DOPTS="guest_errors,$EVTS"
+fi
 # shellcheck disable=SC2086
 timeout "${TIMEOUT_S}s" "$QEMU_BIN" -nographic -machine esp32s3 \
   -drive file="$FLASH",if=mtd,format=raw \
-  -d guest_errors -D "$GUESTLOG" \
-  -serial "$SERIAL" >"$LOGDIR/qemu_stdout.log" 2>&1 || true
+  -d "$DOPTS" -D "$GUESTLOG" \
+  -serial "$SERIAL" >"$LOGDIR/qemu_stdout.log" 2>"$LOGDIR/trace.log" || true
 
 C10=$(grep -c -E "Unknown cmd (0x)?10$" "$GUESTLOG" 2>/dev/null || true)
 C10u=$(grep -c "Unknown cmd" "$GUESTLOG" 2>/dev/null || true)
