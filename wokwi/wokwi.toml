@@ -1,7 +1,9 @@
 [wokwi]
 version = 1
-firmware = ".pio/build/esp32-s3-devkitc-1/firmware.bin"
-elf = ".pio/build/esp32-s3-devkitc-1/firmware.elf"
+# Paths are relative to this directory for `wokwi-cli wokwi` (assumption:
+# CLI resolves firmware/elf against the project dir holding wokwi.toml).
+firmware = "../.pio/build/esp32-s3-devkitc-1/firmware.bin"
+elf = "../.pio/build/esp32-s3-devkitc-1/firmware.elf"
 
 # Meter stimulus: second MCU (see wokwi/meter.ino) polls every 1s.
 # RS485 emulated at UART+DE logic level; MAX485 modeled by custom chip

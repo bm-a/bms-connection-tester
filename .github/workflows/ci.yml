@@ -22,3 +22,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o soak && ./soak
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/check_web_contract.py
+      - run: mkdir -p .unity && for f in unity.h unity.c unity_internals.h; do curl -sL --max-time 60 "https://raw.githubusercontent.com/ThrowTheSwitch/Unity/master/src/$f" -o ".unity/$f"; done
+      - run: g++ -std=c++17 -DARDUINO -I test/test_web -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp src/web_ui.cpp test/test_web/test_web.cpp .unity/unity.c -o test_web
+      - run: ./test_web
+  wokwi-sim:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.WOKWI_CLI_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install platformio
+      - run: pio run -e esp32-s3-devkitc-1
+      - run: curl -L https://wokwi.com/ci/install.sh | sh
+      - run: wokwi-cli wokwi --timeout 90000 --scenario wokwi/sim.yaml
+        env: { WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }} }

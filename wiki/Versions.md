@@ -1,5 +1,16 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.1] — 2026-09-23
+### Added
+- 14 host-executed website tests + JS↔firmware contract gate + 24 h office-day
+  sim (86,400 polls, per-reply checksum validation) + Wokwi automation scenario
+  (`sim.yaml`) with token-gated CI sim job.
+- Diagram verified against official docs and fixed (NeoPixel VDD/VSS, button
+  1.l/2.l); 8 real relay-module parts with NO-contact indicators.
+### Changed
+- `select_reply()` host-covered refactor (behavior-identical); `FW_VERSION` →
+  `2.1`. Bench-confirmed: relay idle HIGH, ON-when-LOW = active-LOW default.
+
 ## [v2.0] — 2026-09-22
 ### Added
 - 8-relay sequencer (sequential/all-ON, 3 button behaviors, boot-safe,

@@ -1,6 +1,6 @@
-# Ready-to-flash binaries — v2.0 (ESP32-S3 DevKitC-1, 8 MB flash)
+# Ready-to-flash binaries — v2.1 (ESP32-S3 DevKitC-1, 8 MB flash)
 
-Built 2026-09-22 from this exact source (`pio run -e esp32-s3-devkitc-1`,
+Built 2026-09-23 from this exact source (`pio run -e esp32-s3-devkitc-1`,
 Xtensa GCC 8.4.0, Arduino 2.0.x). Use for 8 MB boards and for Wokwi.
 For 16 MB N16R8 boards use `firmware-n16r8/` instead (same logic, 16 MB map).
 
@@ -23,8 +23,8 @@ Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher
 load the three files at the addresses above, flash, done.
 
 ## Verify
-- `firmware.bin` (761,408 bytes)
-  SHA-256: `8f4565da595758b418389210945ea46ac2f37b28c5675bb31e2ef3c61c0d8302`
+- `firmware.bin` (761,536 bytes)
+  SHA-256: `8c393b3733ad29294054f16d98e898af73bf9b1f0f67c5d9a9dc63d7204419c9`
 - `bootloader.bin` (15,104 bytes)
   SHA-256: `1776e4dd896a69d0a5c2e79957b0e2a88aa4129b1381d6478683515a1f6af343`
 - `partitions.bin` (3,072 bytes)

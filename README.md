@@ -18,8 +18,8 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.0** current · `v1.2` RGB+N16R8 · `v1.1` fixes below · `v1.0` frozen (ZIP + tag) |
-| Tests | **50 / 50 passing** (`pio test -e native` or `sh run_tests.sh`) + 8-day soak |
+| Releases | **v2.1** current · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.1` fixes · `v1.0` frozen (ZIP + tag) |
+| Tests | **66 passing** (52 via `pio test -e native` + 14 web via `sh run_tests.sh`) + 8-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
 
@@ -59,7 +59,7 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.0` / `RED 2.0`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.1` / `RED 2.1`.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
   dashboard (usually `192.168.4.1`), log in, configure.
@@ -77,26 +77,31 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 ## Verify it
 
 ```sh
-sh run_tests.sh          # 50/50 Unity + 8-day soak (always); HIL when attached
-pio test -e native       # checksums, logic, parser, stress, relay, spoof
+sh run_tests.sh          # full 66: g++ suites + web contract + test_web + soak (always); HIL when attached
+pio test -e native       # 52 Unity tests: checksum, logic, parser, stress, relay, spoof, system
 pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile
 ```
 
-Emulator results for v2.0 (Termux + Debian proot):
-- Native 50/50 + soak `691040/691040` — PASS (old 32 untouched).
-- Virtual bus (socat PTY + real-protocol harness): 03/04/05 golden, silences,
+Emulator results for v2.1 (Termux + Debian proot):
+- Native 66/66 (52 pio + 14 web) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
+- Virtual bus (`sh tools/virtual_bus.sh`): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
-- Dashboard JS: `node --check` clean.
-- Wokwi: discretes + NeoPixel + 8 relay LEDs + button/spoof buttons.
+- Dashboard JS: `node --check` clean; JS↔firmware contract gate green.
+- Wokwi: discretes + NeoPixel + 8 relay modules (NO indicators) + buttons;
+  `sim.yaml` automation ready (needs `WOKWI_CLI_TOKEN` for headless/CI runs).
 - QEMU-S3: same known Arduino-guest gap (`0x10`/`0x10200C`) — no regression.
 
-`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.0).
+`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.1).
 `firmware-n16r8/firmware.bin` SHA-256: see `firmware-n16r8/README.md`.
 
 ## Versions
 
+- **v2.1** — website reliability: 14 host-executed web tests + contract gate,
+  `select_reply()` now host-covered, 24 h office-day sim, Wokwi relay modules
+  + automation scenario + token-gated CI sim. No behavior change (bench-confirmed
+  active-LOW default stands).
 - **v2.0** — 8-relay sequencer + always-on AP dashboard + spoof window + admin auth.
-  Responder core frozen (50/50 incl. original 32).
+  Responder core frozen (66/66 incl. original 32).
 - **v1.2** — onboard RGB mirror (GPIO48) + N16R8 16 MB/OPI build + Wokwi NeoPixel.
 - **v1.1** — multi-register (03/04/05) + adaptive window + silence-on-unknown + hardened parser.
 - **v1.0** — 0x03-only responder, fixed 2 s window. Frozen: `releases/bms-connection-tester-v1.0.zip` + tag.

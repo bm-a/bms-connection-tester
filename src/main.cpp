@@ -1,4 +1,4 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.0.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.1.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
@@ -16,7 +16,7 @@
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.0\n" / "RED 2.0\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.1\n" / "RED 2.1\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"
@@ -199,13 +199,11 @@ void loop() {
       tracker.note_poll(now);
       // v2.0: during a spoof window, reg 0x03 answers test values; every
       // other rule (option-A silence, golden/cell/name frames) is frozen.
+      // The rule itself lives in select_reply() (host-tested in test_system).
       size_t rlen = 0;
-      const uint8_t *reply = reply_for(f.reg, f.is_write, rlen);
-      if (!f.is_write && f.reg == 0x03 && cfg.spoof_enabled &&
-          spoofFrameReady && spoof.active(now)) {
-        reply = spoofFrame;
-        rlen = SPOOF_FRAME_LEN;
-      }
+      const uint8_t *reply =
+          select_reply(f, cfg, spoof.active(now),
+                       spoofFrameReady ? spoofFrame : nullptr, rlen);
       if (reply) send_frame(reply, rlen);
     }
   }
