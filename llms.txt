@@ -37,7 +37,7 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.1` / `RED 2.1`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.2` / `RED 2.2`.
 
 ## Code map
 
@@ -54,7 +54,7 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 
 ## Verified facts (do not contradict without evidence)
 
-- 66/66 tests pass (incl. original frozen 32); both S3 firmware profiles compile
+- 67/67 tests pass (incl. original frozen 32); both S3 firmware profiles compile
   (Xtensa GCC 8.4.0); golden reply bytes verified inside firmware.bin (SHA-256 in README.md).
 - Reply checksums exclude the echoed command byte (FCDA, not FCD7).
 - QEMU-S3 cannot boot Arduino guests (flash-model gaps, documented); use Wokwi or hardware.

@@ -261,9 +261,29 @@ void test_factory_reset_clears(void) {
   TEST_ASSERT_EQUAL_INT(10, cfg.spoof_seconds);
 }
 
+void test_portal_redirect_flow(void) {
+  fresh_env();
+  // Captive-portal probes (any unknown URL) land on "/" ...
+  WebServer::Resp r = WebServer::get("/generate_204");
+  TEST_ASSERT_EQUAL_INT(302, r.code);
+  TEST_ASSERT_TRUE(r.headers["Location"] == "/");
+  // ... which itself sends unauthed browsers to the login page.
+  r = WebServer::get("/");
+  TEST_ASSERT_EQUAL_INT(302, r.code);
+  TEST_ASSERT_TRUE(r.headers["Location"] == "/login");
+  // Authed users hitting unknown paths land on the dashboard, not a 404.
+  cookie = login("admin", "admin123");
+  r = WebServer::get("/generate_204", auth());
+  TEST_ASSERT_EQUAL_INT(302, r.code);
+  r = WebServer::get("/", auth());
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "id=relays"));
+}
+
 void run_all() {
   RUN_TEST(test_login_page_public);
   RUN_TEST(test_root_requires_auth);
+  RUN_TEST(test_portal_redirect_flow);
   RUN_TEST(test_login_bad);
   RUN_TEST(test_login_good_dashboard);
   RUN_TEST(test_state_defaults);

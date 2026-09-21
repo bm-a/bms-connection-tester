@@ -1,7 +1,7 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
-> Last updated 2026-09-23 for **v2.1** (website reliability). Rule going forward:
+> Last updated 2026-09-24 for **v2.2** (captive portal — page now opens on phones). Rule going forward:
 > §12's release checklist REQUIRES updating this file in the same commit as
 > any feature — a body left stale behind an addendum is a bug (2026-09-22).
 > Audience: the next AI agent (or future me) picking this project up cold.
@@ -26,7 +26,7 @@ for 10 s. No screens needed.
   The Word report for dad keeps the e-rickshaw framing on purpose.)
 - **People:** user = Bhavishya Madan (GitHub `bm-a`). Dad = electronics-strong,
   code-weak; gets status via a WhatsApp Word report, not GitHub.
-- **Current release: v2.1** (tag `v2.1`; reliability release, no behavior change). v1.x responder core FROZEN
+- **Current release: v2.2** (tag `v2.2`; captive portal fix — user-reported "page won't open"). v1.x responder core FROZEN
   (parser, option-A, tracker, golden frames, LEDs, STATUS?, original 32 tests
   byte-identical). v1.0 frozen (ZIP + git tag, untouched since).
 
@@ -36,7 +36,7 @@ for 10 s. No screens needed.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 66 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`, `v1.1`, `v1.2`, `v2.0`, `v2.1`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1 (7 assets each); wiki live (7 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 67 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.2`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2 (7 assets each); wiki live (7 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -81,6 +81,16 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   Wokwi diagram fixed per official docs + 8 relay-module parts + `sim.yaml`
   automation with token-gated CI job. Bench-confirmed relay idle HIGH /
   ON-when-LOW = active-LOW default stands. **66/66 total** (52 pio + 14 web).
+- **v2.2** (tag `v2.2`): user reported the page never opened on their phone.
+  Root causes ranked: (1) no captive portal — phones show "no internet" and
+  route via mobile data / never pop a page; (2) unknown URLs 404'd; (3) AP IP
+  only implicit. Fix: `DNSServer` catch-all to `WiFi.softAPIP()` (login pops
+  on join), `onNotFound` → 302 `/`, explicit
+  `softAPConfig(192.168.4.1/24)`; report + wiki warn to turn mobile data off.
+  Portal flow host-tested (15 web tests). **67/67 total**. Other bench
+  possibility (old v1.x firmware flashed = no WiFi at all) left as a
+  diagnostic question to the user: is `BMS-Tester` visible? what does
+  `STATUS?` report?
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
@@ -161,10 +171,12 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 - `build_spoof_frame()` — golden copy + patched V/A/SOC/temps + recomputed CK
   (same LEN+DATA rule); `relay_pin_level()` polarity helper.
 - `Bms2Config` — all web-tunable values + NVS schema (namespace `bms2`).
-- `web_ui` (ESP-only): AP `BMS-Tester` always on (fixed channel, changeable),
-  session-cookie login (30 min sliding), JSON API + single-page dark dashboard
-  (`node --check` clean + `check_web_contract.py` gate), NVS load/save
-  (explicit defaults-reset before overlay), factory reset + reboot.
+- `web_ui` (ESP-only): AP `BMS-Tester` always on (fixed 192.168.4.1 via
+  `softAPConfig`, channel changeable), `DNSServer` catch-all captive portal,
+  unknown URLs → 302 `/`, session-cookie login (30 min sliding), JSON API +
+  single-page dark dashboard (`node --check` clean + `check_web_contract.py`
+  gate), NVS load/save (explicit defaults-reset before overlay), factory
+  reset + reboot.
 - Reply selection lives in `select_reply()` (`relay_ctrl`, host-tested in
   `test_system`); `main.cpp` calls it — no inline selection logic.
 
@@ -189,13 +201,13 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 
 ---
 
-## 7. Tests — 66/66 + soak + virtual bus + contract (how to run, what they prove)
+## 7. Tests — 67/67 + soak + virtual bus + contract (how to run, what they prove)
 
 - `pio test -e native` → 7 suites: test_checksum (7), test_logic (8),
   test_parser (13), test_stress (4), **test_relay (12), test_spoof (6),
   test_system (2)**. **Last CI run: all green (52/52).** Old 32 byte-identical
-  since v1.1. `test_web` (14) is g++-only (needs `-DARDUINO` + stubs) → total
-  **66/66** via `sh run_tests.sh`.
+  since v1.1. `test_web` (15) is g++-only (needs `-DARDUINO` + stubs) → total
+  **67/67** via `sh run_tests.sh`.
 - `test_web` highlights: real `web_ui.cpp` executes on host — login/session/
   validation/NVS/API/fuzz/reset. Stub-fidelity bugs it caught (and fixed):
   per-TU mock clocks (→ `inline` shared clock), NVS `clear()` missing the
@@ -245,9 +257,9 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 `build_src_filter = +<bms_protocol.cpp> +<relay_ctrl.cpp>`,
 `test_filter` = 6 suites), `s3_tests` (on-target ELFs).
 Pinned reality: espressif32@7.1.3, Xtensa GCC 8.4.0 (esp-2021r2-patch5),
-Arduino 2.0.x (IDF 4.4 based). v2.1 `firmware.bin` = 761,536 bytes
-(`8c393b37…d7204419c9`); `firmware-n16r8/firmware.bin` = 764,048 bytes
-(`164f43de…63fe062d8`). Golden bytes + `2.1` + `BMS-Tester` + dashboard
+Arduino 2.0.x (IDF 4.4 based). v2.2 `firmware.bin` = 768,048 bytes
+(`acb44424…32d74e0`); `firmware-n16r8/firmware.bin` = 770,544 bytes
+(`22716b22…7396e18`). Golden bytes + `2.1` + `BMS-Tester` + dashboard
 strings verified byte-present in both. `firmware/` + `firmware-n16r8/` hold
 bootloader + partitions + esptool READMEs (flash 0x0 / 0x8000 / 0x10000).
 `arduino/` = same firmware as IDE sketch (7 tabs incl. new files).
@@ -325,9 +337,10 @@ or deprioritize — host tests + soak already prove the firmware.
   It is NOT stored in any file. **Still recommend the user revoke/rotate it**
   — chat logs persist. (Outstanding since v1.1.)
 - Commit identity: `bm-a` / `bm-a@users.noreply.github.com`.
-- Releases: v1.0 (ZIP), v1.1 (3 bins + docx), v1.2 + v2.0 + v2.1 (7 assets each:
-  8 MB triple plain-named + `n16r8-` triple — GitHub forbids duplicate asset
-  names, so N16R8 files are uploaded renamed). Wiki backend provisioned
+- Releases: v1.0 (ZIP), v1.1 (3 bins + docx), v1.2 + v2.0 + v2.1 + v2.2
+  (7 assets each: 8 MB triple plain-named + `n16r8-` triple — GitHub forbids
+  duplicate asset names, so N16R8 files are uploaded renamed; docx re-uploaded
+  with `--clobber` when only the report changes). Wiki backend provisioned
   (one browser click); push via the `.wiki.git` clone.
 - Re-run `gh release create` only if assets change.
 
@@ -335,13 +348,14 @@ or deprioritize — host tests + soak already prove the firmware.
 
 ## 11. Pending / next steps (ordered)
 
-1. **Bench test v2.1 with real meter + SmartElex module** (the one thing that
-   matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) button runs
-   the relay sequence with configured delay, relays click in order, no boot
-   click; (c) AP `BMS-Tester` visible, dashboard drives relays; (d) spoof shows
-   88.8/88.8/88.8/188 % for 10 s then reverts. Bench-confirmed already:
-   relay idle HIGH, ON-when-LOW (active-LOW default correct). Needs: 12 V coil
-   supply with common GND.
+1. **Bench test v2.2 with real meter + SmartElex module** (the one thing that
+   matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) AP
+   `BMS-Tester` visible → login page pops on join (or 192.168.4.1, mobile
+   data off); (c) button runs the relay sequence, relays click in order, no
+   boot click; (d) spoof shows 88.8/88.8/88.8/188 % for 10 s then reverts.
+   If the page still won't open: confirm flashed firmware is v2.2
+   (`STATUS?` → `2.2`; v1.x has no WiFi at all), AP visible, exact URL/error.
+   Needs: 12 V coil supply with common GND.
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
    firmware headless (button→pins, spoof→`22 B0`); also answers whether
    `WiFi.softAP` boots in the sim (dashboard HTTP itself has no emulator —

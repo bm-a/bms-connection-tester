@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Beautiful dad-friendly Word report — v2.1 (multi-scenario release)."""
+"""Beautiful dad-friendly Word report — v2.2 (multi-scenario release)."""
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -75,7 +75,7 @@ def callout(title, text, fill="FFF6D6"):
 sec = doc.sections[0]
 fp = sec.footer.paragraphs[0]
 fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = fp.add_run("RS485 Connection Tester v2.1  —  Build & Test Report   |   Page ")
+r = fp.add_run("RS485 Connection Tester v2.2  —  Build & Test Report   |   Page ")
 r.font.size = Pt(9)
 r.font.color.rgb = GREY
 fld = OxmlElement("w:fldSimple")
@@ -94,20 +94,22 @@ r.bold = True
 r.font.color.rgb = NAVY
 sp = doc.add_paragraph()
 sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = sp.add_run("Build & Test Report v2.1 — for an electronics engineer, no coding needed")
+r = sp.add_run("Build & Test Report v2.2 — for an electronics engineer, no coding needed")
 r.font.size = Pt(13)
 r.italic = True
 r.font.color.rgb = GREY
 doc.add_paragraph()
 table(["Item", "Detail"], [
-    ["Board", "ESP32-S3 DevKitC-1 + MAX485 module"],
-    ["Version", "v2.1 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed"],
-    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.1 only"],
+    ["Board", "ESP32-S3 DevKitC-1 (or N16R8) + MAX485 module + 8-channel relay module"],
+    ["Version", "v2.2 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; sequences 8 relays; serves a config web page"],
+    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.2 only"],
     ["Date", "September 2026"],
-    ["Firmware", "firmware.bin — v2.1 8 MB build, compiled + verified (SHA in firmware/README.md)"],
-    ["Tests", "66 / 66 passing (protocol + lamps + faults + soak + relay/spoof/web/24h sim)"],
-    ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Nothing to press."],
+    ["Firmware", "firmware.bin — v2.2 8 MB build, compiled + verified (SHA in firmware/README.md)"],
+    ["Tests", "67 / 67 passing (protocol + lamps + faults + soak + relay/spoof/web/portal/24h sim)"],
+    ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Button runs the relay sequence. Phone/laptop + web page configures everything."],
 ], widths=[1.6, 4.6])
+callout("Passwords — keep this file safe: ",
+        "Wi-Fi network BMS-Tester, password bms12345. Web page login: user admin, password admin123. Change both on first login (Admin card).")
 cp = doc.add_paragraph()
 cp.alignment = WD_ALIGN_PARAGRAPH.CENTER
 r = cp.add_run("Send this file as-is on WhatsApp — it opens in Word / Google Docs on any phone.")
@@ -120,9 +122,9 @@ doc.add_heading("Contents", level=1)
 for item in [
     "1.  What this box does (start here)",
     "2.  Parts list",
-    "3.  Wiring — the complete circuit",
-    "4.  How v2.1 works (every meter type, no code)",
-    "5.  Using it on the assembly line",
+    "3.  Wiring — the complete circuit (lamps + relays + button)",
+    "4.  How v2.2 works (every meter type, no code)",
+    "5.  Using it on the assembly line (lamps, button, web page)",
     "6.  Getting the software onto the board (3 easy methods)",
     "7.  Build & test report (numbers included)",
     "8.  Troubleshooting table",
@@ -139,7 +141,11 @@ doc.add_paragraph(
 doc.add_paragraph("GREEN lamp ON  =  wiring correct, meter and box are talking.", style="List Bullet")
 doc.add_paragraph("RED lamp ON  =  wiring wrong (or meter off, wires swapped, wire broken).", style="List Bullet")
 doc.add_paragraph(
-    "Nothing to press, reset or read. v2.1 handles every meter variant by itself: fast or slow polling, meters that "
+    "BUTTON = runs the 8 relays in order (each relay switches one meter function for testing). "
+    "A phone/laptop web page (no office Wi-Fi needed — the box makes its own network) sets the "
+    "step-by-step delay, the button behavior and test values. Details in §5.", style="List Bullet")
+doc.add_paragraph(
+    "Nothing to press, reset or read. v2.2 handles every meter variant by itself: fast or slow polling, meters that "
     "ask for extra data (cell voltages, device name), and meters that send configuration writes — green lights for all "
     "of them as long as the wires carry real traffic.")
 
@@ -147,13 +153,16 @@ doc.add_paragraph(
 doc.add_heading("2. Parts list", level=1)
 doc.add_paragraph("One box needs:")
 table(["Part", "Qty", "What it does"], [
-    ["ESP32-S3 DevKitC-1 board", "1", "The brain. Listens, replies, drives the lamps."],
+    ["ESP32-S3 DevKitC-1 board (N16R8 also fine)", "1", "The brain. Listens, replies, drives lamps + relays + web page."],
     ["MAX485 module (SP3485 also fine)", "1", "Translator: ESP32 serial ↔ noise-proof RS485 signals."],
-    ["Green LED + red LED (5 mm)", "1 + 1", "The entire user interface."],
+    ["Green LED + red LED (5 mm)", "1 + 1", "Link status at a glance."],
     ["220 Ω resistor", "2", "One per LED (≈ 6–10 mA)."],
     ["10 kΩ resistor", "1", "Pull-down on direction pin — powers up listening, never jamming."],
-    ["USB cable + 5 V charger / power bank", "1", "Powers the box. NEVER the traction battery pack."],
-    ["Twisted-pair wire + screw terminals", "1 set", "A/B test leads to the meter."],
+    ["8-channel 12 V relay module (SmartElex type, 3 A/channel)", "1", "Switches 8 meter functions in sequence. Optoisolated inputs, ESP-compatible."],
+    ["12 V DC adapter (≈ 1 A)", "1", "Relay coils ONLY — USB cannot drive them. Share GND with the ESP."],
+    ["Push button (momentary, to GND)", "1", "Starts/stops the relay sequence. Hold 10 s = factory reset."],
+    ["USB cable + 5 V charger / power bank", "1", "Powers ESP + MAX485. NEVER the traction battery pack."],
+    ["Twisted-pair wire + screw terminals", "1 set", "A/B test leads to the meter; relay wiring to meter functions."],
     ["Small plastic enclosure", "1", "Houses everything."],
 ], widths=[2.2, 0.7, 3.3])
 
@@ -174,28 +183,65 @@ table(["Signal", "From → To", "Notes"], [
 callout("First check, always: ",
         "if the box never turns green, swap A and B at the screw terminal and try again. Safe, instant, fixes most cases.")
 doc.add_paragraph("Pin choices are S3-safe (avoid strapping 0/3/45/46, USB 19/20, flash 26–37, console 43/44). "
-                  "Unchanged from v1.0 — a v1.0-wired box runs v2.1 firmware with zero rewiring.", style="List Bullet")
+                  "Unchanged from v1.0 — a v1.0-wired box runs v2.2 firmware; only new wires are relays/button below.", style="List Bullet")
+doc.add_heading("3.2 Relay bench wiring (v2.x additions)", level=2)
+table(["Signal", "From → To", "Notes"], [
+    ["Relays 1–8", "S3 GPIO5/6/7/8/9/12/13/14 → relay IN1–IN8", "One wire per channel, in order."],
+    ["Relay logic", "Idle HIGH, relay clicks ON when pulled LOW", "Confirmed on bench — boots OFF with no click. A web setting flips it if a module ever needs HIGH."],
+    ["Relay power", "12 V adapter → module DC+/DC−", "Coils ≈ 30 mA each (≈ 240 mA all-on). USB cannot do this."],
+    ["Relay ground", "12 V GND = ESP GND", "Common reference is mandatory, optoisolation does the rest."],
+    ["Relay outputs", "Each COM/NO/NC → one meter function", "Up to 3 A per channel. NO = closes when relay clicks."],
+    ["Button", "S3 GPIO15 → button → GND", "Built-in pull-up; short press runs the sequence, 10 s hold wipes settings."],
+    ["Spoof trigger", "S3 GPIO21 → contact → GND (optional)", "Or press FIRE on the web page instead."],
+], widths=[1.2, 2.4, 2.6])
+callout("12 V rule: ",
+        "the ESP is USB-powered, the relay coils are 12 V-powered, and their grounds are tied together. Relays will never click without the 12 V adapter.")
 
 # ================= 4 =================
-doc.add_heading("4. How v2.1 works (the idea, no code)", level=1)
+doc.add_heading("4. How v2.2 works (the idea, no code)", level=1)
 for s in [
     "The meter asks questions in the JBD battery language at 9600 baud — usually register 0x03 (voltage/current/charge), sometimes 0x04 (cell voltages) or 0x05 (device name), occasionally configuration writes.",
     "The box checks every incoming message completely (start, command, length, safety checksum, end byte). Random factory noise can never fake one — proven with a million random bytes in testing.",
     "Known questions get the matching canned answer (0x03 is the byte-exact recording of a real full battery: 52.0 V, 100 %; 0x04/0x05 are consistent synthesized answers). Writes and unknown questions get silence — but they still count as ‘the meter is talking’, so green still lights. Deliberate choice: a tester must never confuse a meter with a wrong answer.",
     "Green/red is now self-adjusting: the box measures the meter's poll rhythm and sets its patience between 2 and 10 seconds. Fast meters, slow meters, jittery meters — all show steady green; a truly silent line always goes red. No configuration, no buttons, forever.",
+    "Relays: one button press switches R1→R8 with an adjustable pause between clicks (default half a second), holds them, then releases — or switches all 8 at once. Three button styles are selectable: hold-then-auto-off with re-press abort, run-to-the-end ignoring presses, or re-press restarts from R1. The web page also toggles each relay by hand.",
+    "Fault test: a second input (or the web FIRE button) makes the meter read 88.8 V / 88.8 A / 88.8 °C / 188 % for 10 seconds, then everything returns to normal by itself. Values and duration are adjustable.",
+    "Web dashboard: the box permanently broadcasts its own Wi-Fi network (no office internet needed). Any phone or laptop joins it and opens the control page — live relay buttons, delay/mode settings, fault-test values, admin password. All settings survive power cuts.",
     "Invisible helper: over USB the box answers STATUS? with GREEN 2.1 / RED 2.1 (the number is the firmware version). Only for automatic tests.",
 ]:
     doc.add_paragraph(s, style="List Number")
 
 # ================= 5 =================
 doc.add_heading("5. Using it on the assembly line", level=1)
+doc.add_heading("5.1 Wiring check (lamps)", level=2)
 for s in [
     "Power the tester from USB. Power the meter from its bench supply.",
     "Connect A→A, B→B, join grounds.",
     "GREEN within ~1 second = PASS. RED = swap A/B first, then continuity and ground.",
-    "Next meter. No buttons, no reset, ever — works for any meter variant or poll speed.",
+    "Next meter. Works for any meter variant or poll speed.",
 ]:
     doc.add_paragraph(s, style="List Number")
+doc.add_heading("5.2 Relay bench (button)", level=2)
+for s in [
+    "Power the 12 V adapter for the relay coils (relays never click without it).",
+    "Short press the button: relays click R1→R8 in order (or all at once, per setting).",
+    "Re-press behavior follows the selected style: abort-to-OFF, ignored-till-done, or restart-from-R1.",
+    "Each relay output switches one meter function under test — watch the meter respond per channel.",
+]:
+    doc.add_paragraph(s, style="List Number")
+doc.add_heading("5.3 Web dashboard (phone/laptop, no office Wi-Fi needed)", level=2)
+for s in [
+    "On the phone/laptop, join Wi-Fi network BMS-Tester with password bms12345. A login page pops up by itself; if not, open 192.168.4.1 in the browser.",
+    "Phone says ‘no internet’ or keeps using mobile data? Turn mobile data OFF (or tap ‘stay connected’) — the box has no internet, it IS the network.",
+    "Login: user admin, password admin123.",
+    "FIRST: open the Admin card and change the Wi-Fi password and the login password. (Locked out later? Hold the box button 10 s — factory reset, back to the passwords above.)",
+    "Relays card: live green tiles = ON; tap any tile to force it; START runs the sequence, STOP ALL releases everything.",
+    "Sequence card: mode (1-by-1 vs all-at-once), step pause in ms, hold time in s (0 = stay on), button style, relay logic. Save stores it through power cuts.",
+    "Fault card: set V/A/°C/percent + seconds, press FIRE — the meter shows the test values, then returns to normal by itself.",
+]:
+    doc.add_paragraph(s, style="List Number")
+callout("Keep safe: ",
+        "this document carries the live passwords (BMS-Tester / bms12345, admin / admin123). Change them on first login and re-share only the new ones.")
 
 # ================= 6 =================
 doc.add_heading("6. Getting the software onto the board", level=1)
@@ -218,8 +264,8 @@ for s in [
     doc.add_paragraph(s, style="List Number")
 doc.add_heading("Method C — Arduino IDE", level=2)
 for s in [
-    "Boards Manager → ‘esp32 by Espressif’. Open arduino/bms_connection_tester/bms_connection_tester.ino.",
-    "Board ‘ESP32S3 Dev Module’, USB CDC On Boot = Enabled, Upload Speed 921600. Pick port, Upload.",
+    "Boards Manager → ‘esp32 by Espressif’. Open arduino/bms_connection_tester/bms_connection_tester.ino (all tabs open automatically).",
+    "Board ‘ESP32S3 Dev Module’, USB CDC On Boot = Enabled, Upload Speed 921600 (N16R8 boards also: Flash 16MB, PSRAM OPI). Pick port, Upload.",
 ]:
     doc.add_paragraph(s, style="List Number")
 
@@ -228,19 +274,24 @@ doc.add_heading("7. Build & test report", level=1)
 doc.add_heading("7.1 Firmware compiled for real — SUCCESS", level=2)
 doc.add_paragraph(
     "Built with the genuine Espressif Xtensa GCC 8.4.0 toolchain (PlatformIO + Arduino framework), "
-    "6 cores, incremental + cache: v2.1 compiled in 46 seconds. Binary inspected afterward:")
+    "6 cores, incremental + cache: v2.2 compiled in 46 seconds. Binary inspected afterward:")
 table(["Artifact", "Detail"], [
-    ["firmware.bin", "v2.1 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, relay sequencer, AP dashboard; SHAs in firmware/README.md."],
-    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.1 binaries refreshed; golden bytes + version + AP strings verified inside)"],
+    ["firmware.bin", "v2.2 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, relay sequencer, AP dashboard; SHAs in firmware/README.md."],
+    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.2 binaries refreshed; golden bytes + version + AP strings verified inside)"],
     ["bootloader + partitions", "Standard S3 loader and flash layout, refreshed with this build."],
     ["On-target test builds", "All three unit-test programs also compile + link for the S3 chip (they execute once a board is plugged in)."],
     ["QEMU S3 boot test", "QEMU 9.2.2 built from source on this phone; it boots our firmware to the Arduino flash-init step. Tracing proved QEMU's flash model lacked RDID 0x90/0xAB and GD25Q64 SFDP — both patched (separate emulator repo). Only an undecodable DIO-era cmd 0x77 remains: emulator gap, our code is never reached. Wokwi S3 is the practical Arduino-emulation path."],
 ], widths=[1.7, 4.5])
-doc.add_heading("7.2 Automated tests — 66 / 66 PASS (run_tests.sh)", level=2)
+doc.add_heading("7.2 Automated tests — 67 / 67 PASS (run_tests.sh)", level=2)
 table(["Group", "Tests", "Result"], [
     ["Checksums + golden frame (7)", "FFFD / FCDA / FCA8 / FA86 / F65A (2nd Docklight 0x2A variant), byte-exact 0x03 frame, exact-yes / 7xcorrupt-no.", "7 PASS"],
     ["Lamp logic, adaptive (8)", "Boot red, green fast, red after window, self-heal, slow-poll adapt, 2 s floor / 10 s cap, rollover, legacy compat.", "8 PASS"],
-    ["Parser + dispatcher + faults (13)", "0x03/0x04/0x05 reads, write flagged, all corruptions rejected, noise re-sync, overlong rejected, split delivery, option-A silence, canned-frame checksums, 1 M noise bytes = zero false frames, 100 k fast-poll + slow-poll soaks.", "13 PASS"],
+    ["Parser + dispatcher + faults (13)", "0x03/0x04/0x05 reads, write flagged, all corruptions rejected, noise re-sync, overlong rejected, split delivery, option-A silence, canned-frame checksums, 1 M noise bytes = zero false frames, fast + slow soaks.", "13 PASS"],
+    ["Stress (4)", "1,785 exhaustive corruptions, 10 M fuzz, cadence×register sweep, 5,000-frame saturation.", "4 PASS"],
+    ["Relay sequencer (12)", "Boot OFF, stepping, hold expiry/forever, ALL-ON, all 3 button behaviors, abort/restart, override, polarity, rollover, debounce.", "12 PASS"],
+    ["Spoof frame + window (6)", "88.8/88.8/88.8/188 bytes, checksum validity, custom values, timing/cancel/retrigger, rollover.", "6 PASS"],
+    ["Website, host-executed (15)", "Login, portal redirect, auth gates, validation, NVS round-trip, relay/seq/spoof/admin handlers, expiry, logout, fuzz, factory reset.", "15 PASS"],
+    ["System 24 h sim (2)", "Reply-selection matrix + 86,400-poll office day: every reply checksum-validated, exact 10 s spoof, relay schedule, noise, green all day.", "2 PASS"],
 ], widths=[2.3, 2.9, 0.9])
 doc.add_paragraph("The hardware-in-loop test (real board + adapter asserting exact replies and GREEN→RED timing) runs "
                   "itself the moment hardware is detected; until then it skips. The virtual meter gained scenario modes "
@@ -263,12 +314,18 @@ table(["Symptom", "Fix (in order)"], [
     ["GREEN flickers", "Loose terminal / long untwisted run. Shorten, twist; 120 Ω across A–B if long."],
     ["Both LEDs dark", "Unpowered, LEDs backwards (flat side to GND), or 220 Ω forgotten."],
     ["Answers once then stops", "GPIO4/DE-RE fault (stuck TX jams bus). Check GPIO4 + 10 kΩ pull-down."],
+    ["Relays never click", "1) 12 V adapter plugged + LED on module lit.  2) 12 V GND tied to ESP GND.  3) Web page → relay logic matches module (default LOW)."],
+    ["Relay clicks at power-on", "Wrong logic setting — flip relay logic on the web page and Save."],
+    ["Phone cannot see BMS-Tester", "Box fully booted? (takes ~5 s with Wi-Fi). Forget + rejoin; confirm a DATA USB cable powers it."],
+    ["Web page won't open", "Joined BMS-Tester (not office Wi-Fi)? Open 192.168.4.1 exactly."],
+    ["Login rejected", "Changed earlier? Ask who changed it. Else hold the box button 10 s (factory reset) → admin/admin123 back."],
     ["PC cannot see S3", "DATA cable first, then CP210x/CH343 driver; pick the USB-UART port."],
 ], widths=[1.6, 4.6])
 
 # ================= 9 =================
 doc.add_heading("9. Safety & limits", level=1)
-doc.add_paragraph("Power the tester ONLY from USB. Never from the traction pack.", style="List Bullet")
+doc.add_paragraph("Power the tester ONLY from USB. Never from the traction pack. Relay coils ONLY from the 12 V adapter (grounds tied).", style="List Bullet")
+doc.add_paragraph("USB must be a real charger — the Wi-Fi radio is always on. A weak laptop port browns out.", style="List Bullet")
 doc.add_paragraph("This jig proves WIRING and A/B polarity for any meter variant and poll speed. It does not test meter accuracy, calibration or protection trips.", style="List Bullet")
 doc.add_paragraph("Common ground required; short twisted bench leads only.", style="List Bullet")
 callout("Remember: ", "the real battery pack is never needed on the line — that is the whole point.")
@@ -276,27 +333,30 @@ callout("Remember: ", "the real battery pack is never needed on the line — tha
 # ================= 10 =================
 doc.add_heading("10. Project folder map + version history", level=1)
 table(["Path", "What it is"], [
-    ["src/main.cpp, src/bms_protocol.*", "v2.1 program (parser + dispatcher + adaptive window)."],
-    ["VERSION", "2.0 (also baked into STATUS? replies)."],
-    ["arduino/bms_connection_tester/", "Same v2.1 as an Arduino sketch + README."],
-    ["firmware/*.bin", "Ready-to-flash v2.1 binaries + flash README."],
-    ["test/test_checksum|test_logic|test_parser", "32 automated tests, all passing."],
+    ["src/main.cpp, src/bms_protocol.*", "v2.2 program (frozen responder core)."],
+    ["src/relay_ctrl.*, src/web_ui.*", "v2.x relay sequencer + always-on AP dashboard."],
+    ["VERSION", "2.1 (also baked into STATUS? replies)."],
+    ["arduino/bms_connection_tester/", "Same v2.2 as an Arduino sketch + README (7 tabs)."],
+    ["firmware/*.bin + firmware-n16r8/*.bin", "Ready-to-flash v2.2 binaries + flash READMEs with SHAs."],
+    ["test/ (8 suites)", "67 automated tests, all passing (incl. website + 24 h sim)."],
     ["tools/soak_sim.cpp", "8-day run: 691,040 polls answered, rollover crossed, no reset."],
+    ["tools/virtual_bus.sh", "One-shot PTY emulation: real protocol core vs scripted meter."],
     ["captures/", "Original Docklight xlsx + README (ground-truth vectors)."],
     ["releases/", "Frozen bms-connection-tester-v1.0.zip (git-ignored)."],
     ["tools/virtual_meter.py", "Meter simulator with scenario modes."],
     ["tools/test_hardware.py", "Auto board test when hardware appears."],
     ["tools/run_qemu_s3.sh", "One-command S3 emulation boot test (real Linux/Mac)."],
-    ["wokwi/", "Browser simulation (meter now cycles 0x03/0x04/0x05)."],
+    ["wokwi/", "Browser simulation + sim.yaml headless scenario (relays, buttons, meter)."],
+    ["wiki/", "Online manual mirror (Relays page has the web guide)."],
     ["run_tests.sh", "Runs everything runnable in one command."],
-    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.1 work. Current release: v2.1."],
+    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.2 work. Current release: v2.2."],
 ], widths=[2.6, 3.6])
 doc.add_paragraph()
 ep = doc.add_paragraph()
 ep.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = ep.add_run("— End of report v2.1. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
+r = ep.add_run("— End of report v2.2. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
 r.italic = True
 r.font.color.rgb = GREY
 
 doc.save("/data/data/com.termux/files/home/bms-connection-tester/RS485-Tester-Report.docx")
-print("saved v2.1 RS485-Tester-Report.docx")
+print("saved v2.2 RS485-Tester-Report.docx")

@@ -4,9 +4,11 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 #include <Preferences.h>
 
 static WebServer server(80);
+static DNSServer dns;  // captive portal: offline AP, phones pop the login page
 static Preferences nvs;
 static WebCtx *G = nullptr;
 
@@ -377,8 +379,13 @@ void web_setup(WebCtx &ctx) {
   cfg_load();  // NVS -> cfg + identity (or defaults)
   if (G->on_config_changed) G->on_config_changed();  // build spoof frame
   // AP ALWAYS ON: no STA, no timeouts, works with zero office network.
+  // Fixed 192.168.4.1 gateway (documented everywhere) + DNS catch-all so
+  // any URL on the device resolves to us (captive portal).
   WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1),
+                    IPAddress(255, 255, 255, 0));
   WiFi.softAP(ident.ap_ssid, ident.ap_pass, ident.ap_channel);
+  dns.start(53, "*", WiFi.softAPIP());
   static const char *HDRS[] = {"Cookie"};
   server.collectHeaders(HDRS, 1);
   server.on("/", handle_root);
@@ -391,13 +398,20 @@ void web_setup(WebCtx &ctx) {
   server.on("/api/config", HTTP_POST, handle_config);
   server.on("/api/spoof", HTTP_POST, handle_spoof);
   server.on("/api/admin", HTTP_POST, handle_admin);
-  server.onNotFound([]() { server.send(404, "text/plain", "not found"); });
+  // Captive portal: any unknown host/path lands on "/" (which itself sends
+  // unauthed browsers to /login). This makes phones pop the login page on
+  // join and keeps "no internet" devices from showing a dead 404.
+  server.onNotFound([]() {
+    server.sendHeader("Location", "/");
+    server.send(302);
+  });
   server.begin();
 }
 
 void web_tick(unsigned long now) {
   (void)now;
-  server.handleClient();  // short, non-blocking; RS485 keeps priority
+  dns.processNextRequest();  // captive portal DNS (cheap; no-op off-AP)
+  server.handleClient();     // short, non-blocking; RS485 keeps priority
 }
 
 #endif  // ARDUINO
