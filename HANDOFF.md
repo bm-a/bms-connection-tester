@@ -1,6 +1,9 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
+> Last updated 2026-09-22 for **v2.0** (relay bench). Rule going forward:
+> §12's release checklist REQUIRES updating this file in the same commit as
+> any feature — a body left stale behind an addendum is a bug (2026-09-22).
 > Audience: the next AI agent (or future me) picking this project up cold.
 > Goal: everything needed to resume without re-discovering anything.
 > **Read order for a new agent:** §1 → §2 → §5 → §8 → §11.
@@ -11,7 +14,11 @@
 
 An ESP32-S3 box that impersonates a **JBD / Xiaoxiang Smart BMS** over RS485 so
 compatible meters/displays can be exercised **without the real battery pack**.
-Two LEDs: green = valid BMS traffic seen, red = bus silent. No buttons, no UI.
+Two LEDs: green = valid BMS traffic seen, red = bus silent.
+**v2.0 adds a relay test bench**: 8 relays switch the meter's own functions
+sequentially (or all at once) via a button or a built-in always-on WiFi AP
+dashboard; a spoof input shows test values (88.8/88.8/88.8/188 %) on the meter
+for 10 s. No screens needed.
 
 - **Origin story:** user's dad runs an e-rickshaw meter assembly line; workers
   needed the real battery or a laptop to verify RS485 wiring. This box replaces
@@ -19,7 +26,9 @@ Two LEDs: green = valid BMS traffic seen, red = bus silent. No buttons, no UI.
   The Word report for dad keeps the e-rickshaw framing on purpose.)
 - **People:** user = Bhavishya Madan (GitHub `bm-a`). Dad = electronics-strong,
   code-weak; gets status via a WhatsApp Word report, not GitHub.
-- **Current release: v1.1.** v1.0 frozen (ZIP + git tag, untouched since).
+- **Current release: v2.0** (`71b0bc6`, tag `v2.0`). v1.x responder core FROZEN
+  (parser, option-A, tracker, golden frames, LEDs, STATUS?, original 32 tests
+  byte-identical). v1.0 frozen (ZIP + git tag, untouched since).
 
 ---
 
@@ -27,7 +36,7 @@ Two LEDs: green = valid BMS traffic seen, red = bus silent. No buttons, no UI.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 32 Unity tests, docs, binaries, Wokwi, CI | main pushed; tags `v1.0`, `v1.1`; GitHub Releases v1.0 (ZIP) + v1.1 (3 bins + docx) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 50 Unity tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`, `v1.1`, `v1.2`, `v2.0`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2 (7 assets) + v2.0 (7 assets); wiki live (7 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -53,16 +62,27 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   multi-register (03/04/05) + adaptive window + silence-on-unknown (option A) +
   hardened streaming parser; **32/32 tests**; S3 firmware rebuilt;
   Arduino sketch; flash binaries; docs; CI; generic repo identity.
+- **v1.2** (`67e9ebe`, tag `v1.2`): onboard WS2812 RGB mirror (GPIO48,
+  `neopixelWrite`, no extra lib) + N16R8 build (`s3-n16r8`: 16 MB flash, OPI
+  PSRAM) + Wokwi NeoPixel; `firmware/` + `firmware-n16r8/` triples; 32/32 +
+  soak green; virtual-bus PASS; QEMU known gap re-confirmed.
+- **v2.0** (`71b0bc6`, tag `v2.0`): relay test bench — 8-relay sequencer
+  (`src/relay_ctrl.*`: sequential/all-ON, 3 button behaviors, debounce, hold
+  timer, boot-safe OFF-first, polarity toggle), always-on AP dashboard
+  (`src/web_ui.*`: dark UI, login, NVS `bms2`, admin reset, `BMS-Tester`),
+  spoof window (88.8/88.8/88.8/188 on `0x03`, configurable, auto-revert);
+  18 new tests (**50/50**); Wokwi relay LEDs + buttons; CI builds both envs.
+  Responder core frozen and re-proven on the same source.
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
 
 ---
 
-## 4. Hardware design (frozen — v1.1 needs zero rewiring vs v1.0)
+## 4. Hardware design (v2.0 map — v1.x wiring unchanged, only ADDS pins)
 
-Board: **ESP32-S3 DevKitC-1** (NOT classic ESP32 — S3 has no GPIO25;
-S3 GPIO range is 0–21 + 26–48; verified against Espressif docs by research agents).
+Board: **ESP32-S3 DevKitC-1 (8 MB) or N16R8 (16 MB + OPI PSRAM)** (NOT classic
+ESP32 — S3 has no GPIO25; S3 GPIO range is 0–21 + 26–48).
 
 | Signal | Connection |
 |---|---|
@@ -71,19 +91,27 @@ S3 GPIO range is 0–21 + 26–48; verified against Espressif docs by research a
 | S3 GPIO4 | → MAX485 DE+RE tied (+ 10 kΩ pull-down to GND) |
 | S3 GPIO10 | → 220 Ω → green LED → GND |
 | S3 GPIO11 | → 220 Ω → red LED → GND |
+| S3 GPIO48 | onboard WS2812 RGB (mirrors LEDs, v1.2+) |
+| S3 GPIO5/6/7/8/9/12/13/14 (v2.0) | → relay IN1–IN8 (SmartElex 12 V, own 12 V supply, common GND, active-LOW default) |
+| S3 GPIO15 (v2.0) | → button to GND (pull-up; 10 s hold = factory reset) |
+| S3 GPIO21 (v2.0) | → spoof trigger to GND (pull-up) |
 | MAX485 VCC / GND | 3.3 V (NOT 5 V) / common GND with meter |
 | MAX485 A/B | → meter A/B, twisted pair, short run |
 
 Avoided pins: strapping 0/3/45/46, USB-JTAG 19/20, flash/PSRAM 26–37,
 console 43/44. UART2 @ 9600 8N1 via GPIO matrix.
-Power: USB 5 V only — NEVER the traction pack. Idle ≈ 0.3–0.5 W (radio off).
+Power: USB 5 V for ESP + MAX485 — NEVER the traction pack. v1.x idle ≈ 0.3–0.5 W
+(radio off). v2.0 keeps the Wi-Fi AP always on (~1 W-class — use a real charger)
+and relay coils run on their own 12 V supply (common GND).
 
 ---
 
 ## 5. Firmware architecture
 
 ```
-src/bms_protocol.h / .cpp   hardware-independent core (also compiled on host)
+src/bms_protocol.h / .cpp   hardware-independent core, FROZEN (also on host)
+src/relay_ctrl.h / .cpp     v2.0 HW-independent add-on (also on host)
+src/web_ui.h / .cpp         v2.0 ESP-only (WiFi/WebServer/Preferences)
 src/main.cpp                Arduino sketch (ESP32-S3 only)
 ```
 
@@ -97,7 +125,7 @@ Core pieces (`bms_protocol.*`):
 - `reply_for(reg, is_write, len)` — 0x03/04/05 read → canned frame; else NULL.
 - `PollTracker` — EMA of poll intervals; threshold = clamp(2×EMA+500, 2 s, 10 s).
 - `matches_request()` + `connection_active()` — v1.0 compat, kept for tests.
-- `FW_VERSION` = `"1.1"`; `STATUS?` replies `GREEN 1.1` / `RED 1.1`
+- `FW_VERSION` = `"2.0"`; `STATUS?` replies `GREEN 2.0` / `RED 2.0`
   (first token stable — HIL test splits on whitespace).
 
 Canned frames (frozen literals, NEVER recomputed at runtime):
@@ -107,10 +135,27 @@ Canned frames (frozen literals, NEVER recomputed at runtime):
 | 0x04 | 35 | 14 × 0x0E82 (3714 mV) = 52.0 V, consistent with 0x03 | F8 04 |
 | 0x05 | 19 | ASCII `TEST-14S100A` | FC FD |
 
-`main.cpp` loop: drain Serial2 → parser → `note_poll` + reply (DE HIGH →
-write → `flush(true)` → 1.5 ms guard → DE LOW → drain stale RX → parser reset);
-250 ms LED eval; `STATUS?` handler. Boots red. No `delay()` in hot path.
-(No `delay(1)` power tweak — deliberately deferred to a possible v1.2.)
+`main.cpp` loop (v2.0 order): button debounce (press event + 10 s reset hold) →
+spoof-pin edge → `seq.tick()` + `apply_relays()` (change-only writes) +
+`web_tick()` (non-blocking) → FROZEN RS485 drain→parser→`note_poll`+reply
+(DE HIGH → write → `flush(true)` → 1.5 ms guard → DE LOW → drain → reset),
+with one additive select: reg `0x03` + spoof window active → `spoofFrame`,
+else frozen `reply_for` → 250 ms LED eval → `STATUS?`. Boots red, relays OFF
+(OFF level driven BEFORE `pinMode` — no boot click). No `delay()` in hot path.
+(No `delay(1)` power tweak — obsolete: radio is on in v2.0.)
+
+v2.0 pieces (`relay_ctrl.*`, host-tested):
+- `RelaySequencer` — `millis()` state machine (IDLE/RUNNING/HOLD), sequential
+  stepping with catch-up, hold expiry (0 = forever), manual force mask,
+  rollover-safe compares. `handle_button_press()` maps the 3 web modes
+  (HOLD_ABORT / RUN_LOCK / RESTART).
+- `DebouncedInput` (30 ms, edge-once), `SpoofWindow` (trigger/cancel/active).
+- `build_spoof_frame()` — golden copy + patched V/A/SOC/temps + recomputed CK
+  (same LEN+DATA rule); `relay_pin_level()` polarity helper.
+- `Bms2Config` — all web-tunable values + NVS schema (namespace `bms2`).
+- `web_ui` (ESP-only): AP `BMS-Tester` always on (fixed channel, changeable),
+  session-cookie login (30 min sliding), JSON API + single-page dark dashboard
+  (`node --check` clean), NVS load/save, factory reset + reboot.
 
 ---
 
@@ -133,22 +178,33 @@ write → `flush(true)` → 1.5 ms guard → DE LOW → drain stale RX → parse
 
 ---
 
-## 7. Tests — 32/32 + soak (how to run, what they prove)
+## 7. Tests — 50/50 + soak + virtual bus (how to run, what they prove)
 
-- `pio test -e native` → 4 suites: test_checksum (7), test_logic (8),
-  test_parser (13), test_stress (4). **Last CI run: all green.**
-- `sh run_tests.sh` → same suites via g++ fallback (needed on Termux/Android
-  where `pio test` historically crashed — since fixed via pyserial patch, but
-  fallback kept) + **soak sim** + HIL (auto-skip without hardware).
-- Highlights: exhaustive 1,785 single-byte corruptions (0 false frames; also
-  asserts `DD 5A 03…` is a *valid write* → silent); 10 M fuzz (0 emits);
-  cadence×register sweep (100 ms–10 s × 03/04/05 + write/unknown interleave);
-  bus saturation (5,000 back-to-back polls); 1 s-green / 2 s-red / self-heal /
-  rollover; on-target S3 test ELFs link (run only with hardware).
+- `pio test -e native` → 6 suites: test_checksum (7), test_logic (8),
+  test_parser (13), test_stress (4), **test_relay (12), test_spoof (6)**.
+  **Last CI run: all green (50/50).** Old 32 byte-identical since v1.1.
+- `sh run_tests.sh` → same suites via g++ fallback + **soak sim** + HIL
+  (auto-skip without hardware).
+- New-suite highlights: sequential stepping/timing, hold expiry/forever,
+  ALL-ON, all 3 button modes, abort/restart mid-cycle, manual override,
+  polarity map, debounce edges, sequencer+window rollover; spoof default
+  bytes (22B0/22B0/0E23/BC), CK self-consistency, custom values, window
+  timing/cancel/retrigger. Past real bug caught: debounce test asserted the
+  wrong return polarity (test bug, not code — fixed before commit).
+- Old highlights (still green): exhaustive 1,785 single-byte corruptions
+  (0 false frames); 10 M fuzz (0 emits); cadence×register sweep;
+  bus saturation (5,000); 1 s-green / 2 s-red / self-heal / rollover.
 - `tools/soak_sim.cpp` — 8 simulated days: **691,040 polls, all answered**,
   noise rejected, silence→red, millis() wrap crossed mid-run, green-on-resume.
-  Runs in ~0.04 s. Wired into run_tests.sh.
-- `tools/virtual_meter.py` — scenario modes (reg/period/jitter/mode).
+- `tools/virtual_bus.sh` — one-shot PTY emulation (Debian/proot, socat+g++):
+  builds `tools/dut_emu.cpp` (real `bms_protocol.cpp` over a PTY), runs
+  `tools/raw_meter.py` (raw-fd I/O — pyserial modem ioctls fail on proot PTYs)
+  through 03/04/05 golden + write/unknown silence + noise resync + 3 s
+  silence, asserts meter PASS + DUT RED→GREEN→RED. Exit 0 = PASS.
+  (Earlier sessions kept these harnesses in scratch; v2.0 promoted them in-repo.)
+- Dashboard JS: `node --check` clean (Termux node). Wokwi diagram validated
+  as JSON (18 parts, 33 wires); browser run is manual (never executed here).
+- `tools/virtual_meter.py` — scenario modes (real serial ports).
 - `tools/test_hardware.py` — HIL pytest; needs `HIL_BUS_PORT` + `HIL_CDC_PORT`.
 - Past bugs the suite caught (proof it works): parser emit-on-bad-CK,
   author's own wrong vector (FEEF not FEFF), Arduino `B1` macro collision,
@@ -159,14 +215,18 @@ write → `flush(true)` → 1.5 ms guard → DE LOW → drain stale RX → parse
 
 ## 8. Build system & environments
 
-`platformio.ini` envs: `esp32-s3-devkitc-1` (firmware), `native` (host tests,
-`build_src_filter = +<bms_protocol.cpp>`), `s3_tests` (on-target test ELFs).
+`platformio.ini` envs: `esp32-s3-devkitc-1` (8 MB firmware),
+`s3-n16r8` (16 MB + OPI PSRAM, `default_16MB.csv`), `native` (host tests,
+`build_src_filter = +<bms_protocol.cpp> +<relay_ctrl.cpp>`,
+`test_filter` = 6 suites), `s3_tests` (on-target ELFs).
 Pinned reality: espressif32@7.1.3, Xtensa GCC 8.4.0 (esp-2021r2-patch5),
-Arduino 2.0.x (IDF 4.4 based). `firmware.bin` = 277,360 bytes,
-SHA-256 `7195161117ef68e3a3cd4c7793539a87c03083b067bde1a6e5b13ae330a376cf`.
-`firmware/` also holds bootloader.bin + partitions.bin + esptool README
-(flash addrs 0x0 / 0x8000 / 0x10000). `arduino/` = same firmware as IDE sketch.
-`.github/workflows/ci.yml` runs native + firmware + soak on Ubuntu (green).
+Arduino 2.0.x (IDF 4.4 based). v2.0 `firmware.bin` = 761,408 bytes
+(`8f4565da…c61c0d8302`); `firmware-n16r8/firmware.bin` = 763,920 bytes
+(`89d93a4f…1367cf1c5d`). Golden bytes + `2.0` + `BMS-Tester` + dashboard
+strings verified byte-present in both. `firmware/` + `firmware-n16r8/` hold
+bootloader + partitions + esptool READMEs (flash 0x0 / 0x8000 / 0x10000).
+`arduino/` = same firmware as IDE sketch (7 tabs incl. new files).
+`.github/workflows/ci.yml` runs native + **both firmware envs** + soak (green).
 
 **CRITICAL — two homes:** Termux home (`/data/data/com.termux/files/home`,
 shared into proot containers) vs container-local roots. These live INSIDE the
@@ -210,12 +270,14 @@ Traced with `-d guest_errors` + fixed two REAL upstream flash-model bugs
 2. GD25Q64 (8 MB image part) had no SFDP → `0x5A` failed → added 256-B table.
 3. `0x77` Set-Burst-with-Wrap → accept-and-ignore (trace-confirmed gone).
 After all three, remaining trace per boot loop: `M25P80: Unknown cmd 0x10`
-(~25×) + `Invalid read at addr 0x10200C … region 'er'` (~99×) → still asserts.
+(~22–25×) + `Invalid read at addr 0x10200C … region 'er'` (~84–99×) → still asserts.
+Re-confirmed with the v2.0 8 MB image (22/84) — identical signature, no regression.
 Hypothesis: DIO-era command bytes hitting the single-line SSI model + an
 unmodeled register region. IDF-based guests are unaffected per Espressif CI;
 Arduino guests were never QEMU-supported. Verdict: **emulator gap, not firmware
 — our code is never reached.** Practical emulation path = Wokwi (`wokwi/`
-scaffolded; meter cycles 03/04/05; needs browser/token, never executed here).
+v2.0: meter cycles 03/04/05 + 8 relay LEDs + button/spoof buttons + NeoPixel;
+JSON-validated, browser run is manual).
 `tools/run_qemu_s3.sh` = one-command boot test for real Linux/Mac.
 Next agent: to continue, decode what `0x10` is in DIO context (possible status-
 register or continuous-read mode byte) and identify the `0x10200C` peripheral;
@@ -223,70 +285,74 @@ or deprioritize — host tests + soak already prove the firmware.
 
 ---
 
-## 10. GitHub access & pushing (as of 2026-09-18)
+## 10. GitHub access & pushing
 
-- Account `bm-a` (Bhavishya Madan). NO Developer Program needed — pushing only
-  needs a normal account + classic PAT with `repo` scope.
-- A PAT (`ghp_…`, full permissions) was **pasted in chat**. It is NOT stored in
-  any file (verified: only used via `gh auth login --with-token` inside the
-  Debian container). **Recommend the user revoke/rotate it** — chat logs persist.
-- `gh` lives ONLY in the Debian container (`/usr/bin/gh`, auth in container
-  root's config). Push from there: `proot-distro login debian -- bash -c 'cd
-  <repo> && git push origin main'`. (Termux-shell push fails: no credential
-  helper.) `gh auth setup-git` was run once in Debian — re-run if pushes fail.
-- Commit identity used: `bm-a` / `bm-a@users.noreply.github.com`.
-- Releases: v1.0 (ZIP asset), v1.1 (firmware×3 + docx). Re-run
-  `gh release create` only if assets change.
+- Account `bm-a` (Bhavishya Madan). Pushing needs a normal account + classic
+  PAT with `repo` scope. `gh` authenticated (Termux `~/.config/gh/hosts.yml`,
+  0600). Plain `git push` / `git tag` / `gh release create` work from the
+  Termux shell via the gh credential helper — verified for v1.2 + v2.0.
+  (Old note: pushes once had to go via the Debian container; no longer true.
+  If a push ever fails with auth errors, `gh auth status` first, then
+  `gh auth setup-git`.)
+- A PAT (`ghp_…`, full permissions) was **pasted in chat on 2026-09-18**.
+  It is NOT stored in any file. **Still recommend the user revoke/rotate it**
+  — chat logs persist. (Outstanding since v1.1.)
+- Commit identity: `bm-a` / `bm-a@users.noreply.github.com`.
+- Releases: v1.0 (ZIP), v1.1 (3 bins + docx), v1.2 + v2.0 (7 assets each:
+  8 MB triple plain-named + `n16r8-` triple — GitHub forbids duplicate asset
+  names, so N16R8 files are uploaded renamed). Wiki backend provisioned
+  (one browser click); push via the `.wiki.git` clone.
+- Re-run `gh release create` only if assets change.
 
 ---
 
 ## 11. Pending / next steps (ordered)
 
-1. **Bench test with a real meter** (the one thing that matters): green ≤ 1 s,
-   meter shows ~52 V/100 %, red ~2 s after unplug. Report anomalies → likely a
-   one-constant fix (window) or an extra register reply.
-2. **HIL pytest** (`HIL_BUS_PORT`/`HIL_CDC_PORT`) + Wokwi run once hardware/PC
-   available. QEMU `0x10`/`0x10200C` investigation (see §9) — optional.
-3. **Possible v1.2:** `delay(1)` at end of `loop()` (~30 % power cut); re-tag,
-   refresh `firmware/`, report.
-4. **Housekeeping:** rotate the chat-exposed PAT; re-check CI after any push
-   (Node 20 deprecation warnings are non-fatal noise); Google indexes new repos
-   with days of lag — normal.
+1. **Bench test v2.0 with real meter + SmartElex module** (the one thing that
+   matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) button runs
+   the relay sequence with configured delay, relays click in order, no boot
+   click; (c) AP `BMS-Tester` visible, dashboard drives relays; (d) spoof shows
+   88.8/88.8/88.8/188 % for 10 s then reverts. Needs: 12 V coil supply with
+   common GND. Anomalies → likely a one-constant fix or polarity default flip.
+2. **HIL pytest** (`HIL_BUS_PORT`/`HIL_CDC_PORT`) + manual Wokwi run + dashboard
+   browser pass once hardware/PC available. QEMU `0x10`/`0x10200C` — optional.
+3. **Possible v2.1:** per-relay custom labels on dashboard; STA+AP fallback for
+   offices WITH Wi-Fi; `delay(1)` power trim (obsolete while AP is always on).
+4. **Housekeeping:** rotate the chat-exposed PAT (outstanding since 2026-09-18);
+   re-check CI after any push; Google index lag is normal.
 
 ---
 
-## 12. File inventory (project root + home)
+## 12. File inventory + RELEASE CHECKLIST (read this before any release)
 
 Project: `platformio.ini README.md CHANGELOG.md LICENSE VERSION HANDOFF.md
 RS485-Tester-Report.docx run_tests.sh src/ test/ tools/ arduino/ firmware/
-wokwi/ captures/ docs/ scripts/ releases/ .github/ .gitignore .unity/ .pio/`
+firmware-n16r8/ wokwi/ captures/ docs/ scripts/ wiki/ releases/ .github/
+.gitignore .unity/ .pio/`
 (`.pio .unity releases/ *.log tc.json .test_*` git-ignored; `releases/` holds
 v1.0 ZIP + 2 git bundles — offline full-history backup, verified by test-clone.)
-Termux home `archive/` (backups/logs/installers/bento-dev + ORGANIZE_LOG.txt
-with undo commands) — pre-existing clutter tidied 2026-09-18; active
-`bento_final.js`, `status_server6.py` etc. deliberately left in place.
+Wiki canonical sources live in `wiki/` (Home, Flashing, Hardware, Protocol,
+Emulators, Versions, Relays) and are pushed to the `.wiki.git` backend.
+Termux home `archive/` — pre-existing clutter, leave alone.
 Emulator work (`/opt/qemu-src`, `/opt/qemu-s3`, `/opt/pioenv`) is inside the
 Debian container — see §8 before wiping proot data.
 
+**Release checklist — EVERY feature release MUST do all of these in the
+release commit (lesson learned 2026-09-22: HANDOFF body went stale at v1.1
+while README/CHANGELOG moved on — never again):**
+1. `src/` + `arduino/` tabs identical (diff-check every file).
+2. `VERSION` + `FW_VERSION` + `STATUS?` strings bumped together.
+3. `CHANGELOG.md` new entry; `README.md` versions/table/SHAs; `docs/MODULES.md`
+   pins; `llms.txt` counts + code map; `test/README.md` counts;
+   `tools/README.md` if helpers changed; `arduino/README.md` wiring/tabs;
+   `wokwi/README.md` if diagram changed.
+4. `firmware/` + `firmware-n16r8/` rebuilt from exact source + SHAs in READMEs;
+   `RS485-Tester-Report.docx` regenerated via `make_report.py`.
+5. `wiki/` sources updated + pushed to `.wiki.git`.
+6. **This HANDOFF**: update §§1–5, 7–12 in the body (no addendum-only updates),
+   then commit → tag → push → `gh release create` (n16r8 assets renamed) →
+   confirm CI green.
+
 Resume checklist: `git log --oneline | head -3` → `git status --short` →
-`pio test -e native` (Termux) → `sh run_tests.sh` → compare against §7 numbers.
-
----
-
-## 13. v2.0 addendum (2026-09-22, relay test bench — base frozen)
-
-- v1.x responder core (parser, option-A, tracker, golden frames, LEDs,
-  STATUS?, 32 tests, soak) untouched and re-proven: native **50/50**
-  (old 32 + `test_relay` 12 + `test_spoof` 6), soak green, virtual-bus PASS.
-- New: `src/relay_ctrl.*` (sequencer, 3 button modes, debounce, spoof window
-  + frame builder, config struct), `src/web_ui.*` (always-on AP `BMS-Tester`,
-  login, dark dashboard, NVS `bms2`, factory reset), integrated in
-  `src/main.cpp` (+ identical `.ino`, + IDE tabs). `FW_VERSION` = `"2.0"`.
-- GPIOs added: relays R1–R8 = 5/6/7/8/9/12/13/14 (SmartElex 12 V module, own
-  12 V supply, common GND, active-LOW default), button = 15, spoof = 21.
-- Builds: both envs green in proot (one fix: WebServer 2.0.x `collectHeaders`
-  array form). `firmware/` 761,408 B, `firmware-n16r8/` 763,920 B.
-- Wokwi: +8 relay LEDs + 2 pushbuttons. QEMU: same known `0x10`/`0x10200C`
-  gap (22/84 hits), no regression. Dashboard JS: `node --check` clean.
-- Release: tag `v2.0`; assets = 8 MB triple + `n16r8-` triple
-  (renamed: GitHub forbids duplicate asset names) + docx. Wiki: +`Relays.md`.
+`pio test -e native` (Termux) → `sh run_tests.sh` → `sh tools/virtual_bus.sh`
+(in proot) → compare against §7 numbers.

@@ -37,20 +37,23 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 1.2` / `RED 1.2`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.0` / `RED 2.0`.
 
 ## Code map
 
-- `src/bms_protocol.{h,cpp}` — checksum, streaming parser, dispatcher, tracker, canned frames.
-- `src/main.cpp` — Arduino loop: parse → reply → LEDs (discretes + RGB) → STATUS?.
-- `test/test_checksum|test_logic|test_parser|test_stress` — 32 Unity tests.
+- `src/bms_protocol.{h,cpp}` — checksum, streaming parser, dispatcher, tracker, canned frames (FROZEN since v1.x).
+- `src/relay_ctrl.{h,cpp}` — v2.0 sequencer, debounce, spoof window/builder, config (host-tested).
+- `src/web_ui.{h,cpp}` — v2.0 always-on AP dashboard, login, NVS (ESP-only).
+- `src/main.cpp` — Arduino loop: frozen RS485 path + v2.0 relay/web/spoof handling.
+- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof` — 50 Unity tests.
 - `tools/virtual_meter.py` — host-side meter simulator with scenario modes.
-- `tools/soak_sim.cpp` — 8-day continuous-run proof. `firmware/*.bin` — flash-ready.
-- `arduino/` — same firmware as Arduino IDE sketch. `wokwi/` — browser simulation.
+- `tools/dut_emu.cpp` + `tools/raw_meter.py` + `tools/virtual_bus.sh` — PTY virtual-bus emulation (no ESP32).
+- `tools/soak_sim.cpp` — 8-day continuous-run proof. `firmware/*.bin` + `firmware-n16r8/*.bin` — flash-ready.
+- `arduino/` — same firmware as Arduino IDE sketch. `wokwi/` — browser simulation (relays + buttons).
 
 ## Verified facts (do not contradict without evidence)
 
-- 32/32 tests pass; S3 firmware compiles (Xtensa GCC 8.4.0); golden reply bytes
-  verified inside firmware.bin (SHA-256 in README.md).
+- 50/50 tests pass (incl. original frozen 32); both S3 firmware profiles compile
+  (Xtensa GCC 8.4.0); golden reply bytes verified inside firmware.bin (SHA-256 in README.md).
 - Reply checksums exclude the echoed command byte (FCDA, not FCD7).
 - QEMU-S3 cannot boot Arduino guests (flash-model gaps, documented); use Wokwi or hardware.

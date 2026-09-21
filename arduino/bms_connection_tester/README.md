@@ -19,6 +19,9 @@
 - GPIO10 → 220Ω → green LED → GND ; GPIO11 → 220Ω → red LED → GND.
   Onboard RGB (GPIO48) mirrors both automatically — no wiring needed.
 - GPIO17→MAX485 DI, GPIO16→MAX485 RO, GPIO4→DE+RE (+10k pull-down), 3.3V, GND, A/B→meter.
+- v2.0 bench: GPIO5/6/7/8/9/12/13/14 → relay IN1–IN8 (12 V coils, own supply,
+  common GND); GPIO15 → button to GND; GPIO21 → spoof trigger to GND.
+  Join AP `BMS-Tester` (`bms12345`), open `192.168.4.1`, login `admin`/`admin123`.
 
 ## 4. Upload
 Connect the S3 with a DATA USB cable, pick the COM port, press Upload.
