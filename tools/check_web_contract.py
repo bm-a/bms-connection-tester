@@ -34,23 +34,20 @@ def main() -> int:
 
     # 1. endpoints
     for ep in sorted(set(re.findall(r"fetch\(['\"]([^'\"]+)['\"]", js))):
-        if ep == "/login":
-            continue  # form POST, checked below
         ok = any(p == ep for (p, _) in routes)
         print(f"endpoint {ep}: {'OK' if ok else 'MISSING ROUTE'}")
         if not ok:
             fail(f"JS fetches {ep} with no server.on route")
 
-    # login/logout form wiring (+ manual firmware upload page)
-    for token in ['action=/login', 'href=/logout', 'href=/update',
-                  'action=/update']:
+    # Login wall is gone since v2.3.1 (WPA2 is the gate); sensitive actions
+    # carry the admin password per request. Manual firmware upload page stays.
+    for token in ['href=/update', 'action=/update']:
         if token not in src:
             fail(f"missing {token}")
-    if ("/login", "POST") not in [(p, m) for (p, m) in routes] and \
-            not re.search(r'server\.on\("/login", HTTP_POST', src):
-        fail("no POST /login route")
-    if not re.search(r'server\.on\("/logout"', src):
-        fail("no /logout route")
+    for dead in ['action=/login', 'href=/logout', 'PAGE_LOGIN',
+                 'handle_login', 'handle_logout']:
+        if dead in src:
+            fail(f"login remnant still present: {dead}")
 
     # 2. element ids
     html_ids = set(re.findall(r"id=([A-Za-z_]+)", html))
@@ -74,9 +71,10 @@ def main() -> int:
     # cfg keys are built as \",\"key\": so also catch them
     emitted |= set(re.findall(r'\\\\",\\\\"([a-z_]+)', state_fn))
     js_keys = set()
-    refresh_fn = js.split("async function refresh()", 1)[1].split(
-        "async function relay(", 1)[0]
-    for m in re.finditer(r"for\(let k of \[(.*?)\]\)", refresh_fn):
+    # Form fields live in fillForm() (NOT the 1 s status tick anymore).
+    fill_fn = js.split("function fillForm(s)", 1)[1].split(
+        "async function loadForm()", 1)[0]
+    for m in re.finditer(r"for\(let k of \[(.*?)\]\)", fill_fn):
         js_keys |= set(re.findall(r"'([a-z_]+)'", m.group(1)))
     # top-level flags used directly
     for k in ("link", "running", "spoof", "relays", "cycles", "acts", "stage",
@@ -101,15 +99,15 @@ def main() -> int:
     posts = {
         "/api/relay": ["i", "on"],
         "/api/seq": ["cmd"],
-        "/api/config": ["rmode", "nrel", "step", "hseq", "hch", "hall",
+        "/api/config": ["rmode", "nrel", "step", "hseq", "swp", "hall",
                         "bmode", "alow", "dir", "loop", "cpause", "clim",
                         "stag", "lbl0", "lbl1", "lbl2", "lbl3", "lbl4",
                         "lbl5", "lbl6", "lbl7"],
         "/api/spoof": ["cmd", "sv", "sa", "sc", "ssoc", "ssec",
-                       "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena"],
-        "/api/admin": ["cmd", "ap_ssid", "ap_pass", "ap_ch", "a_user",
+                       "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena", "spin"],
+        "/api/admin": ["cmd", "pass", "ap_ssid", "ap_pass", "ap_ch",
                        "a_pass", "sta_en", "sta_ssid", "sta_pass", "auto"],
-        "/api/ota": ["cmd", "ota_auto"],
+        "/api/ota": ["cmd", "pass", "ota_auto"],
     }
     handlers = {
         "/api/relay": "handle_relay", "/api/seq": "handle_seq",

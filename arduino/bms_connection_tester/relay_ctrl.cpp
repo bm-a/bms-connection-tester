@@ -87,7 +87,11 @@ void RelaySequencer::enterHold(unsigned long now) {
 uint32_t RelaySequencer::holdForMode() const {
   if (!cfg_) return 0;
   if (cfg_->relay_mode == RELAY_ALL_ON) return cfg_->hold_all_ms;
-  if (cfg_->relay_mode == RELAY_CHASE) return cfg_->hold_chase_ms;
+  if (cfg_->relay_mode == RELAY_CHASE) {
+    // v2.3.1 auto-hold: N full sweeps (0 = forever); retunes with count+step.
+    if (cfg_->chase_sweeps == 0) return 0;
+    return (uint32_t)cfg_->chase_sweeps * effCount() * stepGap();
+  }
   return cfg_->hold_seq_ms;
 }
 

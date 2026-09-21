@@ -3,6 +3,42 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.3.1] — 2026-09-21
+### Fixed
+- Dashboard save race: the 1 s state refresh overwrote any field the moment
+  it lost focus, so clicking Save after editing posted the stale device
+  value ("options reset to before one" unless you beat the poll). The 1 s
+  tick is now status-only (link/relays/counters/OTA/STA); form fields fill
+  once on load and after each successful save, user-edited (dirty) fields
+  are never clobbered, and failed fetches no longer kill the tick.
+- Same root cause explained the "chase sweeps only 3 relays" bench report:
+  the chase engine was correct — the persisted relay count was stale.
+  With saves sticking, count/chase/hold edits apply as shown.
+- Garbled dashboard letters: pages had no charset; all three now declare
+  UTF-8 (`⚡ → ∞ °` render correctly, incl. portal mini-browsers).
+- GitHub OTA check never matched: the API pretty-prints `"tag_name": "v2.3"`
+  (space after colon) but the parser wanted no space — every check died as
+  "bad api reply". Tolerant parse + a dashboard **Install update** button
+  (password-gated) so a found release is one tap away.
+### Changed
+- Login wall removed (WPA2 AP password is the gate). Reboot, factory reset,
+  `/update` upload, OTA-admin and AP/admin saves now ask for the admin
+  password per request (default `admin123`, changeable; blank = keep).
+  Password values no longer appear in `/api/state`.
+- Chase hold is now automatic: `Chase sweeps` (default 3, 0 = forever);
+  effective hold = sweeps × relays × step, retuned at every start.
+  The old `Hold chase ms` field is retired (stale NVS key ignored).
+### Added
+- Spoof trigger GPIO is configurable on the dashboard (default 21, saved on
+  FIRE). Only proven-safe free DIOs are accepted (1, 2, 21, 38–44, 47);
+  anything else falls back to 21. The pin re-arms live on change.
+- WiFi kill switch: grounding GPIO18 (free, non-strapping) drops the AP +
+  portal + server immediately; releasing it brings everything back.
+  Default on at boot, debounced like the main button.
+### Notes
+- `nvs_open failed: NOT_FOUND` once on first boot is benign (read-only
+  open before the first commit creates the namespace).
+
 ## [v2.3] — 2026-09-21
 ### Added
 - Relay count (first N of 8 participate, web `Relays`, beyond-N forced OFF

@@ -1,5 +1,18 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.3.1] — 2026-09-21
+### Fixed
+- Saves stick: the 1 s tick is status-only; forms fill on load + after saves.
+- UTF-8 on all pages (garbled letters gone). OTA check parse + Install button.
+### Changed
+- No login wall (WPA2 is the gate); reboot/reset/upload/OTA-admin/AP saves
+  ask the admin password per request (default `admin123`).
+- Chase hold is automatic (`Chase sweeps`, default 3, 0 = forever).
+### Added
+- Spoof trigger GPIO configurable (safe pins only, else 21). WiFi kill
+  switch: ground GPIO18 to drop the AP, release to restore.
+- 103/103 tests.
+
 ## [v2.3] — 2026-09-21
 ### Added
 - Relay count (first N of 8) + chase-wave mode (3rd sequence mode) +

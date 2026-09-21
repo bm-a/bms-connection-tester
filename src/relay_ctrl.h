@@ -33,7 +33,10 @@ struct Bms2Config {
   // v2.3 per-mode holds (ms each; 0 = stay ON forever until stopped).
   // Sequential wants a short settle; ALL-ON burn-in wants a long soak.
   uint32_t hold_seq_ms = 30000;
-  uint32_t hold_chase_ms = 30000;
+  // v2.3.1 chase auto-hold: full sweeps (0 = sweep forever until stopped).
+  // Effective hold = sweeps x relay-count x step, recomputed at start(), so
+  // it retunes itself when count/step change. Replaces hold_chase_ms.
+  uint8_t chase_sweeps = 3;
   uint32_t hold_all_ms = 300000;
   uint8_t relay_count = 8;        // v2.3: first N relays participate (1..8)
   uint8_t relay_mode = RELAY_SEQUENTIAL;
@@ -57,6 +60,9 @@ struct Bms2Config {
   bool button_invert = false;     // false: press pulls pin LOW (pull-up)
   bool spoof_invert = false;      // false: trigger pulls pin LOW
   bool spoof_enabled = true;
+  // v2.3.1 configurable trigger GPIO (was hardwired 21). Only proven-safe
+  // free DIOs are accepted; anything else falls back to 21 (see below).
+  uint8_t spoof_pin = 21;
   // v2.3 two-stage spoof: stage 1 fires first, then stage 2, then revert.
   // Stage 1 defaults = "100" (realistic full pack); stage 2 = 88.8/188
   // over-range pattern. Upgraders: legacy single-stage values migrate to
@@ -79,6 +85,19 @@ inline uint8_t relay_pin_level(bool logical_on, bool active_low) {
   // Arduino HIGH=1 / LOW=0 assumed by caller mapping.
   if (active_low) return logical_on ? 0 : 1;
   return logical_on ? 1 : 0;
+}
+
+// v2.3.1 spoof-trigger GPIO allowlist: proven-safe free DIOs only.
+// Everything else (UART, relays, button, LEDs/RGB, USB, strapping, flash,
+// the WiFi kill pin 18) falls back to 21. Tested on host.
+inline uint8_t sanitize_spoof_pin(uint8_t p) {
+  switch (p) {
+    case 1: case 2: case 21: case 38: case 39: case 40: case 41: case 42:
+    case 43: case 44: case 47:
+      return p;
+    default:
+      return 21;
+  }
 }
 
 // ---- 8-relay sequencer: pure millis() state machine, no delay() ----

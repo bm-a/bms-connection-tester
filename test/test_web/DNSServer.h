@@ -29,4 +29,5 @@ class DNSServer {
     return true;
   }
   void processNextRequest() { processCalls++; }
+  void stop() { startCalls = 0; }
 };

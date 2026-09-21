@@ -30,8 +30,21 @@ static void on_cfg() {
 }
 static bool ota_check_called = false;
 static void on_ota() { ota_check_called = true; }
+static bool ota_install_called = false;
+static void on_ota_install() { ota_install_called = true; }
 static WebCtx ctx;
-static std::string cookie;
+
+// v2.3.1: no login wall. Sensitive endpoints (/api/admin, /api/ota,
+// /update) take the admin password inline per request.
+static std::string with_pass(const std::string &body) {
+  if (body.empty() || body == "{}") return "{\"pass\":\"admin123\"}";
+  return body.substr(0, body.size() - 1) + ",\"pass\":\"admin123\"}";
+}
+
+static WebServer::Resp admin_post(const std::string &path,
+                                  const std::string &body) {
+  return WebServer::post(path, with_pass(body));
+}
 
 static void nvs_clear() {
   Preferences p;
@@ -48,6 +61,7 @@ static void fresh_env() {
   spoof.cancel();
   ota = OtaState();
   ota_check_called = false;
+  ota_install_called = false;
   link_green = false;
   g_mock_millis = 1000000UL;
   g_restart_requested = false;
@@ -61,130 +75,91 @@ static void fresh_env() {
   ctx.on_config_changed = on_cfg;
   ctx.ota = &ota;
   ctx.on_ota_check = on_ota;
+  ctx.on_ota_install = on_ota_install;
   web_setup(ctx);
-}
-
-static std::string login(const char *u, const char *p, bool remember = false) {
-  std::map<std::string, std::string> args;
-  args["u"] = u;
-  args["p"] = p;
-  if (remember) args["remember"] = "1";
-  WebServer::Resp r = WebServer::request(
-      "POST", "/login", std::map<std::string, std::string>(), "", args);
-  TEST_ASSERT_EQUAL_INT(302, r.code);
-  auto it = r.headers.find("Set-Cookie");
-  TEST_ASSERT_TRUE(it != r.headers.end());
-  std::string sc = it->second;  // "BMS2=<tok>; Path=/; ..."
-  auto pos = sc.find("BMS2=");
-  TEST_ASSERT_TRUE(pos != std::string::npos);
-  auto end = sc.find(';', pos);
-  return sc.substr(pos, end == std::string::npos ? end : end - pos);
-}
-
-static std::map<std::string, std::string> auth() {
-  if (cookie.empty()) cookie = login("admin", "admin123");
-  std::map<std::string, std::string> h;
-  h["Cookie"] = cookie;
-  return h;
 }
 
 static bool has(const std::string &s, const std::string &sub) {
   return s.find(sub) != std::string::npos;
 }
 
-void test_login_page_public(void) {
-  fresh_env();
-  WebServer::Resp r = WebServer::get("/login");
-  TEST_ASSERT_EQUAL_INT(200, r.code);
-  TEST_ASSERT_TRUE(has(r.body, "action=/login"));
-}
-
-void test_root_requires_auth(void) {
+void test_root_open_dashboard(void) {
   fresh_env();
   WebServer::Resp r = WebServer::get("/");
-  TEST_ASSERT_EQUAL_INT(302, r.code);
-  TEST_ASSERT_TRUE(r.headers["Location"] == "/login");
-  r = WebServer::get("/api/state");
-  TEST_ASSERT_EQUAL_INT(401, r.code);
-}
-
-void test_login_bad(void) {
-  fresh_env();
-  std::map<std::string, std::string> args;
-  args["u"] = "admin";
-  args["p"] = "wrong";
-  WebServer::Resp r = WebServer::request(
-      "POST", "/login", std::map<std::string, std::string>(), "", args);
-  TEST_ASSERT_EQUAL_INT(401, r.code);
-}
-
-void test_login_good_dashboard(void) {
-  fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::Resp r = WebServer::get("/", auth());
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "id=relays"));
   TEST_ASSERT_TRUE(has(r.body, "FIRE now") || has(r.body, "FIRE"));
+  // Unknown paths still land on the dashboard (captive portal), not a 404.
+  r = WebServer::get("/generate_204");
+  TEST_ASSERT_EQUAL_INT(302, r.code);
+  TEST_ASSERT_TRUE(r.headers["Location"] == "/");
+}
+
+void test_state_public_no_secrets(void) {
+  fresh_env();
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"relays\":[0,0,0,0,0,0,0,0]"));
+  // Password values are NEVER in the public state (no login wall anymore).
+  TEST_ASSERT_FALSE(has(r.body, "ap_pass"));
+  TEST_ASSERT_FALSE(has(r.body, "sta_pass"));
+  TEST_ASSERT_FALSE(has(r.body, "a_user"));
+  TEST_ASSERT_FALSE(has(r.body, "bms12345"));
 }
 
 void test_state_defaults(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::Resp r = WebServer::get("/api/state", auth());
+  WebServer::Resp r = WebServer::get("/api/state");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "\"relays\":[0,0,0,0,0,0,0,0]"));
   TEST_ASSERT_TRUE(has(r.body, "\"step\":500"));
   TEST_ASSERT_TRUE(has(r.body, "\"hseq\":30000"));
-  TEST_ASSERT_TRUE(has(r.body, "\"hch\":30000"));
+  TEST_ASSERT_TRUE(has(r.body, "\"swp\":3"));
   TEST_ASSERT_TRUE(has(r.body, "\"hall\":300000"));
   TEST_ASSERT_TRUE(has(r.body, "\"nrel\":8"));
   TEST_ASSERT_TRUE(has(r.body, "\"rmode\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"ssec\":5"));
   TEST_ASSERT_TRUE(has(r.body, "\"s2sec\":10"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.3\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.3.1\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
 void test_relay_override(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   WebServer::Resp r =
-      WebServer::post("/api/relay", "{\"i\":3,\"on\":1}", auth());
+      WebServer::post("/api/relay", "{\"i\":3,\"on\":1}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(seq.relayOn(3));
-  r = WebServer::get("/api/state", auth());
+  r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"relays\":[0,0,0,1,0,0,0,0]"));
-  r = WebServer::post("/api/relay", "{\"i\":3,\"on\":0}", auth());
+  r = WebServer::post("/api/relay", "{\"i\":3,\"on\":0}");
   TEST_ASSERT_FALSE(seq.relayOn(3));
-  r = WebServer::post("/api/relay", "{\"i\":99,\"on\":1}", auth());
+  r = WebServer::post("/api/relay", "{\"i\":99,\"on\":1}");
   TEST_ASSERT_EQUAL_INT(400, r.code);  // out of range rejected
 }
 
 void test_seq_start_stop(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   WebServer::Resp r =
-      WebServer::post("/api/seq", "{\"cmd\":\"start\"}", auth());
+      WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
   TEST_ASSERT_TRUE(seq.running());
-  r = WebServer::post("/api/seq", "{\"cmd\":\"stop\"}", auth());
+  r = WebServer::post("/api/seq", "{\"cmd\":\"stop\"}");
   TEST_ASSERT_FALSE(seq.running());
   TEST_ASSERT_EQUAL_INT(0, seq.onCount());
 }
 
 void test_config_validation_persist(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   WebServer::Resp r = WebServer::post(
       "/api/config",
-      "{\"rmode\":2,\"nrel\":4,\"step\":5,\"hseq\":99999999,\"hch\":5000,"
-      "\"hall\":60000,\"bmode\":9,\"alow\":0}",
-      auth());
+      "{\"rmode\":2,\"nrel\":4,\"step\":5,\"hseq\":99999999,\"swp\":2,"
+      "\"hall\":60000,\"bmode\":9,\"alow\":0}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_EQUAL_INT(RELAY_CHASE, cfg.relay_mode);
   TEST_ASSERT_EQUAL_INT(4, cfg.relay_count);
   TEST_ASSERT_EQUAL_INT(50, cfg.step_delay_ms);      // floored
   TEST_ASSERT_EQUAL_UINT32(3600000, cfg.hold_seq_ms);  // capped (ms now)
-  TEST_ASSERT_EQUAL_UINT32(5000, cfg.hold_chase_ms);
+  TEST_ASSERT_EQUAL_UINT8(2, cfg.chase_sweeps);
   TEST_ASSERT_EQUAL_UINT32(60000, cfg.hold_all_ms);
   TEST_ASSERT_EQUAL_INT(BTN_HOLD_ABORT, cfg.button_mode);  // bad -> default
   TEST_ASSERT_FALSE(cfg.active_low);
@@ -199,76 +174,79 @@ void test_config_validation_persist(void) {
 
 void test_spoof_fire_cancel(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   WebServer::Resp r = WebServer::post(
       "/api/spoof",
       "{\"cmd\":\"fire\",\"sv\":1000,\"sa\":1000,\"sc\":1000,\"ssoc\":100,"
       "\"ssec\":5,\"s2v\":888,\"s2a\":888,\"s2c\":888,\"s2soc\":188,"
-      "\"s2sec\":10}",
-      auth());
+      "\"s2sec\":10,\"spin\":25}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(spoof.active(g_mock_millis));
   TEST_ASSERT_EQUAL_UINT8(1, spoof.stage(g_mock_millis));
-  r = WebServer::get("/api/state", auth());
+  r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"spoof\":true"));
   TEST_ASSERT_TRUE(has(r.body, "\"stage\":1"));
   // Advance into stage 2 (100-first, then 88.8/188).
   g_mock_millis += 5000;
-  r = WebServer::get("/api/state", auth());
+  r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"stage\":2"));
-  r = WebServer::post("/api/spoof", "{\"cmd\":\"cancel\"}", auth());
+  r = WebServer::post("/api/spoof", "{\"cmd\":\"cancel\"}");
   TEST_ASSERT_FALSE(spoof.active(g_mock_millis));
 }
 
-void test_admin_validation(void) {
+void test_admin_gate_and_validation(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::Resp r = WebServer::post(
-      "/api/admin", "{\"ap_pass\":\"short\"}", auth());
-  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));  // 8+ chars enforced
+  // No password -> refused, nothing applied.
+  WebServer::Resp r = WebServer::post("/api/admin", "{\"ap_ssid\":\"X\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "admin password required"));
+  // Wrong password -> refused too.
   r = WebServer::post("/api/admin",
-                      "{\"ap_ssid\":\"Bench\",\"ap_pass\":\"longpass1\","
-                      "\"ap_ch\":9,\"a_user\":\"tech\",\"a_pass\":\"s3cret\"}",
-                      auth());
+                      "{\"ap_ssid\":\"X\",\"pass\":\"nope\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  // Short AP password rejected even with the right admin pass.
+  r = admin_post("/api/admin", "{\"ap_pass\":\"short\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));  // 8+ chars enforced
+  r = admin_post("/api/admin",
+                 "{\"ap_ssid\":\"Bench\",\"ap_pass\":\"longpass1\","
+                 "\"ap_ch\":9,\"a_pass\":\"s3cret\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
-  // New creds work, old ones don't (persistence across reload too).
+  // New admin pass works from here on, old one doesn't (RAM + NVS reload).
+  r = WebServer::post("/api/admin",
+                      "{\"cmd\":\"reboot\",\"pass\":\"admin123\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   web_tick(g_mock_millis + 2000);  // flush the deferred save first
   web_setup(ctx);
-  std::map<std::string, std::string> args;
-  args["u"] = "admin";
-  args["p"] = "admin123";
-  r = WebServer::request("POST", "/login",
-                         std::map<std::string, std::string>(), "", args);
-  TEST_ASSERT_EQUAL_INT(401, r.code);
-  cookie = login("tech", "s3cret");
-  r = WebServer::get("/api/state", auth());
+  r = admin_post("/api/admin", "{\"cmd\":\"reboot\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));  // pass helper still old -> no
+  r = WebServer::post("/api/admin", "{\"cmd\":\"reboot\",\"pass\":\"s3cret\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(g_restart_requested);
+  r = WebServer::get("/api/state");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "\"ap_ch\":9"));
+  TEST_ASSERT_FALSE(has(r.body, "longpass1"));  // secrets never leak
 }
 
-void test_session_expiry_relogin(void) {
+void test_ota_gate(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  g_mock_millis += 31UL * 60UL * 1000UL;  // past 30 min sliding window
-  WebServer::Resp r = WebServer::get("/api/state", auth());
-  TEST_ASSERT_EQUAL_INT(401, r.code);
-  cookie = login("admin", "admin123");  // re-login works
-  r = WebServer::get("/api/state", auth());
+  // Toggling OTA without the password changes nothing.
+  WebServer::Resp r = WebServer::post("/api/ota", "{\"ota_auto\":1}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
-}
-
-void test_logout(void) {
-  fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::Resp r = WebServer::get("/logout", auth());
-  TEST_ASSERT_EQUAL_INT(302, r.code);
-  r = WebServer::get("/api/state", auth());
-  TEST_ASSERT_EQUAL_INT(401, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_FALSE(ota.auto_enabled);
+  r = admin_post("/api/ota", "{\"ota_auto\":1}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(ota.auto_enabled);
+  // Check-now also gated (it can flash firmware via the uplink).
+  g_wifi_status = WL_CONNECTED;
+  ota.auto_enabled = true;
+  r = WebServer::post("/api/ota", "{\"cmd\":\"check\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_FALSE(ota_check_called);
 }
 
 void test_fuzz_posts(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   const char *eps[] = {"/api/relay", "/api/seq", "/api/config", "/api/spoof",
                        "/api/admin", "/api/ota"};
   const char *bad[] = {"{{{", "", "{\"i\":-1,\"on\":9999999999999999999}",
@@ -276,14 +254,17 @@ void test_fuzz_posts(void) {
                        "{\"cmd\":\"__proto__\",\"ssoc\":300,\"ssec\":0}"};
   for (auto ep : eps) {
     for (auto b : bad) {
-      WebServer::Resp r = WebServer::post(ep, b, auth());
-      TEST_ASSERT_TRUE(r.code == 200 || r.code == 400 || r.code == 401);
+      WebServer::Resp r = WebServer::post(ep, b);
+      TEST_ASSERT_TRUE(r.code == 200 || r.code == 400);
+      // Same garbage WITH the admin password: still no crash, no apply.
+      r = WebServer::post(ep, with_pass(b));
+      TEST_ASSERT_TRUE(r.code == 200 || r.code == 400);
     }
   }
   // Config still sane after garbage.
   TEST_ASSERT_TRUE(cfg.step_delay_ms >= 50 && cfg.step_delay_ms <= 60000);
   TEST_ASSERT_TRUE(cfg.hold_seq_ms <= 3600000);
-  TEST_ASSERT_TRUE(cfg.hold_chase_ms <= 3600000);
+  TEST_ASSERT_TRUE(cfg.chase_sweeps <= 100);
   TEST_ASSERT_TRUE(cfg.hold_all_ms <= 3600000);
   TEST_ASSERT_TRUE(cfg.spoof_seconds >= 1 && cfg.spoof_seconds <= 120);
   TEST_ASSERT_TRUE(cfg.s2_seconds >= 1 && cfg.s2_seconds <= 120);
@@ -292,11 +273,9 @@ void test_fuzz_posts(void) {
 
 void test_factory_reset_clears(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/config", "{\"step\":4321}", auth());
+  WebServer::post("/api/config", "{\"step\":4321}");
   TEST_ASSERT_EQUAL_INT(4321, cfg.step_delay_ms);
-  WebServer::Resp r =
-      WebServer::post("/api/admin", "{\"cmd\":\"reset\"}", auth());
+  WebServer::Resp r = admin_post("/api/admin", "{\"cmd\":\"reset\"}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(g_restart_requested);
   cfg = Bms2Config();  // reboot wipes RAM; NVS (now empty) yields defaults
@@ -312,15 +291,8 @@ void test_portal_redirect_flow(void) {
   WebServer::Resp r = WebServer::get("/generate_204");
   TEST_ASSERT_EQUAL_INT(302, r.code);
   TEST_ASSERT_TRUE(r.headers["Location"] == "/");
-  // ... which itself sends unauthed browsers to the login page.
+  // ... which serves the open dashboard (no login wall since v2.3.1).
   r = WebServer::get("/");
-  TEST_ASSERT_EQUAL_INT(302, r.code);
-  TEST_ASSERT_TRUE(r.headers["Location"] == "/login");
-  // Authed users hitting unknown paths land on the dashboard, not a 404.
-  cookie = login("admin", "admin123");
-  r = WebServer::get("/generate_204", auth());
-  TEST_ASSERT_EQUAL_INT(302, r.code);
-  r = WebServer::get("/", auth());
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "id=relays"));
 }
@@ -342,8 +314,8 @@ void test_nvs_migration_v2(void) {
   cfg = Bms2Config();
   seq.begin(&cfg);
   web_setup(ctx);  // migrates the v2 image in place (no nvs_clear)
-  TEST_ASSERT_EQUAL_UINT32(30000, cfg.hold_seq_ms);  // seconds -> ms, all modes
-  TEST_ASSERT_EQUAL_UINT32(30000, cfg.hold_chase_ms);
+  TEST_ASSERT_EQUAL_UINT32(30000, cfg.hold_seq_ms);  // seconds -> ms
+  TEST_ASSERT_EQUAL_UINT8(3, cfg.chase_sweeps);  // chase keeps auto-sweeps
   TEST_ASSERT_EQUAL_UINT32(30000, cfg.hold_all_ms);
   TEST_ASSERT_EQUAL_INT(700, cfg.step_delay_ms);  // untouched keys kept
   TEST_ASSERT_EQUAL_INT(600, cfg.s2_v_tenth);     // customs -> stage 2
@@ -354,8 +326,7 @@ void test_nvs_migration_v2(void) {
   TEST_ASSERT_EQUAL_INT(100, cfg.spoof_soc);
   TEST_ASSERT_EQUAL_INT(5, cfg.spoof_seconds);
   // Next save stamps v3 with the ms hold (flush the deferred write first).
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/config", "{\"step\":701}", auth());
+  WebServer::post("/api/config", "{\"step\":701}");
   web_tick(g_mock_millis + 2000);
   Preferences q;
   q.begin("bms2", true);
@@ -364,66 +335,93 @@ void test_nvs_migration_v2(void) {
   q.end();
 }
 
-void test_remember_login_persists(void) {
+void test_spoof_pin_clamp_and_persist(void) {
   fresh_env();
-  std::string cA = login("admin", "admin123", true);
-  std::map<std::string, std::string> hA;
-  hA["Cookie"] = cA;
-  // Simulate reboot: RAM session lost (a plain login overwrites it).
-  cookie = login("admin", "admin123");
-  // The remembered cookie still works via its NVS slot.
-  WebServer::Resp r = WebServer::get("/api/state", hA);
+  // Safe pin sticks; reserved pins fall back to 21.
+  WebServer::Resp r = WebServer::post("/api/spoof",
+                                      "{\"cmd\":\"fire\",\"spin\":44}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_EQUAL_UINT8(44, cfg.spoof_pin);
+  r = WebServer::post("/api/spoof", "{\"cmd\":\"fire\",\"spin\":16}");
+  TEST_ASSERT_EQUAL_UINT8(21, cfg.spoof_pin);  // UART RX is reserved
+  r = WebServer::post("/api/spoof", "{\"cmd\":\"fire\",\"spin\":18}");
+  TEST_ASSERT_EQUAL_UINT8(21, cfg.spoof_pin);  // WiFi kill pin is reserved
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"spin\":21"));
+  // Persists across reload (FIRE saves like all spoof values).
+  web_tick(g_mock_millis + 2000);
+  WebServer::post("/api/spoof", "{\"cmd\":\"fire\",\"spin\":44}");
+  web_tick(g_mock_millis + 2000);
+  cfg.spoof_pin = 21;
+  web_setup(ctx);
+  TEST_ASSERT_EQUAL_UINT8(44, cfg.spoof_pin);
 }
 
-void test_remember_expiry(void) {
+void test_ota_install_gate(void) {
   fresh_env();
-  std::string cA = login("admin", "admin123", true);
-  std::map<std::string, std::string> hA;
-  hA["Cookie"] = cA;
-  g_mock_millis += 31UL * 24UL * 3600UL * 1000UL;  // past the 30-day window
-  cookie = login("admin", "admin123");
-  WebServer::Resp r = WebServer::get("/api/state", hA);
-  TEST_ASSERT_EQUAL_INT(401, r.code);
+  // Nothing pending -> refused even with the password.
+  WebServer::Resp r = admin_post("/api/ota", "{\"cmd\":\"install\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_FALSE(ota_install_called);
+  // Pending but STA offline -> refused, no install attempt.
+  ota.update_pending = true;
+  strncpy(ota.latest_tag, "v9.9", sizeof(ota.latest_tag));
+  r = admin_post("/api/ota", "{\"cmd\":\"install\"}");
+  TEST_ASSERT_TRUE(has(r.body, "STA offline"));
+  TEST_ASSERT_FALSE(ota_install_called);
+  // Pending + online + password -> dispatches to main.cpp.
+  g_wifi_status = WL_CONNECTED;
+  ota.auto_enabled = true;
+  admin_post("/api/admin",
+             "{\"sta_en\":1,\"sta_ssid\":\"Hot\",\"sta_pass\":\"pw123456\"}");
+  web_tick(g_mock_millis + 2000);
+  web_setup(ctx);
+  g_wifi_status = WL_CONNECTED;
+  web_tick(g_mock_millis);
+  TEST_ASSERT_EQUAL_INT(2, web_sta_state());
+  r = admin_post("/api/ota", "{\"cmd\":\"install\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(ota_install_called);
+  // No password -> refused.
+  ota_install_called = false;
+  r = WebServer::post("/api/ota", "{\"cmd\":\"install\"}");
+  TEST_ASSERT_TRUE(has(r.body, "admin password required"));
+  TEST_ASSERT_FALSE(ota_install_called);
 }
 
-void test_token_eviction(void) {
+void test_wifi_kill_switch(void) {
   fresh_env();
-  std::string c[5];
-  for (int i = 0; i < 5; i++) c[i] = login("admin", "admin123", true);
-  cookie = login("admin", "admin123");  // RAM holds the plain session now
-  std::map<std::string, std::string> h;
-  h["Cookie"] = c[0];
-  WebServer::Resp r = WebServer::get("/api/state", h);
-  TEST_ASSERT_EQUAL_INT(401, r.code);  // oldest slot evicted by the 5th login
-  h["Cookie"] = c[4];
-  r = WebServer::get("/api/state", h);
+  web_wifi_set(false);  // grounded pin: everything down
+  TEST_ASSERT_EQUAL_INT(WIFI_OFF, g_wifi_mode);
+  web_wifi_set(false);  // idempotent: no crash, still off
+  TEST_ASSERT_EQUAL_INT(WIFI_OFF, g_wifi_mode);
+  web_wifi_set(true);  // released: AP back with the saved identity
+  TEST_ASSERT_EQUAL_INT(WIFI_AP, g_wifi_mode);
+  WebServer::Resp r = WebServer::get("/api/state");
   TEST_ASSERT_EQUAL_INT(200, r.code);
 }
 
 void test_relay_count_api(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/config", "{\"nrel\":4}", auth());
+  WebServer::post("/api/config", "{\"nrel\":4}");
   TEST_ASSERT_EQUAL_INT(4, cfg.relay_count);
   WebServer::Resp r =
-      WebServer::post("/api/relay", "{\"i\":5,\"on\":1}", auth());
+      WebServer::post("/api/relay", "{\"i\":5,\"on\":1}");
   TEST_ASSERT_EQUAL_INT(400, r.code);  // beyond count: OFF zone
-  r = WebServer::post("/api/relay", "{\"i\":3,\"on\":1}", auth());
+  r = WebServer::post("/api/relay", "{\"i\":3,\"on\":1}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(seq.relayOn(3));
-  WebServer::post("/api/config", "{\"nrel\":99}", auth());
+  WebServer::post("/api/config", "{\"nrel\":99}");
   TEST_ASSERT_EQUAL_INT(8, cfg.relay_count);  // clamped
-  WebServer::post("/api/config", "{\"nrel\":0}", auth());
+  WebServer::post("/api/config", "{\"nrel\":0}");
   TEST_ASSERT_EQUAL_INT(1, cfg.relay_count);
 }
 
 void test_chase_runs_single(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/config", "{\"rmode\":2,\"nrel\":8}", auth());
+  WebServer::post("/api/config", "{\"rmode\":2,\"nrel\":8}");
   TEST_ASSERT_EQUAL_INT(RELAY_CHASE, cfg.relay_mode);
-  WebServer::post("/api/seq", "{\"cmd\":\"start\"}", auth());
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
   seq.tick(g_mock_millis);
   TEST_ASSERT_TRUE(seq.running());
   TEST_ASSERT_EQUAL_UINT8(1, seq.onCount());  // chase: exactly one lit
@@ -431,25 +429,22 @@ void test_chase_runs_single(void) {
 
 void test_ota_api(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::Resp r = WebServer::post("/api/ota", "{\"ota_auto\":1}", auth());
+  WebServer::Resp r = admin_post("/api/ota", "{\"ota_auto\":1}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(ota.auto_enabled);
   // Check-now without the STA uplink is refused (office has no internet).
-  r = WebServer::post("/api/ota", "{\"cmd\":\"check\"}", auth());
+  r = admin_post("/api/ota", "{\"cmd\":\"check\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   TEST_ASSERT_FALSE(ota_check_called);
   // Bring STA online: check-now dispatches to main.cpp.
-  WebServer::post("/api/admin",
-                  "{\"sta_en\":1,\"sta_ssid\":\"Hot\",\"sta_pass\":\"pw123456\"}",
-                  auth());
+  admin_post("/api/admin",
+             "{\"sta_en\":1,\"sta_ssid\":\"Hot\",\"sta_pass\":\"pw123456\"}");
   web_tick(g_mock_millis + 2000);  // flush the deferred save first
   web_setup(ctx);  // simulated reboot picks up the STA creds
-  cookie = login("admin", "admin123");
   g_wifi_status = WL_CONNECTED;
   web_tick(g_mock_millis);
   TEST_ASSERT_EQUAL_INT(2, web_sta_state());
-  r = WebServer::post("/api/ota", "{\"cmd\":\"check\"}", auth());
+  r = admin_post("/api/ota", "{\"cmd\":\"check\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
   TEST_ASSERT_TRUE(ota_check_called);
   // OTA preference persists across the (simulated) reboot.
@@ -460,31 +455,32 @@ void test_ota_api(void) {
 
 void test_update_upload(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   std::string fw(1500, '\0');
   for (size_t i = 0; i < fw.size(); i++) fw[i] = (char)(i * 31 + 7);
-  WebServer::Resp r = WebServer::upload("/update", "firmware.bin", fw, auth());
+  std::map<std::string, std::string> upargs;
+  upargs["pass"] = "admin123";
+  WebServer::Resp r = WebServer::upload("/update", "firmware.bin", fw,
+                                        std::map<std::string, std::string>(),
+                                        upargs);
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "UPDATE OK"));
   TEST_ASSERT_TRUE(Update.finished);
   TEST_ASSERT_EQUAL_INT((int)fw.size(), (int)Update.bytes.size());
   TEST_ASSERT_TRUE(Update.bytes == fw);
   TEST_ASSERT_TRUE(g_restart_requested);
-  // Unauthed uploads are refused.
+  // Uploads without the admin password are refused: nothing flashes.
   fresh_env();
-  r = WebServer::upload("/update", "firmware.bin", fw,
-                        std::map<std::string, std::string>());
-  TEST_ASSERT_EQUAL_INT(401, r.code);
+  r = WebServer::upload("/update", "firmware.bin", fw);
+  TEST_ASSERT_EQUAL_INT(403, r.code);
+  TEST_ASSERT_FALSE(Update.finished);
 }
 
 void test_sta_uplink(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   TEST_ASSERT_EQUAL_INT(0, web_sta_state());  // AP-only by default
   TEST_ASSERT_FALSE(g_wifi_begun);
-  WebServer::post("/api/admin",
-                  "{\"sta_en\":1,\"sta_ssid\":\"Hot\",\"sta_pass\":\"pw\"}",
-                  auth());
+  admin_post("/api/admin",
+             "{\"sta_en\":1,\"sta_ssid\":\"Hot\",\"sta_pass\":\"pw\"}");
   web_tick(g_mock_millis + 2000);
   web_setup(ctx);
   TEST_ASSERT_EQUAL_INT(1, web_sta_state());  // connecting, non-blocking
@@ -492,12 +488,11 @@ void test_sta_uplink(void) {
   g_wifi_status = WL_CONNECTED;
   web_tick(g_mock_millis);
   TEST_ASSERT_EQUAL_INT(2, web_sta_state());
-  WebServer::Resp r = WebServer::get("/api/state", auth());
+  WebServer::Resp r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"sta\":2"));
   // An attempt that never links falls back to AP-only after 30 s.
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/admin", "{\"sta_en\":1,\"sta_ssid\":\"Hot\"}", auth());
+  admin_post("/api/admin", "{\"sta_en\":1,\"sta_ssid\":\"Hot\"}");
   web_tick(g_mock_millis + 2000);
   web_setup(ctx);
   g_mock_millis += 31000;
@@ -507,13 +502,12 @@ void test_sta_uplink(void) {
 
 void test_save_coalescing(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   // Three rapid saves (like the dashboard's double-POST buttons): the bench
   // reacts instantly from RAM, but flash is untouched until the idle flush.
-  WebServer::post("/api/config", "{\"step\":1000}", auth());
+  WebServer::post("/api/config", "{\"step\":1000}");
   TEST_ASSERT_EQUAL_INT(1000, cfg.step_delay_ms);  // RAM: instant
-  WebServer::post("/api/config", "{\"step\":2000}", auth());
-  WebServer::post("/api/spoof", "{\"cmd\":\"fire\",\"ssec\":6}", auth());
+  WebServer::post("/api/config", "{\"step\":2000}");
+  WebServer::post("/api/spoof", "{\"cmd\":\"fire\",\"ssec\":6}");
   TEST_ASSERT_EQUAL_INT(0, (int)Preferences::nvs_commits());
   web_tick(g_mock_millis + 500);  // too soon: still coalescing
   TEST_ASSERT_EQUAL_INT(0, (int)Preferences::nvs_commits());
@@ -528,11 +522,10 @@ void test_save_coalescing(void) {
 
 void test_reboot_flushes_pending_save(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/config", "{\"step\":4321}", auth());
+  WebServer::post("/api/config", "{\"step\":4321}");
   TEST_ASSERT_EQUAL_INT(0, (int)Preferences::nvs_commits());
   // Reboot commits synchronously first: nothing lost, no tick needed.
-  WebServer::post("/api/admin", "{\"cmd\":\"reboot\"}", auth());
+  admin_post("/api/admin", "{\"cmd\":\"reboot\"}");
   TEST_ASSERT_TRUE(g_restart_requested);
   TEST_ASSERT_EQUAL_INT(1, (int)Preferences::nvs_commits());
   cfg.step_delay_ms = 0;
@@ -542,23 +535,21 @@ void test_reboot_flushes_pending_save(void) {
 
 void test_industrial_config(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   WebServer::Resp r = WebServer::post(
       "/api/config",
-      "{\"loop\":1,\"cpause\":99999999,\"clim\":50,\"stag\":99999,\"dir\":5}",
-      auth());
+      "{\"loop\":1,\"cpause\":99999999,\"clim\":50,\"stag\":99999,\"dir\":5}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(cfg.loop_enabled);
   TEST_ASSERT_EQUAL_UINT32(3600000, cfg.cycle_pause_ms);  // capped
   TEST_ASSERT_EQUAL_INT(50, cfg.cycle_limit);
   TEST_ASSERT_EQUAL_INT(60000, cfg.allon_stagger_ms);     // capped
   TEST_ASSERT_EQUAL_INT(0, cfg.seq_dir);                  // bad -> forward
-  WebServer::post("/api/config", "{\"dir\":1}", auth());
+  WebServer::post("/api/config", "{\"dir\":1}");
   TEST_ASSERT_EQUAL_INT(1, cfg.seq_dir);
-  WebServer::post("/api/admin", "{\"auto\":1}", auth());
+  admin_post("/api/admin", "{\"auto\":1}");
   TEST_ASSERT_TRUE(cfg.boot_autostart);
   web_tick(g_mock_millis + 2000);
-  r = WebServer::get("/api/state", auth());
+  r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"loop\":1"));
   TEST_ASSERT_TRUE(has(r.body, "\"clim\":50"));
   TEST_ASSERT_TRUE(has(r.body, "\"dir\":1"));
@@ -573,56 +564,51 @@ void test_industrial_config(void) {
 
 void test_relay_labels(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
   WebServer::Resp r = WebServer::post(
-      "/api/config", "{\"lbl0\":\"HORN\",\"lbl1\":\"LIGHT BAR\"}", auth());
+      "/api/config", "{\"lbl0\":\"HORN\",\"lbl1\":\"LIGHT BAR\"}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_EQUAL_STRING("HORN", cfg.relay_label[0]);
   TEST_ASSERT_EQUAL_STRING("LIGHT BAR", cfg.relay_label[1]);
   web_tick(g_mock_millis + 2000);
-  r = WebServer::get("/api/state", auth());
+  r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"lbl0\":\"HORN\""));
   // Hostile labels rejected: quotes (JSON/HTML break), backslash, too long.
-  WebServer::post("/api/config", "{\"lbl0\":\"A\\\"B\"}", auth());
+  WebServer::post("/api/config", "{\"lbl0\":\"A\\\"B\"}");
   TEST_ASSERT_EQUAL_STRING("HORN", cfg.relay_label[0]);
-  WebServer::post("/api/config", "{\"lbl0\":\"AAAAAAAAAAAAAAAA\"}", auth());
+  WebServer::post("/api/config", "{\"lbl0\":\"AAAAAAAAAAAAAAAA\"}");
   TEST_ASSERT_EQUAL_STRING("HORN", cfg.relay_label[0]);
-  WebServer::post("/api/config", "{\"lbl0\":\"A\\\\B\"}", auth());
+  WebServer::post("/api/config", "{\"lbl0\":\"A\\\\B\"}");
   TEST_ASSERT_EQUAL_STRING("HORN", cfg.relay_label[0]);
 }
 
 void test_counters_state(void) {
   fresh_env();
-  cookie = login("admin", "admin123");
-  WebServer::post("/api/seq", "{\"cmd\":\"start\"}", auth());
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
   seq.tick(g_mock_millis + 3500);  // 8 sequential actuations done
   seq.tick(g_mock_millis + 3500 + 30000);  // hold_seq default -> cycle done
   TEST_ASSERT_EQUAL_UINT(1, seq.cyclesDone());
-  WebServer::Resp r = WebServer::get("/api/state", auth());
+  WebServer::Resp r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"cycles\":1"));
   TEST_ASSERT_TRUE(has(r.body, "\"acts\":8"));
 }
 
 void run_all() {
-  RUN_TEST(test_login_page_public);
-  RUN_TEST(test_root_requires_auth);
+  RUN_TEST(test_root_open_dashboard);
+  RUN_TEST(test_state_public_no_secrets);
   RUN_TEST(test_portal_redirect_flow);
-  RUN_TEST(test_login_bad);
-  RUN_TEST(test_login_good_dashboard);
   RUN_TEST(test_state_defaults);
   RUN_TEST(test_relay_override);
   RUN_TEST(test_seq_start_stop);
   RUN_TEST(test_config_validation_persist);
   RUN_TEST(test_spoof_fire_cancel);
-  RUN_TEST(test_admin_validation);
-  RUN_TEST(test_session_expiry_relogin);
-  RUN_TEST(test_logout);
+  RUN_TEST(test_spoof_pin_clamp_and_persist);
+  RUN_TEST(test_admin_gate_and_validation);
+  RUN_TEST(test_ota_gate);
+  RUN_TEST(test_ota_install_gate);
+  RUN_TEST(test_wifi_kill_switch);
   RUN_TEST(test_fuzz_posts);
   RUN_TEST(test_factory_reset_clears);
   RUN_TEST(test_nvs_migration_v2);
-  RUN_TEST(test_remember_login_persists);
-  RUN_TEST(test_remember_expiry);
-  RUN_TEST(test_token_eviction);
   RUN_TEST(test_relay_count_api);
   RUN_TEST(test_chase_runs_single);
   RUN_TEST(test_ota_api);

@@ -194,7 +194,7 @@ void test_seq_count_limits_scope(void) {
 void test_seq_chase_wave(void) {
   Bms2Config c = def_cfg();
   c.relay_mode = RELAY_CHASE;
-  c.hold_chase_ms = 0;  // sweep forever until stopped
+  c.chase_sweeps = 0;  // sweep forever until stopped
   RelaySequencer s;
   s.begin(&c);
   s.start(10000);
@@ -221,10 +221,10 @@ void test_seq_chase_count_wrap_and_hold(void) {
   Bms2Config c = def_cfg();
   c.relay_mode = RELAY_CHASE;
   c.relay_count = 3;
-  c.hold_chase_ms = 2000;
+  c.chase_sweeps = 2;  // auto-hold: 2 sweeps x 3 relays x 500 ms = 3000 ms
   RelaySequencer s;
   s.begin(&c);
-  s.start(10000);
+  s.start(10000);  // hold expires at 13000
   s.tick(10500);
   TEST_ASSERT_TRUE(s.relayOn(1));
   s.tick(11000);
@@ -233,9 +233,33 @@ void test_seq_chase_count_wrap_and_hold(void) {
   TEST_ASSERT_TRUE(s.relayOn(0));
   TEST_ASSERT_EQUAL_UINT8(1, s.onCount());
   TEST_ASSERT_FALSE(s.relayOn(3));  // beyond count never lights
-  s.tick(12000);  // hold (2000 ms) expired -> auto OFF
+  s.tick(12999);
+  TEST_ASSERT_TRUE(s.running());
+  s.tick(13000);  // auto-hold expired -> auto OFF
   TEST_ASSERT_FALSE(s.running());
   TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+}
+
+void test_spoof_pin_sanitize(void) {
+  // Allowlist: proven-safe free DIOs pass through untouched.
+  const uint8_t ok[] = {1, 2, 21, 38, 39, 40, 41, 42, 43, 44, 47};
+  for (uint8_t i = 0; i < sizeof(ok); i++)
+    TEST_ASSERT_EQUAL_UINT8(ok[i], sanitize_spoof_pin(ok[i]));
+  // Everything else (UART, relays, button, LEDs, USB, strapping, flash,
+  // kill switch) falls back to 21.
+  const uint8_t bad[] = {0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                         16, 17, 18, 19, 20, 26, 33, 37, 45, 46, 48, 99};
+  for (uint8_t i = 0; i < sizeof(bad); i++)
+    TEST_ASSERT_EQUAL_UINT8(21, sanitize_spoof_pin(bad[i]));
+  // Chase auto-hold retunes with count+step (sweeps x relays x step ms).
+  Bms2Config c = def_cfg();
+  c.relay_mode = RELAY_CHASE;
+  c.chase_sweeps = 2;  // 2 x 8 x 500 ms
+  RelaySequencer s;
+  s.begin(&c);
+  TEST_ASSERT_EQUAL_UINT32(8000, s.holdForMode());
+  c.chase_sweeps = 0;
+  TEST_ASSERT_EQUAL_UINT32(0, s.holdForMode());  // 0 = sweep forever
 }
 
 void test_seq_hold_ms_precise(void) {
@@ -273,8 +297,10 @@ void test_seq_hold_per_mode(void) {
   TEST_ASSERT_FALSE(s.running());
   // holdForMode reports the active mode's hold.
   c.relay_mode = RELAY_CHASE;
-  c.hold_chase_ms = 7000;
-  TEST_ASSERT_EQUAL_UINT32(7000, s.holdForMode());
+  c.chase_sweeps = 2;  // 2 x 8 x 500 ms = 8000 ms auto-hold
+  TEST_ASSERT_EQUAL_UINT32(8000, s.holdForMode());
+  c.chase_sweeps = 0;
+  TEST_ASSERT_EQUAL_UINT32(0, s.holdForMode());
   c.relay_mode = RELAY_SEQUENTIAL;
   TEST_ASSERT_EQUAL_UINT32(1000, s.holdForMode());
 }
@@ -363,7 +389,7 @@ void test_reverse_direction(void) {
   TEST_ASSERT_EQUAL_UINT8(2, s.onCount());
   // Chase reverses too.
   c.relay_mode = RELAY_CHASE;
-  c.hold_chase_ms = 0;
+  c.chase_sweeps = 0;
   s.start(20000);
   TEST_ASSERT_TRUE(s.relayOn(3));
   s.tick(20500);
@@ -430,6 +456,7 @@ void run_all() {
   RUN_TEST(test_seq_count_limits_scope);
   RUN_TEST(test_seq_chase_wave);
   RUN_TEST(test_seq_chase_count_wrap_and_hold);
+  RUN_TEST(test_spoof_pin_sanitize);
   RUN_TEST(test_seq_hold_ms_precise);
   RUN_TEST(test_seq_hold_per_mode);
   RUN_TEST(test_seq_effcount_clamp);

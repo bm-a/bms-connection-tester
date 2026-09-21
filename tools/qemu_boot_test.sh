@@ -13,7 +13,8 @@
 #               (via -d trace:, the reliable route) to $LOGDIR/trace.log.
 #   default     EXACT TEST: PASS iff zero 'Unknown cmd 0x10' AND zero '0x10200C'
 #               in guest_errors (Stage-A gate), exit 1 otherwise.
-# Env overrides: QEMU_BIN, ESPTOOL, LOGDIR, PORT (tcp serial, off by default).
+# Env overrides: QEMU_BIN, ESPTOOL, LOGDIR, PORT (tcp serial, off by default),
+# FWBIN (use a different app binary, e.g. a UART0-debug build).
 set -eu
 cd "$(dirname "$0")/.."
 VARIANT="${1:-n16r8}"
@@ -46,7 +47,7 @@ rm -f "$FLASH" "$GUESTLOG" "$UARTLOG"
 
 $ESPTOOL --chip esp32s3 merge_bin --fill-flash-size 8MB -o "$FLASH" \
   0x0 "$FWDIR/bootloader.bin" 0x8000 "$FWDIR/partitions.bin" \
-  0x10000 "$FWDIR/firmware.bin" >/dev/null
+  0x10000 "${FWBIN:-$FWDIR/firmware.bin}" >/dev/null
 SIZE=$(wc -c < "$FLASH")
 echo "flash image: $SIZE bytes (expect 8388608 for GD25Q64 selection)"
 
