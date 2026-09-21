@@ -1,5 +1,25 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.4] — 2026-09-22
+### Fixed
+- Firmware upload rebuilt Tasmota-style: exact variant-asset match, explicit
+  sketch budget, image-head gate, single finalize, progress bar, named errors
+  (a wrong file or password changes nothing).
+### Changed
+- Relay timing floors (step ≥ 100 ms default 250, stagger default 50,
+  pause 500–60000 default 2000); chase gains a fixed 20 ms break-before-make;
+  START refused 0.5 s after STOP; mode switch needs IDLE; loop needs a
+  finite hold; count-shrink acts immediately; RESTART keeps tile forces.
+- Dashboard shows only the active mode's fields; spoof card has Save-only;
+  OTA interval editable; AP/STA saves offer Save + reboot.
+### Added
+- Web console, config backup/restore (passwords never exported), custom OTA
+  URL + Upgrade-from-URL, one-shot STA uplink test (no reboot), Information
+  card (variant/flash/sketch/heap/uptime/bootcount/reset reason/RSSI/pin
+  map), mDNS `bmstester.local`, keep-WiFi reset, boot-counter reset.
+- 134/134 tests (36 relay incl. R18–R31, 41 web, 5 upload gates) + contract
+  (single-end rule, no SIZE_UNKNOWN) + soak + virtual-bus + both PIO envs.
+
 ## [v2.3.1] — 2026-09-21
 ### Fixed
 - Saves stick: the 1 s tick is status-only; forms fill on load + after saves.

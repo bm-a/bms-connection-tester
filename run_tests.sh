@@ -51,6 +51,11 @@ g++ -std=c++17 -I src -I .unity src/ota.cpp test/test_ota/test_ota.cpp .unity/un
 ./.test_ota
 rm -f .test_ota
 
+echo "=== native: test_upload (Unity, v2.4 Tasmota-grade update gates) ==="
+g++ -std=c++17 -I src -I .unity test/test_upload/test_upload.cpp .unity/unity.c -o .test_upload
+./.test_upload
+rm -f .test_upload
+
 echo "=== web contract (dashboard JS vs web_ui.cpp routes/keys) ==="
 python3 tools/check_web_contract.py
 

@@ -10,6 +10,8 @@
 #include "WiFi.h"
 #include "Preferences.h"
 #include "Update.h"
+#include "ESPmDNS.h"
+#include "esp_system.h"
 #include "../../src/relay_ctrl.h"
 #include "../../src/ota.h"
 #include "../../src/web_ui.h"
@@ -77,6 +79,7 @@ static void fresh_env() {
   ctx.on_ota_check = on_ota;
   ctx.on_ota_install = on_ota_install;
   web_setup(ctx);
+  Preferences::nvs_commits_reset();  // web_setup tracks boot (its own write)
 }
 
 static bool has(const std::string &s, const std::string &sub) {
@@ -112,7 +115,7 @@ void test_state_defaults(void) {
   WebServer::Resp r = WebServer::get("/api/state");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "\"relays\":[0,0,0,0,0,0,0,0]"));
-  TEST_ASSERT_TRUE(has(r.body, "\"step\":500"));
+  TEST_ASSERT_TRUE(has(r.body, "\"step\":250"));
   TEST_ASSERT_TRUE(has(r.body, "\"hseq\":30000"));
   TEST_ASSERT_TRUE(has(r.body, "\"swp\":3"));
   TEST_ASSERT_TRUE(has(r.body, "\"hall\":300000"));
@@ -120,7 +123,7 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"rmode\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"ssec\":5"));
   TEST_ASSERT_TRUE(has(r.body, "\"s2sec\":10"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.3.1\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.4\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
@@ -157,7 +160,7 @@ void test_config_validation_persist(void) {
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_EQUAL_INT(RELAY_CHASE, cfg.relay_mode);
   TEST_ASSERT_EQUAL_INT(4, cfg.relay_count);
-  TEST_ASSERT_EQUAL_INT(50, cfg.step_delay_ms);      // floored
+  TEST_ASSERT_EQUAL_INT(100, cfg.step_delay_ms);     // floored (R4)
   TEST_ASSERT_EQUAL_UINT32(3600000, cfg.hold_seq_ms);  // capped (ms now)
   TEST_ASSERT_EQUAL_UINT8(2, cfg.chase_sweeps);
   TEST_ASSERT_EQUAL_UINT32(60000, cfg.hold_all_ms);
@@ -167,7 +170,7 @@ void test_config_validation_persist(void) {
   web_tick(g_mock_millis + 2000);
   cfg.step_delay_ms = 12345;
   web_setup(ctx);
-  TEST_ASSERT_EQUAL_INT(50, cfg.step_delay_ms);
+  TEST_ASSERT_EQUAL_INT(100, cfg.step_delay_ms);
   TEST_ASSERT_EQUAL_UINT32(3600000, cfg.hold_seq_ms);
   TEST_ASSERT_EQUAL_INT(4, cfg.relay_count);
 }
@@ -262,7 +265,7 @@ void test_fuzz_posts(void) {
     }
   }
   // Config still sane after garbage.
-  TEST_ASSERT_TRUE(cfg.step_delay_ms >= 50 && cfg.step_delay_ms <= 60000);
+  TEST_ASSERT_TRUE(cfg.step_delay_ms >= 100 && cfg.step_delay_ms <= 60000);
   TEST_ASSERT_TRUE(cfg.hold_seq_ms <= 3600000);
   TEST_ASSERT_TRUE(cfg.chase_sweeps <= 100);
   TEST_ASSERT_TRUE(cfg.hold_all_ms <= 3600000);
@@ -280,7 +283,7 @@ void test_factory_reset_clears(void) {
   TEST_ASSERT_TRUE(g_restart_requested);
   cfg = Bms2Config();  // reboot wipes RAM; NVS (now empty) yields defaults
   web_setup(ctx);      // reboot reloads -> factory defaults
-  TEST_ASSERT_EQUAL_INT(500, cfg.step_delay_ms);
+  TEST_ASSERT_EQUAL_INT(250, cfg.step_delay_ms);
   TEST_ASSERT_EQUAL_INT(5, cfg.spoof_seconds);
   TEST_ASSERT_EQUAL_INT(10, cfg.s2_seconds);
 }
@@ -455,8 +458,11 @@ void test_ota_api(void) {
 
 void test_update_upload(void) {
   fresh_env();
+  // Valid 8 MB image head (0xE9 magic, flash code 3) + random body.
   std::string fw(1500, '\0');
   for (size_t i = 0; i < fw.size(); i++) fw[i] = (char)(i * 31 + 7);
+  fw[0] = (char)0xE9;
+  fw[3] = (char)0x30;
   std::map<std::string, std::string> upargs;
   upargs["pass"] = "admin123";
   WebServer::Resp r = WebServer::upload("/update", "firmware.bin", fw,
@@ -465,6 +471,8 @@ void test_update_upload(void) {
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "UPDATE OK"));
   TEST_ASSERT_TRUE(Update.finished);
+  TEST_ASSERT_EQUAL_INT(1, Update.end_calls);  // single-end rule (v2.4)
+  TEST_ASSERT_TRUE(Update.begin_size != 0xFFFFFFFFu);  // explicit budget
   TEST_ASSERT_EQUAL_INT((int)fw.size(), (int)Update.bytes.size());
   TEST_ASSERT_TRUE(Update.bytes == fw);
   TEST_ASSERT_TRUE(g_restart_requested);
@@ -472,7 +480,72 @@ void test_update_upload(void) {
   fresh_env();
   r = WebServer::upload("/update", "firmware.bin", fw);
   TEST_ASSERT_EQUAL_INT(403, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "admin password required"));
   TEST_ASSERT_FALSE(Update.finished);
+}
+
+void test_update_rejects(void) {
+  fresh_env();
+  std::string fw(1500, '\0');
+  for (size_t i = 0; i < fw.size(); i++) fw[i] = (char)(i * 31 + 7);
+  fw[0] = (char)0xE9;
+  fw[3] = (char)0x30;
+  std::map<std::string, std::string> upargs;
+  upargs["pass"] = "admin123";
+  // Wrong variant file: the 8 MB box refuses the N16R8 asset by NAME.
+  WebServer::Resp r = WebServer::upload("/update", "n16r8-firmware.bin", fw,
+                                        std::map<std::string, std::string>(),
+                                        upargs);
+  TEST_ASSERT_EQUAL_INT(400, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "wrong file"));
+  TEST_ASSERT_FALSE(Update.finished);
+  // Garbage bytes (ELF, config JSON): bad magic, nothing committed.
+  std::string elf(1500, 'x');
+  elf[0] = 0x7F;
+  r = WebServer::upload("/update", "firmware.bin", elf,
+                        std::map<std::string, std::string>(), upargs);
+  TEST_ASSERT_EQUAL_INT(400, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "magic"));
+  TEST_ASSERT_FALSE(Update.finished);
+  // 16 MB image on an 8 MB flash chip: rejected on the head bytes.
+  std::string big16 = fw;
+  big16[3] = (char)0x40;
+  r = WebServer::upload("/update", "firmware.bin", big16,
+                        std::map<std::string, std::string>(), upargs);
+  TEST_ASSERT_EQUAL_INT(400, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "more flash"));
+  TEST_ASSERT_FALSE(Update.finished);
+  // Tiny sketch budget: explicit TOO_BIG instead of dying mid-stream.
+  // (Page granularity is 4 KB, so this case needs a file bigger than the
+  // 0x1000 budget a 0x2000-free chip reports.)
+  std::string big(5000, 'q');
+  big[0] = (char)0xE9;
+  big[3] = (char)0x30;
+  g_esp_free_sketch = 0x2000;
+  r = WebServer::upload("/update", "firmware.bin", big,
+                        std::map<std::string, std::string>(), upargs);
+  TEST_ASSERT_EQUAL_INT(400, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "too big"));
+  TEST_ASSERT_FALSE(Update.finished);
+  g_esp_free_sketch = 0x800000;
+}
+
+void test_update_pass_order_independent(void) {
+  // The pass field may stream AFTER the file part (some stacks reorder
+  // multipart parts); the verdict is judged once, in the done handler.
+  fresh_env();
+  std::string fw(1500, '\0');
+  for (size_t i = 0; i < fw.size(); i++) fw[i] = (char)(i * 31 + 7);
+  fw[0] = (char)0xE9;
+  fw[3] = (char)0x30;
+  std::map<std::string, std::string> upargs;
+  upargs["pass"] = "admin123";
+  WebServer::Resp r = WebServer::upload("/update", "firmware.bin", fw,
+                                        std::map<std::string, std::string>(),
+                                        upargs, false /* pass streams last */);
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(Update.finished);
+  TEST_ASSERT_TRUE(Update.bytes == fw);
 }
 
 void test_sta_uplink(void) {
@@ -540,9 +613,9 @@ void test_industrial_config(void) {
       "{\"loop\":1,\"cpause\":99999999,\"clim\":50,\"stag\":99999,\"dir\":5}");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(cfg.loop_enabled);
-  TEST_ASSERT_EQUAL_UINT32(3600000, cfg.cycle_pause_ms);  // capped
+  TEST_ASSERT_EQUAL_UINT32(60000, cfg.cycle_pause_ms);  // capped (R6)
   TEST_ASSERT_EQUAL_INT(50, cfg.cycle_limit);
-  TEST_ASSERT_EQUAL_INT(60000, cfg.allon_stagger_ms);     // capped
+  TEST_ASSERT_EQUAL_INT(1000, cfg.allon_stagger_ms);    // capped (R5)
   TEST_ASSERT_EQUAL_INT(0, cfg.seq_dir);                  // bad -> forward
   WebServer::post("/api/config", "{\"dir\":1}");
   TEST_ASSERT_EQUAL_INT(1, cfg.seq_dir);
@@ -592,6 +665,255 @@ void test_counters_state(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"acts\":8"));
 }
 
+void test_spoof_save_only(void) {
+  fresh_env();
+  // Save stages values + pin WITHOUT firing (v2.4): no spoof window opens.
+  WebServer::Resp r = WebServer::post(
+      "/api/spoof", "{\"cmd\":\"save\",\"sv\":520,\"ssec\":9,\"spin\":2}");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_EQUAL_INT(520, cfg.spoof_v_tenth);
+  TEST_ASSERT_EQUAL_INT(9, cfg.spoof_seconds);
+  TEST_ASSERT_EQUAL_INT(2, cfg.spoof_pin);
+  TEST_ASSERT_EQUAL_UINT8(0, spoof.stage(g_mock_millis));
+  // FIRE still saves AND triggers.
+  r = WebServer::post("/api/spoof", "{\"cmd\":\"fire\",\"sv\":530}");
+  TEST_ASSERT_EQUAL_INT(530, cfg.spoof_v_tenth);
+  TEST_ASSERT_EQUAL_UINT8(1, spoof.stage(g_mock_millis));
+}
+
+void test_config_loop_hold_reject(void) {
+  fresh_env();
+  // R9: loop + hold 0 can never complete a cycle — the save is refused
+  // and the bench keeps its previous config.
+  WebServer::Resp r = WebServer::post(
+      "/api/config", "{\"loop\":1,\"hseq\":0,\"hall\":0}");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "finite hold"));
+  TEST_ASSERT_FALSE(cfg.loop_enabled);
+  // Finite hold + loop: accepted.
+  r = WebServer::post("/api/config", "{\"loop\":1,\"hseq\":5000}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(cfg.loop_enabled);
+}
+
+void test_config_mode_switch_needs_idle(void) {
+  fresh_env();
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  TEST_ASSERT_TRUE(seq.running());
+  // R10: mode switch mid-run is refused; the running mode is untouched.
+  WebServer::Resp r = WebServer::post("/api/config", "{\"rmode\":2}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "stop the sequence"));
+  TEST_ASSERT_EQUAL_INT(RELAY_SEQUENTIAL, cfg.relay_mode);
+  WebServer::post("/api/seq", "{\"cmd\":\"stop\"}");
+  g_mock_millis += 1000;  // past the R12 dead-band
+  r = WebServer::post("/api/config", "{\"rmode\":2}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_EQUAL_INT(RELAY_CHASE, cfg.relay_mode);
+}
+
+void test_config_pause_floor(void) {
+  fresh_env();
+  // R26: pause clamps to the 500 ms floor (R6), never honored literally.
+  WebServer::post("/api/config", "{\"cpause\":0}");
+  TEST_ASSERT_EQUAL_UINT32(500, cfg.cycle_pause_ms);
+  WebServer::post("/api/config", "{\"cpause\":99999999}");
+  TEST_ASSERT_EQUAL_UINT32(60000, cfg.cycle_pause_ms);
+}
+
+void test_seq_deadband_api(void) {
+  fresh_env();
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  WebServer::post("/api/seq", "{\"cmd\":\"stop\"}");
+  // R12: immediate restart refused with a named error.
+  WebServer::Resp r = WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "settling"));
+  TEST_ASSERT_FALSE(seq.running());
+  g_mock_millis += 600;
+  r = WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(seq.running());
+}
+
+void test_sta_test_flow(void) {
+  fresh_env();
+  // No SSID anywhere: named error, no radio touched.
+  WebServer::Resp r = admin_post("/api/sta", "{\"cmd\":\"test\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  // Supplied credentials: test starts, AP stays up.
+  r = admin_post("/api/sta",
+                 "{\"cmd\":\"test\",\"ssid\":\"Hot\",\"sta_pass\":\"pw\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(g_wifi_begun);
+  // Link comes up: ok + RSSI/IP recorded, radio back to AP-only.
+  g_wifi_status = WL_CONNECTED;
+  web_tick(g_mock_millis + 1000);
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"sta_test\":2"));
+  TEST_ASSERT_TRUE(has(r.body, "RSSI"));
+  TEST_ASSERT_TRUE(has(r.body, "192.168.43.12"));
+  TEST_ASSERT_FALSE(g_wifi_begun);
+  // Never links: 30 s deadline -> named failure, AP-only again.
+  fresh_env();
+  r = admin_post("/api/sta",
+                 "{\"cmd\":\"test\",\"ssid\":\"Hot\",\"sta_pass\":\"pw\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  g_mock_millis += 31000;
+  web_tick(g_mock_millis);
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"sta_test\":3"));
+  TEST_ASSERT_FALSE(g_wifi_begun);
+}
+
+void test_console_verbs(void) {
+  fresh_env();
+  // Free verbs.
+  WebServer::Resp r = WebServer::post("/api/cmd", "{\"cmd\":\"HELP\"}");
+  TEST_ASSERT_TRUE(has(r.body, "START STOP"));
+  r = WebServer::post("/api/cmd", "{\"cmd\":\"status\"}");
+  TEST_ASSERT_TRUE(has(r.body, "LINK RED"));
+  r = WebServer::post("/api/cmd", "{\"cmd\":\"version\"}");
+  TEST_ASSERT_TRUE(has(r.body, "2.4"));
+  r = WebServer::post("/api/cmd", "{\"cmd\":\"bogus\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  // Privileged verbs need the password...
+  r = WebServer::post("/api/cmd", "{\"cmd\":\"start\"}");
+  TEST_ASSERT_TRUE(has(r.body, "admin password required"));
+  TEST_ASSERT_FALSE(seq.running());
+  // ...and then they work.
+  r = admin_post("/api/cmd", "{\"cmd\":\"start\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"out\":\"started\""));
+  TEST_ASSERT_TRUE(seq.running());
+  r = admin_post("/api/cmd", "{\"cmd\":\"stop\"}");
+  TEST_ASSERT_FALSE(seq.running());
+  g_mock_millis += 1000;
+  r = admin_post("/api/cmd", "{\"cmd\":\"fire\"}");
+  TEST_ASSERT_EQUAL_UINT8(1, spoof.stage(g_mock_millis));
+}
+
+void test_backup_restore(void) {
+  fresh_env();
+  WebServer::post("/api/config",
+                  "{\"rmode\":1,\"nrel\":4,\"step\":1000,\"stag\":60}");
+  WebServer::post("/api/spoof", "{\"cmd\":\"save\",\"sv\":520}");
+  // Backup exports everything but secrets.
+  WebServer::Resp r = WebServer::get("/api/backup");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"backup\":1"));
+  TEST_ASSERT_TRUE(has(r.body, "\"nrel\":4"));
+  TEST_ASSERT_TRUE(has(r.body, "\"sv\":520"));
+  TEST_ASSERT_FALSE(has(r.body, "bms12345"));  // AP secret never leaves
+  TEST_ASSERT_FALSE(has(r.body, "admin123"));  // admin secret never leaves
+  // Restore onto a wiped box brings settings back (not passwords).
+  std::string bk = r.body;
+  fresh_env();
+  TEST_ASSERT_EQUAL_INT(8, cfg.relay_count);
+  size_t pp = bk.rfind('}');
+  std::string rb = bk.substr(0, pp) + ",\"pass\":\"admin123\"}";
+  r = WebServer::post("/api/restore", rb);
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(has(r.body, "passwords not restored"));
+  TEST_ASSERT_EQUAL_INT(4, cfg.relay_count);
+  TEST_ASSERT_EQUAL_INT(520, cfg.spoof_v_tenth);
+  TEST_ASSERT_EQUAL_INT(RELAY_ALL_ON, cfg.relay_mode);
+  // Non-backup JSON is refused.
+  r = admin_post("/api/restore", "{\"nrel\":2}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "not a bms-tester backup"));
+}
+
+void test_reset_keepwifi(void) {
+  fresh_env();
+  admin_post("/api/admin", "{\"ap_ssid\":\"Bench-AP\"}");
+  WebServer::post("/api/config", "{\"step\":4321}");
+  web_tick(g_mock_millis + 2000);
+  // Reset-4: settings wiped, identity kept, reboot follows.
+  WebServer::Resp r =
+      admin_post("/api/admin", "{\"cmd\":\"reset_keepwifi\"}");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(g_restart_requested);
+  cfg = Bms2Config();  // simulated reboot: RAM wiped, NVS reloaded
+  web_setup(ctx);
+  TEST_ASSERT_EQUAL_INT(250, cfg.step_delay_ms);  // settings: defaults
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"ap_ssid\":\"Bench-AP\""));  // kept
+}
+
+void test_bootcount_info(void) {
+  fresh_env();  // boot #1 (NVS was cleared)
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"boot\":1"));
+  TEST_ASSERT_TRUE(has(r.body, "\"reset\":\"power-on\""));
+  web_setup(ctx);  // simulated reboot -> boot #2
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"boot\":2"));
+  // Reset-99 zeroes the counter without rebooting.
+  r = admin_post("/api/admin", "{\"cmd\":\"bootcount_reset\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"boot\":0"));
+  // Reset reason follows the (stubbed) hardware cause.
+  g_esp_reset_reason_code = ESP_RST_PANIC;
+  web_setup(ctx);
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"reset\":\"panic\""));
+  g_esp_reset_reason_code = ESP_RST_POWERON;
+}
+
+void test_info_fields(void) {
+  fresh_env();
+  WebServer::Resp r = WebServer::get("/api/state");
+  // Tasmota Status 1/2/4/5 surface, bench edition.
+  for (const char *k : {"\"variant\":\"8mb\"", "\"flash_kb\":8192",
+                        "\"sketch_free\":", "\"heap\":", "\"psram\":",
+                        "\"uptime_s\":", "\"rssi\":", "\"sta_ip\":",
+                        "\"sta_mac\":", "\"ota_url\":", "\"ota_int_h\":"}) {
+    TEST_ASSERT_TRUE(has(r.body, k));
+  }
+}
+
+void test_ota_url_flow(void) {
+  fresh_env();
+  // Garbage URL refused with a named error.
+  WebServer::Resp r = admin_post("/api/ota", "{\"ota_url\":\"ftp://x/y.txt\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  // Good URL + cadence persist.
+  r = admin_post("/api/ota",
+                 "{\"ota_url\":\"http://192.168.1.9:8000/n16r8-firmware.bin\","
+                 "\"ota_int_h\":6}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  web_tick(g_mock_millis + 2000);
+  web_setup(ctx);
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "192.168.1.9"));
+  TEST_ASSERT_TRUE(has(r.body, "\"ota_int_h\":6"));
+  // URL upgrade needs STA online first (enable + reboot + link)...
+  admin_post("/api/admin", "{\"sta_en\":1,\"sta_ssid\":\"Hot\"}");
+  web_tick(g_mock_millis + 2000);
+  web_setup(ctx);
+  r = admin_post("/api/ota", "{\"cmd\":\"url_upgrade\"}");
+  TEST_ASSERT_TRUE(has(r.body, "STA offline"));
+  TEST_ASSERT_FALSE(ota_install_called);
+  // ...then it fires the shared install path.
+  g_wifi_status = WL_CONNECTED;
+  web_tick(g_mock_millis);
+  r = admin_post("/api/ota", "{\"cmd\":\"url_upgrade\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(ota_install_called);
+}
+
+void test_mdns_follows_wifi(void) {
+  fresh_env();
+  TEST_ASSERT_TRUE(g_mdns_up);  // advertised with the AP
+  web_wifi_set(false);          // kill switch drops everything
+  TEST_ASSERT_FALSE(g_mdns_up);
+  web_wifi_set(true);
+  TEST_ASSERT_TRUE(g_mdns_up);  // release brings it back
+}
+
 void run_all() {
   RUN_TEST(test_root_open_dashboard);
   RUN_TEST(test_state_public_no_secrets);
@@ -613,6 +935,21 @@ void run_all() {
   RUN_TEST(test_chase_runs_single);
   RUN_TEST(test_ota_api);
   RUN_TEST(test_update_upload);
+  RUN_TEST(test_update_rejects);
+  RUN_TEST(test_update_pass_order_independent);
+  RUN_TEST(test_spoof_save_only);
+  RUN_TEST(test_config_loop_hold_reject);
+  RUN_TEST(test_config_mode_switch_needs_idle);
+  RUN_TEST(test_config_pause_floor);
+  RUN_TEST(test_seq_deadband_api);
+  RUN_TEST(test_sta_test_flow);
+  RUN_TEST(test_console_verbs);
+  RUN_TEST(test_backup_restore);
+  RUN_TEST(test_reset_keepwifi);
+  RUN_TEST(test_bootcount_info);
+  RUN_TEST(test_info_fields);
+  RUN_TEST(test_ota_url_flow);
+  RUN_TEST(test_mdns_follows_wifi);
   RUN_TEST(test_sta_uplink);
   RUN_TEST(test_save_coalescing);
   RUN_TEST(test_reboot_flushes_pending_save);

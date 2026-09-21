@@ -1,4 +1,4 @@
-# test/ — automated tests (103 passing: 77 via pio + 26 web via g++)
+# test/ — automated tests (134 passing: 93 via pio + 41 web via g++)
 
 Each subdirectory is an independent Unity test app (PlatformIO convention),
 also compilable with plain `g++` (see `run_tests.sh` fallback).
@@ -15,22 +15,32 @@ also compilable with plain `g++` (see `run_tests.sh` fallback).
 - `test_stress/` (4) — exhaustive 1,785 single-byte corruptions (zero false
   frames), 10 M-byte fuzz (zero emits), cadence×register sweep, 5,000-frame
   bus saturation.
-- `test_relay/` (24) — sequencer: boot OFF, sequential stepping, per-mode ms
-  holds, ALL-ON, chase wave, relay count scoping, loop/pause/limit, reverse
-  direction, ALL-ON stagger, QC counters, all 3 button behaviors, manual
-  override, polarity helper, millis rollover, debounce edges.
+- `test_relay/` (36) — sequencer: boot OFF, sequential stepping, per-mode
+  holds, ALL-ON (+ default 50 ms stagger ramp), chase wave + 20 ms
+  break-before-make gaps (bitmask weight 1 lit / 0 in gap), relay count
+  scoping + live shrink/regrow safety, loop/pause/limit, reverse direction,
+  QC counters, all 3 button behaviors, manual override (+ force-in-chase
+  idles the wave, RESTART preserves forces), post-stop start dead-band,
+  mid-cycle edit latching, polarity helper, millis rollover, debounce edges.
+- `test_upload/` (5) — Tasmota-grade update gates: explicit sketch budget,
+  per-variant asset pick, exact-basename filename match (suffix-trap proof),
+  image-head magic + flash-size-vs-chip matrix, error vocabulary coverage.
 - `test_spoof/` (11) — stage-1 ("100") + stage-2 (88.8/88.8/88.8/188) frame
   bytes, checksum self-consistency, custom values, `SpoofPlan` stage
   timing/handoff/cancel/retrigger/rollover, legacy window (frozen) timing.
 - `test_ota/` (6) — version compare (incl. `2.10 > 2.9`), per-variant asset
   pick, download-URL build + tag sanitizing, auto-check gate matrix.
-- `test_web/` (26, g++-only) — real `web_ui.cpp` on host stubs (`Arduino.h`,
-  `WiFi.h` + STA, `WebServer.h` + request/upload drivers, `Preferences.h` +
-  commit counter, `Update.h`, `DNSServer.h`): per-request admin password
-  gating, WiFi kill switch, NVS v2→v3 migration,
-  validation/clamping, deferred-save coalescing + reboot flush, relay count /
-  chase-sweeps / spoof-pin / loop / labels / counters / STA / OTA (+install) /
-  `/update` upload handlers, POST fuzz, factory reset, portal redirects.
+- `test_web/` (41, g++-only) — real `web_ui.cpp` on host stubs (`Arduino.h`,
+  `WiFi.h` + STA/RSSI/IP, `WebServer.h` + request/upload drivers incl.
+  pass-last order, `Preferences.h` + commit counter, `Update.h` + single-end
+  + failure injection, `ESPmDNS.h`, `esp_system.h`): per-request admin
+  password gating, WiFi kill switch + mDNS, NVS v2→v3 migration,
+  validation/clamping + named rejects (R9/R10), deferred-save coalescing +
+  reboot flush, relay count / chase-sweeps / spoof-pin+save / loop / labels /
+  counters / STA + one-shot test / OTA (+install, URL, interval) / Tasmota
+  `/update` upload (gates, rejects, order-independence) / console verbs /
+  backup-restore (secrets never exported) / keep-WiFi reset + bootcount /
+  info fields, POST fuzz, factory reset, portal redirects.
 - `test_system/` (3) — `select_reply()` matrix (golden/stage-1/stage-2/
   disabled/silent paths) + 24 h office-day sim: 86,400 polls, per-reply
   checksum validation, exact 5 s + 10 s spoof stages, write-silence mid-spoof,
@@ -38,7 +48,8 @@ also compilable with plain `g++` (see `run_tests.sh` fallback).
   cycle/limit/counter proof.
 
 Plus `tools/check_web_contract.py` — dashboard JS ↔ firmware route/key gate
-(incl. dynamic `lblN` keys, `/api/ota`, `/update` form).
+(incl. dynamic `lblN` keys, `/api/ota`, `/update` form, new v2.4 endpoints,
+per-mode element ids, single-`Update.end(true)` + no-`SIZE_UNKNOWN` rules).
 
-Run: `pio test -e native` (70: all except `test_web`) or `sh ../run_tests.sh`
-(full 103: g++ suites + contract + `test_web` + `test_system` + soak).
+Run: `pio test -e native` (93: all except `test_web`) or `sh ../run_tests.sh`
+(full 134: g++ suites + contract + `test_web` + `test_system` + soak).

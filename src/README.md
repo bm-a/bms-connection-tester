@@ -2,22 +2,26 @@
 
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
-  adaptive tracker, canned frames, `FW_VERSION` (`"2.3.1"`).
+  adaptive tracker, canned frames, `FW_VERSION` (`"2.4"`).
 - `relay_ctrl.h` / `relay_ctrl.cpp` — hardware-independent bench add-on:
   8-relay sequencer (sequential/all-ON/chase, relay count, 3 button behaviors,
-  per-mode ms holds, loop/pause/limit, stagger, direction, QC counters),
+  per-mode holds/sweeps, loop/pause/limit, stagger, direction, QC counters,
+  chase break-before-make, post-stop dead-band, run-register snapshots),
   debounced inputs, 2-stage spoof plan + frame builder, NVS-backed config
   struct. Host-tested (`test_relay`, `test_spoof`).
+- `fw_upload.h` — hardware-independent update gates (Tasmota rules: explicit
+  sketch budget, exact variant-asset match, image-head check, one error
+  vocabulary). Host-tested (`test_upload`); enforced by both update paths.
 - `ota.h` / `ota.cpp` — hardware-independent OTA decision logic: version
   compare, per-variant asset pick, download URL, auto-check gate.
   Host-tested (`test_ota`); network I/O lives in `main.cpp` (ESP-only).
-- `web_ui.h` / `web_ui.cpp` — ESP-only: always-on AP + captive portal, no login wall (admin password per sensitive request)
-  (RAM session + persistent NVS slots), dashboard
-  (relays/sequence/labels/spoof/OTA/admin), NVS v3 load/save + v2 migration,
-  optional STA uplink, manual `/update` upload. Host-tested on stubs
-  (`test_web`).
+- `web_ui.h` / `web_ui.cpp` — ESP-only: always-on AP + captive portal, no login wall (admin password per sensitive request),
+  per-mode dashboard (relays/sequence/labels/spoof/firmware/admin/info/console),
+  NVS v3 load/save + v2 migration, STA uplink + one-shot test, Tasmota-grade
+  manual `/update` upload, config backup/restore, custom OTA URL, mDNS.
+  Host-tested on stubs (`test_web`).
 - `main.cpp` — Arduino sketch: frozen RS485 RX → parse → reply path, 250 ms
-  LED eval, `STATUS?` (`GREEN 2.3.1` / `RED 2.3.1`), plus relay/web/spoof/OTA
+  LED eval, `STATUS?` (`GREEN 2.4` / `RED 2.4`), plus relay/web/spoof/OTA
   handling (all non-blocking, RS485 keeps priority).
 
 Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11, onboard RGB=48 (WS2812,

@@ -10,6 +10,14 @@ void RelaySequencer::begin(const Bms2Config *cfg) {
   step_at_ = 0;
   hold_until_ = 0;
   pause_until_ = 0;
+  stop_at_ = 0;
+  stop_seen_ = false;  // boot: no stop yet, first start always allowed
+  run_mode_ = RELAY_SEQUENTIAL;
+  run_n_ = RELAY_COUNT;
+  run_gap_ = 500;
+  bbm_pending_ = false;
+  bbm_step_ = 0;
+  bbm_until_ = 0;
   cycles_done_ = 0;
   acts_ = 0;
   for (uint8_t i = 0; i < RELAY_COUNT; i++) {
@@ -44,23 +52,34 @@ uint16_t RelaySequencer::stepGap() const {
   return cfg_->step_delay_ms;
 }
 
-void RelaySequencer::start(unsigned long now) {
-  if (!cfg_) return;
+bool RelaySequencer::start(unsigned long now) {
+  if (!cfg_) return false;
+  // R12: mandatory all-OFF dead-band after any stop (armatures releasing).
+  // Unsigned subtraction: rollover-safe (R13). begin() clears stop_seen_,
+  // so boot auto-start is always allowed.
+  if (stop_seen_ && (now - stop_at_) < RELAY_STOP_DEADBAND_MS) return false;
   for (uint8_t i = 0; i < RELAY_COUNT; i++) seq_[i] = false;
+  bbm_pending_ = false;
   step_ = 0;
-  uint8_t n = effCount();
+  // R11: latch the run registers — mid-cycle edits apply next cycle.
+  run_mode_ = cfg_->relay_mode;
+  run_n_ = effCount();
+  run_gap_ = stepGap();
+  uint8_t n = run_n_;
+  uint16_t gap = run_gap_;
   // Step gap: ALL-ON with stagger ramps like sequential (inrush limiting).
-  uint16_t gap = stepGap();
-  bool ramp_all = (cfg_->relay_mode == RELAY_ALL_ON &&
+  bool ramp_all = (run_mode_ == RELAY_ALL_ON &&
                    cfg_->allon_stagger_ms > 0);
-  if (cfg_->relay_mode == RELAY_ALL_ON && !ramp_all) {
+  if (run_mode_ == RELAY_ALL_ON && !ramp_all) {
     for (uint8_t i = 0; i < n; i++) lightStep(i);
     enterHold(now);
-    return;
+    return true;
   }
-  if (cfg_->relay_mode == RELAY_CHASE) {
+  if (run_mode_ == RELAY_CHASE) {
     // Chase: single lit relay sweeping across R1..R(n), wraps until hold
     // expires (or forever when hold is 0). Button modes still apply.
+    // First relay lights immediately; every later step goes through the
+    // all-OFF BBM gap (R15).
     for (uint8_t i = 0; i < RELAY_COUNT; i++) seq_[i] = false;
     lightStep(0);
     step_ = 1 % n;
@@ -68,7 +87,7 @@ void RelaySequencer::start(unsigned long now) {
     phase_ = PH_CHASE;
     uint32_t h = holdForMode();
     hold_until_ = h > 0 ? now + h : 0;
-    return;
+    return true;
   }
   // Sequential (or staggered ALL-ON): first relay immediately, rest on grid.
   lightStep(0);
@@ -76,6 +95,7 @@ void RelaySequencer::start(unsigned long now) {
   step_at_ = now + gap;
   if (step_ >= n) enterHold(now);
   else phase_ = PH_RUNNING;
+  return true;
 }
 
 void RelaySequencer::enterHold(unsigned long now) {
@@ -95,10 +115,13 @@ uint32_t RelaySequencer::holdForMode() const {
   return cfg_->hold_seq_ms;
 }
 
-void RelaySequencer::stopAll() {
+void RelaySequencer::stopAll(unsigned long now) {
   phase_ = PH_IDLE;
   step_ = 0;
   hold_until_ = 0;
+  bbm_pending_ = false;
+  stop_at_ = now;
+  stop_seen_ = true;  // arms the R12 start dead-band
   for (uint8_t i = 0; i < RELAY_COUNT; i++) {
     seq_[i] = false;
     forced_[i] = false;
@@ -108,8 +131,31 @@ void RelaySequencer::stopAll() {
 
 void RelaySequencer::setForced(uint8_t i, bool on) {
   if (i >= RELAY_COUNT) return;
+  if (phase_ == PH_CHASE) {
+    // R7: forcing during CHASE would light two relays at once (the wave +
+    // the tile), breaking the one-at-a-time invariant on a shared 48 V
+    // harness. Idle the wave first; the requested force is then the ONLY
+    // relay ON. Counters are preserved.
+    phase_ = PH_IDLE;
+    step_ = 0;
+    hold_until_ = 0;
+    bbm_pending_ = false;
+    for (uint8_t k = 0; k < RELAY_COUNT; k++) seq_[k] = false;
+  }
   forced_[i] = true;
   forced_state_[i] = on;
+}
+
+// R8/R22: relay-count change safety. Drops forces outside [0,new_count)
+// (a shrink/regrow must never resurrect a stale ON with no operator action)
+// and clamps the in-flight step pointer.
+void RelaySequencer::countChanged() {
+  uint8_t n = effCount();
+  for (uint8_t i = n; i < RELAY_COUNT; i++) {
+    forced_[i] = false;
+    forced_state_[i] = false;
+  }
+  if (step_ >= n && n > 0) step_ = (uint8_t)(n - 1);
 }
 
 void RelaySequencer::clearForced() {
@@ -121,31 +167,47 @@ void RelaySequencer::clearForced() {
 
 void RelaySequencer::tick(unsigned long now) {
   if (!cfg_ || phase_ == PH_IDLE) return;
-  uint8_t n = effCount();
-  uint16_t gap = stepGap();
+  uint8_t live_n = effCount();  // live count: SHRINK is safety, acts now
+  // R22: same-tick drop — a shrink kills out-of-range outputs immediately,
+  // even if cfg was edited without countChanged().
+  for (uint8_t i = live_n; i < RELAY_COUNT; i++) seq_[i] = false;
   if (phase_ == PH_RUNNING) {
-    // Catch up missed steps (unsigned math is rollover-safe).
-    while (step_ < n && (long)(now - step_at_) >= 0) {
+    // Catch up missed steps (unsigned math is rollover-safe, R13).
+    while (step_ < run_n_ && step_ < live_n &&
+           (long)(now - step_at_) >= 0) {
       lightStep(step_);
       step_++;
-      step_at_ += gap;
+      step_at_ += run_gap_;
     }
-    if (step_ >= n) enterHold(now);
+    if (step_ >= run_n_ || step_ >= live_n) enterHold(now);
   } else if (phase_ == PH_CHASE) {
-    // Advance the single lit relay; wrap R(n) -> R1. Hold expiry (if any)
-    // stops the sweep; hold 0 = sweep forever until stopped.
-    while ((long)(now - step_at_) >= 0) {
+    // R15 break-before-make: each advance parks all-OFF for CHASE_BBM_MS
+    // (release is slower than pull-in), then lights exactly one relay.
+    // Wave bitmask weight is 1 while lit, 0 inside the gap (R19).
+    // Property: one grid step per tick() call max (a pending gap blocks
+    // catch-up). Sparse ticks slow the wave; they never skip or double-lit.
+    if (bbm_pending_ && (long)(now - bbm_until_) >= 0) {
+      lightStep(bbm_step_);
+      bbm_pending_ = false;
+    }
+    while (!bbm_pending_ && (long)(now - step_at_) >= 0) {
       for (uint8_t i = 0; i < RELAY_COUNT; i++) seq_[i] = false;
-      lightStep(step_);
+      bbm_step_ = step_;
+      if (bbm_step_ >= run_n_) bbm_step_ = 0;
+      if (bbm_step_ >= live_n) bbm_step_ = 0;
       step_++;
-      if (step_ >= n) step_ = 0;
-      step_at_ += gap;
+      if (step_ >= run_n_) step_ = 0;
+      bbm_until_ = now + CHASE_BBM_MS;
+      bbm_pending_ = true;
+      step_at_ += run_gap_;
     }
     if (hold_until_ != 0 && (long)(now - hold_until_) >= 0) cycleDone(now);
   } else if (phase_ == PH_HOLD) {
     if (hold_until_ != 0 && (long)(now - hold_until_) >= 0) cycleDone(now);
   } else if (phase_ == PH_PAUSE) {
     // Loop rest window: restart the cycle when the pause elapses.
+    // The pause floor (>= 500 ms all-OFF, R6) already satisfies the R12
+    // dead-band, and stop_seen_ predates it, so start() is accepted.
     if ((long)(now - pause_until_) >= 0) start(now);
   }
 }
@@ -160,7 +222,7 @@ void RelaySequencer::cycleDone(unsigned long now) {
     enterPause(now);
     return;
   }
-  stopAll();
+  stopAll(now);
 }
 
 uint8_t RelaySequencer::effCount() const {

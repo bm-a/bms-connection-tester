@@ -9,7 +9,7 @@
 ## 2. Open and configure
 1. Open `bms_connection_tester.ino` (all tabs open automatically:
    `bms_protocol.*` responder core, `relay_ctrl.*` sequencer + spoof,
-   `web_ui.*` dashboard, `ota.*` update logic).
+   `web_ui.*` dashboard, `ota.*` update logic, `fw_upload.h` update gates).
 2. Tools → Board → **“ESP32S3 Dev Module”**.
 3. Tools → USB CDC On Boot → **Enabled**.
 4. Tools → Upload Speed → **921600**.

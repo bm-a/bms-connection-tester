@@ -12,6 +12,9 @@
 inline int g_wifi_status = WL_DISCONNECTED;
 inline bool g_wifi_begun = false;
 inline int g_wifi_mode = WIFI_AP;
+inline long g_wifi_rssi = -60;
+inline std::string g_wifi_ip = "192.168.43.12";
+inline std::string g_wifi_mac = "AA:BB:CC:DD:EE:FF";
 
 struct WiFiClass {
   void mode(int m) { g_wifi_mode = m; }
@@ -21,5 +24,8 @@ struct WiFiClass {
   void begin(const char *, const char *) { g_wifi_begun = true; }
   int status() { return g_wifi_status; }
   void disconnect(bool = false) { g_wifi_begun = false; }
+  long RSSI() { return g_wifi_rssi; }
+  IPAddress localIP() { return IPAddress(192, 168, 43, 12); }
+  String macAddress() { return String(g_wifi_mac.c_str()); }
 };
 static WiFiClass WiFi;

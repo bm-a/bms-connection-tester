@@ -29,9 +29,13 @@ enum ButtonMode : uint8_t {
 
 // Persistent config (stored in NVS by web_ui; plain struct here for tests).
 struct Bms2Config {
-  uint16_t step_delay_ms = 500;   // sequential gap R(n) -> R(n+1)
+  // v2.4 timing floors (R4/R5/R6): step >= 100 ms (bounce + ADC settle),
+  // stagger 20..1000 ms default 50 (never slam 8 contactors at once),
+  // pause 500..60000 ms default 2000 (coil cooling between looped cycles).
+  uint16_t step_delay_ms = 250;   // sequential gap R(n) -> R(n+1)
   // v2.3 per-mode holds (ms each; 0 = stay ON forever until stopped).
   // Sequential wants a short settle; ALL-ON burn-in wants a long soak.
+  // UI shows one hold per mode (UI-only dedup, R2); both stay in NVS.
   uint32_t hold_seq_ms = 30000;
   // v2.3.1 chase auto-hold: full sweeps (0 = sweep forever until stopped).
   // Effective hold = sweeps x relay-count x step, recomputed at start(), so
@@ -43,9 +47,9 @@ struct Bms2Config {
   uint8_t button_mode = BTN_HOLD_ABORT;
   // v2.3 industrial pack (all additive; defaults = v2.0 behavior).
   bool loop_enabled = false;      // repeat the cycle until stopped/limit
-  uint32_t cycle_pause_ms = 5000;  // rest between looped cycles (coil cooling)
+  uint32_t cycle_pause_ms = 2000;  // rest between looped cycles (coil cooling)
   uint16_t cycle_limit = 0;       // 0 = forever, else stop after N cycles
-  uint16_t allon_stagger_ms = 0;  // 0 = true at-once; >0 = ramp gap (inrush)
+  uint16_t allon_stagger_ms = 50;  // 0 = true at-once; >0 = ramp gap (inrush)
   uint8_t seq_dir = 0;            // 0 = R1->Rn, 1 = Rn->R1
   bool boot_autostart = false;    // start the configured mode on boot
   char relay_label[RELAY_COUNT][12];  // dashboard tile names (NVS, QC labels)
@@ -100,14 +104,34 @@ inline uint8_t sanitize_spoof_pin(uint8_t p) {
   }
 }
 
+// v2.4 relay safety constants (R12/R15): fixed, NOT user fields.
+// STOP_DEADBAND: all-OFF settle after any stop before a start is accepted
+// (armatures still releasing; also covers loop PAUSE->restart implicitly).
+// CHASE_BBM: break-before-make — release is slower than pull-in, so the wave
+// parks all-OFF this long between steps; never two relays ON at once.
+#define RELAY_STOP_DEADBAND_MS 500u
+#define CHASE_BBM_MS 20u
+
 // ---- 8-relay sequencer: pure millis() state machine, no delay() ----
 class RelaySequencer {
  public:
   void begin(const Bms2Config *cfg);
-  void start(unsigned long now);     // button press / web START
-  void stopAll();                    // abort now: everything OFF, forces cleared
-  void setForced(uint8_t i, bool on);// web per-relay manual override
+  // Button press / web START. Restarts from R1. Returns false when refused
+  // by the post-stop dead-band (R12); true otherwise. Manual forces are
+  // preserved across restarts (R14) — only stopAll() clears them.
+  bool start(unsigned long now);
+  // Abort now: everything OFF, forces cleared, arms the start dead-band.
+  // Counters (cycles/actuations) are preserved for QC.
+  void stopAll(unsigned long now);
+  // Web per-relay manual override. During CHASE the running wave is idled
+  // first (R7): the requested force is then the ONLY relay ON.
+  void setForced(uint8_t i, bool on);
   void clearForced();
+  // Relay-count safety after an NVS/UI change (R8/R22): drop forces outside
+  // [0,new_count), clamp the in-flight step pointer. tick() additionally
+  // kills sequence outputs beyond the live count every pass (same-tick drop
+  // even when cfg is edited without calling here).
+  void countChanged();
   void tick(unsigned long now);      // advance stepping + hold expiry
   bool relayOn(uint8_t i) const;     // logical state (sequence OR forced)
   bool running() const { return phase_ != PH_IDLE; }
@@ -127,6 +151,17 @@ class RelaySequencer {
   unsigned long step_at_ = 0;        // when step_ may switch
   unsigned long hold_until_ = 0;     // 0 = forever
   unsigned long pause_until_ = 0;    // v2.3 loop rest window
+  unsigned long stop_at_ = 0;        // v2.4 last stopAll (dead-band, R12)
+  bool stop_seen_ = false;           // v2.4: dead-band only after a real stop
+  // v2.4 run-register snapshot (R11): timing latched at cycle start so
+  // mid-cycle edits apply next cycle. Count SHRINK stays live (safety).
+  uint8_t run_mode_ = RELAY_SEQUENTIAL;
+  uint8_t run_n_ = RELAY_COUNT;
+  uint16_t run_gap_ = 500;
+  // v2.4 chase BBM state (R15): pending step lighting after the all-OFF gap.
+  bool bbm_pending_ = false;
+  uint8_t bbm_step_ = 0;
+  unsigned long bbm_until_ = 0;
   unsigned long cycles_done_ = 0;    // v2.3 completed cycles (hold expiries)
   unsigned long acts_ = 0;           // v2.3 relay turn-ON edges (QC counter)
   bool seq_[RELAY_COUNT] = {false};
@@ -148,11 +183,11 @@ inline void handle_button_press(RelaySequencer &seq, const Bms2Config &cfg,
       if (!seq.running()) seq.start(now);
       break;
     case BTN_RESTART:
-      seq.start(now);  // start() always restarts from R1
+      seq.start(now);  // start() always restarts from R1; forces kept (R14)
       break;
     case BTN_HOLD_ABORT:
     default:
-      if (seq.running()) seq.stopAll();
+      if (seq.running()) seq.stopAll(now);
       else seq.start(now);
       break;
   }

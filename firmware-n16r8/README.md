@@ -1,13 +1,14 @@
-# Ready-to-flash binaries — v2.3 (ESP32-S3 N16R8, 16 MB flash + OPI PSRAM)
+# Ready-to-flash binaries — v2.4 (ESP32-S3 N16R8, 16 MB flash + OPI PSRAM)
 
-Built 2026-09-21 from this exact source (`pio run -e s3-n16r8`,
+Built 2026-09-22 from this exact source (`pio run -e s3-n16r8`,
 Xtensa GCC 8.4.0, Arduino 2.0.x). Same firmware logic as `firmware/`,
 only the flash/PSRAM map differs. Use for N16R8 boards (16 MB flash,
 8 MB octal PSRAM, onboard WS2812 on GPIO48).
 
-Includes the v2.3 relay bench (relay count, chase wave, per-mode ms holds,
-loop/pause/limit, stagger, direction, labels, counters, autostart) +
-always-on AP dashboard (`BMS-Tester`, captive portal, persistent logins) +
+Includes the v2.4 bench (Tasmota-grade update path, per-mode relay menu with
+chase break-before-make + stop dead-band, spoof save-only, console, config
+backup/restore, custom OTA URL, STA uplink test, info card, mDNS) +
+always-on AP dashboard (`BMS-Tester`, captive portal, no login wall) +
 2-stage spoof (100 first, then 88.8/188) + manual/auto OTA. v1.x responder
 behavior frozen.
 
@@ -27,13 +28,13 @@ Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher
 load the three files at the addresses above, flash, done.
 
 ## Verify
-- `firmware.bin` (955,392 bytes)
-  SHA-256: `0238aa58db143f514b11a5543bbacc9b85883329376b1a95918252e6c25d1ad5`
+- `firmware.bin` (1,001,568 bytes)
+  SHA-256: `8d5f0f0cf410c6000b5c8b63226f9ddcea9e4b7dcec6398ec782342d55c13b9e`
 - `bootloader.bin` (15,104 bytes)
   SHA-256: `1776e4dd896a69d0a5c2e79957b0e2a88aa4129b1381d6478683515a1f6af343`
 - `partitions.bin` (3,072 bytes)
   SHA-256: `bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce`
-- Golden reply bytes, `2.3.1` version, `BMS-Tester` AP name and dashboard
+- Golden reply bytes, `2.4` version, `BMS-Tester` AP name and dashboard
   strings verified byte-present inside `firmware.bin`.
 
 Behavior: identical to the 8 MB build — boots red, relays OFF, AP up,
