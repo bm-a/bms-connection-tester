@@ -3,6 +3,42 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.3] — 2026-09-21
+### Added
+- Relay count (first N of 8 participate, web `Relays`, beyond-N forced OFF
+  and greyed out) + chase-wave mode (single lit relay sweeping R1→Rn, wraps;
+  3rd `rmode`, all 3 button behaviors apply).
+- 2-stage spoof: stage 1 ("100" realistic full pack, 5 s) then stage 2
+  (88.8/88.8/88.8/188 pattern, 10 s), then auto-revert — both stages fully
+  editable (values + seconds each) from the web or pin trigger.
+- Per-mode holds in milliseconds (`hseq`/`hch`/`hall`, 0 = forever each;
+  ALL-ON default 5 min soak). The old seconds `hold` is gone (it caused the
+  "relays won't turn off" confusion at 0).
+- Industrial pack: loop + inter-cycle pause + cycle limit (burn-in),
+  ALL-ON stagger (inrush ramp), direction fwd/rev, 8 relay labels (QC names
+  on tiles), cycle + actuation counters on the dashboard, boot auto-start.
+- Persistent logins: "remember this device" (30-day NVS token slots ×4,
+  reboot-safe); HttpOnly + SameSite=Lax cookies.
+- OTA: manual `/update` firmware upload (works fully offline) + automatic
+  GitHub-release checks/installs when the optional STA uplink (phone hotspot)
+  is online. AP stays always-on regardless; auto-gate requires idle bench +
+  60 s silent bus + no running sequence.
+- Live firmware version on the dashboard (from `/api/state`, never stale).
+- 38 new tests: **105/105 passing** (70 pio-native incl. new `test_ota`,
+  29 web, contract gate). NVS `bms2` v3 with v2→v3 migration tested
+  (seconds×1000 fanned to all holds, singles→stage 2, 100-first order).
+### Changed
+- Config saves no longer stall the loop: handlers mark dirty, `web_tick()`
+  commits once after 1.5 s idle (3 rapid saves = 1 flash write, proven by
+  test); reboot/reset flush synchronously first.
+- `FW_VERSION`/`STATUS?` report `2.3`.
+### Fixed
+- Host-stub fidelity bug #4: single-char `String::indexOf(' ')` returns
+  garbage on the stub (truncated auth cookies depending on token content) —
+  cookie parsing now uses the `const char*` overload (caught by 2 web tests).
+- Dashboard `handle_state` statement terminated early by a stray `;`, dropping
+  the spoof keys from `/api/state` (caught by 2 web tests before release).
+
 ## [v2.2] — 2026-09-24
 ### Fixed
 - Web page now actually opens on phones: captive portal (DNS catch-all to

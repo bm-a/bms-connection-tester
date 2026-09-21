@@ -1,5 +1,19 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.3] — 2026-09-21
+### Added
+- Relay count (first N of 8) + chase-wave mode (3rd sequence mode) +
+  2-stage spoof (100 first 5 s, then 88.8/88.8/88.8/188 10 s, both editable).
+- Per-mode holds in ms (sequential / chase / ALL-ON soak); industrial pack:
+  loop + pause + cycle limit, ALL-ON stagger, direction, relay labels,
+  cycle/actuation counters, boot auto-start.
+- Persistent logins (remember-me, 30-day NVS slots); OTA via offline
+  `/update` upload or automatic GitHub updates over the optional STA uplink.
+- 38 new tests (**105/105**); NVS `bms2` v3 with tested v2→v3 migration;
+  coalesced config saves (no loop stalls).
+### Changed
+- `FW_VERSION`/`STATUS?` → `2.3`; dashboard version is live from the device.
+
 ## [v2.2] — 2026-09-24
 ### Fixed
 - Login page pops automatically on join (captive portal DNS catch-all +

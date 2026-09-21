@@ -1,7 +1,8 @@
 #pragma once
 #include "relay_ctrl.h"
+#include "ota.h"
 
-// v2.0 web UI: always-on WiFi AP + login + relay/spoof/admin pages + NVS.
+// v2.3 web UI: always-on WiFi AP + login + relay/spoof/admin pages + NVS.
 // ESP-ONLY (needs Arduino WiFi/WebServer/Preferences). Never compiled on host.
 // The v1.x base loop stays untouched — main.cpp just calls web_setup() once
 // and web_tick() every loop; all handlers are short and non-blocking so the
@@ -13,9 +14,11 @@
 struct WebCtx {
   Bms2Config *cfg = nullptr;
   RelaySequencer *seq = nullptr;
-  SpoofWindow *spoof = nullptr;
+  SpoofPlan *spoof = nullptr;    // v2.3: two-stage plan (was SpoofWindow)
   const bool *link_green = nullptr;  // live LED state for the dashboard
-  void (*on_config_changed)() = nullptr;  // rebuild spoof frame + apply
+  void (*on_config_changed)() = nullptr;  // rebuild spoof frames + apply
+  OtaState *ota = nullptr;        // v2.3: OTA status surfaced on dashboard
+  void (*on_ota_check)() = nullptr;  // v2.3: main.cpp performs a check now
 };
 
 // AP defaults (overridden by NVS once saved).
@@ -25,11 +28,14 @@ struct WebCtx {
 
 // NVS namespace + version tag.
 #define WEB_NVS_NS "bms2"
-#define WEB_NVS_VERSION 2
+#define WEB_NVS_VERSION 3
 
 void web_setup(WebCtx &ctx);
 void web_tick(unsigned long now);
 // Long-press fallback (button held 10 s): wipe NVS + reboot. Called by main.
 void web_factory_reset();
+// v2.3: STA uplink state for main.cpp's OTA gate. 0 = off, 1 = connecting,
+// 2 = online (has address; internet assumed when online).
+int web_sta_state();
 
 #endif  // ARDUINO

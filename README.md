@@ -18,10 +18,24 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.2** current · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **67 passing** (52 via `pio test -e native` + 15 web via `sh run_tests.sh`) + 8-day soak |
+| Releases | **v2.3** current · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **105 passing** (70 via `pio test -e native` + 29 web + contract, via `sh run_tests.sh`) + 8-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
+
+## What v2.3 adds (v1.x base still frozen)
+
+- **Relay count + chase wave.** First N of 8 relays participate (beyond-N forced
+  OFF); new CHASE mode sweeps a single lit relay R1→Rn. Per-mode holds in
+  milliseconds (sequential / chase / ALL-ON soak).
+- **2-stage spoof:** stage 1 shows realistic 100/100/100/100 % first, then
+  stage 2 shows the 88.8/88.8/88.8/188 pattern — both stages fully editable.
+- **Industrial pack:** loop + inter-cycle pause + cycle limit (burn-in racks),
+  ALL-ON stagger (inrush ramp), direction fwd/rev, 8 relay labels, cycle +
+  actuation counters, boot auto-start.
+- **Persistent logins** ("remember this device", reboot-safe) + **OTA**
+  (offline `/update` upload + automatic GitHub updates over the optional STA
+  uplink). Config saves no longer stall the loop (coalesced flash writes).
 
 ## What v2.0 adds (v1.x base frozen)
 
@@ -59,7 +73,7 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.2` / `RED 2.2`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.3` / `RED 2.3`.
 - Joining the AP pops the login page automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
@@ -78,25 +92,29 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 ## Verify it
 
 ```sh
-sh run_tests.sh          # full 66: g++ suites + web contract + test_web + soak (always); HIL when attached
-pio test -e native       # 52 Unity tests: checksum, logic, parser, stress, relay, spoof, system
+sh run_tests.sh          # full 105: g++ suites + web contract + test_web + test_ota + soak (always); HIL when attached
+pio test -e native       # 70 Unity tests: checksum, logic, parser, stress, relay, spoof, ota, system
 pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile
 ```
 
-Emulator results for v2.2 (Termux + Debian proot):
-- Native 67/67 (52 pio + 15 web) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
+Emulator results for v2.3 (Termux + Debian proot):
+- Native 105/105 (70 pio + 29 web + contract) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
 - Virtual bus (`sh tools/virtual_bus.sh`): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
 - Dashboard JS: `node --check` clean; JS↔firmware contract gate green.
 - Wokwi: discretes + NeoPixel + 8 relay modules (NO indicators) + buttons;
   `sim.yaml` automation ready (needs `WOKWI_CLI_TOKEN` for headless/CI runs).
-- QEMU-S3: same known Arduino-guest gap (`0x10`/`0x10200C`) — no regression.
+- QEMU-S3: not re-run for v2.3 (proot JIT limitation); known Arduino-guest gap
+  (`0x10`/`0x10200C`) unchanged since v2.1 — firmware never reached, no regression.
 
-`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.1).
+`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.3).
 `firmware-n16r8/firmware.bin` SHA-256: see `firmware-n16r8/README.md`.
 
 ## Versions
 
+- **v2.3** — relay count + chase, 2-stage spoof, per-mode ms holds, industrial
+  pack (loop/pause/limit/stagger/direction/labels/counters/autostart),
+  persistent logins, manual + auto OTA, coalesced saves. 105/105 tests.
 - **v2.2** — captive portal (login page pops on join) + fixed 192.168.4.1.
 - **v2.1** — website reliability: 14 host-executed web tests + contract gate,
   `select_reply()` now host-covered, 24 h office-day sim, Wokwi relay modules
@@ -112,8 +130,8 @@ See [`CHANGELOG.md`](CHANGELOG.md) for full notes.
 
 ## Layout
 
-`src/` firmware (protocol core + relay ctrl + web UI) · `docs/` module + protocol ·
-`test/` 50 Unity tests · `tools/` meter sim, HIL pytest, QEMU script, soak, report ·
+`src/` firmware (protocol core + relay ctrl + web UI + OTA logic) · `docs/` module + protocol ·
+`test/` 105 Unity tests · `tools/` meter sim, HIL pytest, QEMU script, soak, report ·
 `arduino/` IDE sketch · `firmware/` 8 MB binaries · `firmware-n16r8/` N16R8 binaries ·
 `wokwi/` browser sim (relays + buttons) · `captures/` Docklight recordings ·
 `scripts/` Linux/Termux setup · `wiki/` wiki sources · `.github/workflows/` CI.

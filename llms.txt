@@ -14,7 +14,11 @@ Two LEDs report link state: green = valid BMS traffic seen, red = bus silent.
 v2.0 adds an 8-relay sequencer (GPIO 5/6/7/8/9/12/13/14, 12 V module, own
 supply), a button (GPIO15, 3 behaviors + 10 s factory reset), a spoof trigger
 (GPIO21: 88.8 V/A/C + 188 % on 0x03 for 10 s), and an always-on AP web
-dashboard with admin login + NVS persistence. v1.x responder core frozen.
+dashboard with admin login + NVS persistence. v2.2 adds a captive portal
+(login pops on join) + fixed 192.168.4.1. v2.3 adds relay count + chase wave,
+2-stage spoof (100 first, then 88.8/188), per-mode ms holds, industrial pack
+(loop/pause/limit, stagger, direction, labels, counters, autostart),
+persistent logins, and manual + automatic OTA. v1.x responder core frozen.
 
 Also known as / search terms: JBD BMS emulator, JBD BMS simulator, Xiaoxiang
 BMS tester, smart BMS responder, RS485 BMS spoof, e-rickshaw meter tester,
@@ -37,15 +41,16 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.2` / `RED 2.2`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.3` / `RED 2.3`.
 
 ## Code map
 
 - `src/bms_protocol.{h,cpp}` — checksum, streaming parser, dispatcher, tracker, canned frames (FROZEN since v1.x).
-- `src/relay_ctrl.{h,cpp}` — v2.0 sequencer, debounce, spoof window/builder, config (host-tested).
-- `src/web_ui.{h,cpp}` — v2.0 always-on AP dashboard, login, NVS (ESP-only).
-- `src/main.cpp` — Arduino loop: frozen RS485 path + v2.0 relay/web/spoof handling.
-- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_system` — 52 Unity tests (pio) + `test_web` (14, g++ host stubs) + `tools/check_web_contract.py` gate.
+- `src/relay_ctrl.{h,cpp}` — sequencer (sequential/ALL-ON/chase, count, loop/pause/limit, stagger, direction, counters), debounce, 2-stage spoof plan/builder, config (host-tested).
+- `src/ota.{h,cpp}` — OTA decision logic: version compare, asset pick, download URL, auto-check gate (host-tested, no Arduino deps).
+- `src/web_ui.{h,cpp}` — always-on AP dashboard, login (RAM + persistent NVS slots), NVS v3 + migration, captive portal, STA uplink, manual `/update` upload (ESP-only).
+- `src/main.cpp` — Arduino loop: frozen RS485 path + relay/web/spoof/OTA handling.
+- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_ota|test_system` — 70 Unity tests (pio) + `test_web` (29, g++ host stubs) + `tools/check_web_contract.py` gate.
 - `tools/virtual_meter.py` — host-side meter simulator with scenario modes.
 - `wokwi/sim.yaml` — headless automation scenario (needs WOKWI_CLI_TOKEN).
 - `tools/dut_emu.cpp` + `tools/raw_meter.py` + `tools/virtual_bus.sh` — PTY virtual-bus emulation (no ESP32).
@@ -54,7 +59,10 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 
 ## Verified facts (do not contradict without evidence)
 
-- 67/67 tests pass (incl. original frozen 32); both S3 firmware profiles compile
+- 105/105 tests pass (incl. original frozen 32); both S3 firmware profiles compile
   (Xtensa GCC 8.4.0); golden reply bytes verified inside firmware.bin (SHA-256 in README.md).
 - Reply checksums exclude the echoed command byte (FCDA, not FCD7).
+- The 188 % spoof pattern is proven on-the-wire correct (valid checksum); meters
+  displaying 100 for it are clamping meter-side.
+- Relay idle HIGH / ON-when-LOW = active-LOW default is bench-confirmed.
 - QEMU-S3 cannot boot Arduino guests (flash-model gaps, documented); use Wokwi or hardware.

@@ -7,6 +7,16 @@
 enum { HTTP_ANY = 0, HTTP_GET = 1, HTTP_POST = 2 };
 typedef void (*HandlerFn)();
 
+// Upload states (mirror Arduino-ESP32 HTTPUpload).
+enum { UPLOAD_FILE_START = 1, UPLOAD_FILE_WRITE = 2, UPLOAD_FILE_END = 3 };
+struct HTTPUpload {
+  int status = 0;
+  String filename;
+  const uint8_t *buf = nullptr;
+  size_t currentSize = 0;
+  size_t totalSize = 0;
+};
+
 class WebServer {
  public:
   struct Resp {
@@ -22,9 +32,14 @@ class WebServer {
   void on(const char *path, int method, HandlerFn h) {
     routes()[Key(path, method)] = h;
   }
+  void on(const char *path, int method, HandlerFn h, HandlerFn uh) {
+    routes()[Key(path, method)] = h;
+    uploads()[Key(path, method)] = uh;
+  }
   void onNotFound(HandlerFn h) { notFound() = h; }
   void begin() {}
   void handleClient() {}
+  HTTPUpload &upload() { return cur().upload; }
 
   void send(int code) { respond(code, "", ""); }
   void send(int code, const char *type, const String &content) {
@@ -90,6 +105,52 @@ class WebServer {
     a["plain"] = body;
     return request("POST", path, headers, body, a);
   }
+  // Simulate a multipart firmware upload: START + WRITE chunks + END through
+  // the registered upload handler, then the normal POST done-handler.
+  static Resp upload(const std::string &path, const std::string &filename,
+                     const std::string &data,
+                     const std::map<std::string, std::string> &headers =
+                         std::map<std::string, std::string>()) {
+    Ctx c;
+    c.method = HTTP_POST;
+    c.path = path;
+    c.req_headers = headers;
+    cur() = c;
+    auto uh = uploads().find(Key(path, HTTP_POST));
+    if (uh != uploads().end() && uh->second) {
+      cur().upload.status = UPLOAD_FILE_START;
+      cur().upload.filename = String(filename);
+      cur().upload.buf = nullptr;
+      cur().upload.currentSize = 0;
+      cur().upload.totalSize = data.size();
+      uh->second();
+      for (size_t off = 0; off < data.size(); off += 512) {
+        size_t n = data.size() - off;
+        if (n > 512) n = 512;
+        cur().upload.status = UPLOAD_FILE_WRITE;
+        cur().upload.buf = (const uint8_t *)(data.data() + off);
+        cur().upload.currentSize = n;
+        uh->second();
+      }
+      cur().upload.status = UPLOAD_FILE_END;
+      cur().upload.buf = nullptr;
+      cur().upload.currentSize = 0;
+      uh->second();
+    }
+    auto &rt = routes();
+    auto it = rt.find(Key(path, HTTP_POST));
+    if (it == rt.end()) it = rt.find(Key(path, HTTP_ANY));
+    if (it != rt.end()) {
+      it->second();
+    } else if (notFound()) {
+      notFound()();
+    } else {
+      cur().resp.code = 404;
+    }
+    Resp r = cur().resp;
+    cur() = Ctx();
+    return r;
+  }
 
  private:
   struct Key {
@@ -106,9 +167,14 @@ class WebServer {
     std::string path;
     std::map<std::string, std::string> req_headers;
     std::map<std::string, std::string> args;
+    HTTPUpload upload;
     Resp resp;
   };
   static std::map<Key, HandlerFn> &routes() {
+    static std::map<Key, HandlerFn> m;
+    return m;
+  }
+  static std::map<Key, HandlerFn> &uploads() {
     static std::map<Key, HandlerFn> m;
     return m;
   }

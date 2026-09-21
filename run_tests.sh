@@ -46,6 +46,11 @@ g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/tes
 ./.test_spoof
 rm -f .test_relay .test_spoof
 
+echo "=== native: test_ota (Unity, v2.3 OTA decision logic) ==="
+g++ -std=c++17 -I src -I .unity src/ota.cpp test/test_ota/test_ota.cpp .unity/unity.c -o .test_ota
+./.test_ota
+rm -f .test_ota
+
 echo "=== web contract (dashboard JS vs web_ui.cpp routes/keys) ==="
 python3 tools/check_web_contract.py
 

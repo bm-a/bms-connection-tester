@@ -31,52 +31,60 @@ static bool valid_response(const uint8_t *b, size_t n) {
 
 void test_select_matrix(void) {
   Bms2Config c;
-  uint8_t sf[34];
-  build_spoof_frame(c, sf);
+  uint8_t sfA[34], sfB[34];
+  build_spoof_frame(c, 1, sfA);
+  build_spoof_frame(c, 2, sfB);
   size_t rl = 0;
   const uint8_t *r;
 
-  r = select_reply(mk_frame(0x03, false), c, false, sf, rl);
+  r = select_reply(mk_frame(0x03, false), c, 0, sfA, rl);
   TEST_ASSERT_EQUAL_PTR(BMS_RESPONSE, r);
   TEST_ASSERT_EQUAL_UINT(34, rl);
 
-  r = select_reply(mk_frame(0x03, false), c, true, sf, rl);
-  TEST_ASSERT_EQUAL_PTR(sf, r);
+  r = select_reply(mk_frame(0x03, false), c, 1, sfA, rl);
+  TEST_ASSERT_EQUAL_PTR(sfA, r);
   TEST_ASSERT_EQUAL_UINT(34, rl);
   TEST_ASSERT_TRUE(valid_response(r, rl));
 
+  r = select_reply(mk_frame(0x03, false), c, 2, sfB, rl);
+  TEST_ASSERT_EQUAL_PTR(sfB, r);
+  TEST_ASSERT_TRUE(valid_response(r, rl));
+
   c.spoof_enabled = false;
-  r = select_reply(mk_frame(0x03, false), c, true, sf, rl);
+  r = select_reply(mk_frame(0x03, false), c, 1, sfA, rl);
   TEST_ASSERT_EQUAL_PTR(BMS_RESPONSE, r);
   c.spoof_enabled = true;
 
-  r = select_reply(mk_frame(0x03, false), c, true, nullptr, rl);
+  r = select_reply(mk_frame(0x03, false), c, 1, nullptr, rl);
   TEST_ASSERT_EQUAL_PTR(BMS_RESPONSE, r);  // no frame built yet -> golden
 
-  r = select_reply(mk_frame(0x04, false), c, true, sf, rl);
+  r = select_reply(mk_frame(0x04, false), c, 2, sfB, rl);
   TEST_ASSERT_EQUAL_PTR(BMS_RESPONSE_CELLS, r);
-  r = select_reply(mk_frame(0x05, false), c, true, sf, rl);
+  r = select_reply(mk_frame(0x05, false), c, 2, sfB, rl);
   TEST_ASSERT_EQUAL_PTR(BMS_RESPONSE_NAME, r);
 
-  r = select_reply(mk_frame(0x03, true), c, true, sf, rl);
+  r = select_reply(mk_frame(0x03, true), c, 2, sfB, rl);
   TEST_ASSERT_NULL(r);  // writes silent even mid-spoof
-  r = select_reply(mk_frame(0x09, false), c, true, sf, rl);
+  r = select_reply(mk_frame(0x09, false), c, 2, sfB, rl);
   TEST_ASSERT_NULL(r);  // unknown silent even mid-spoof
 }
 
 void test_office_day_24h(void) {
   Bms2Config c;
   c.step_delay_ms = 500;
-  c.hold_seconds = 120;
+  c.hold_seq_ms = 120000;
+  c.hold_all_ms = 120000;
+  c.relay_count = 8;
   c.relay_mode = RELAY_SEQUENTIAL;
   c.button_mode = BTN_HOLD_ABORT;
-  uint8_t sf[34];
-  build_spoof_frame(c, sf);
+  uint8_t sfA[34], sfB[34];
+  build_spoof_frame(c, 1, sfA);
+  build_spoof_frame(c, 2, sfB);
 
   JbdParser parser;
   PollTracker tracker;
   RelaySequencer seq;
-  SpoofWindow spoof;
+  SpoofPlan spoof;
   seq.begin(&c);
   const uint8_t poll03[7] = {0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77};
   const uint8_t poll04[7] = {0xDD, 0xA5, 0x04, 0x00, 0xFF, 0xFC, 0x77};
@@ -84,10 +92,11 @@ void test_office_day_24h(void) {
   const uint8_t write03[9] = {0xDD, 0x5A, 0x03, 0x02, 0xAA, 0x55,
                               0xFE, 0xFC, 0x77};
 
-  unsigned long polls = 0, replies = 0, spoof_replies = 0, golden03 = 0;
+  unsigned long polls = 0, replies = 0, spoof1 = 0, spoof2 = 0, golden03 = 0;
   unsigned long green_evals = 0, red_evals = 0;
   bool saw_r1_at_8 = false, saw_r8_at_8 = false, saw_off_after_abort = false;
   bool saw_off_after_hold = false, allon_at_18 = false;
+  bool chase_single_at_20 = false, chase_wrap_at_20 = false;
   bool write_got_reply = false;
   JbdFrame f;
 
@@ -95,6 +104,7 @@ void test_office_day_24h(void) {
   const unsigned long T8 = 8UL * 3600UL * 1000UL;
   const unsigned long T12 = 12UL * 3600UL * 1000UL;
   const unsigned long T18 = 18UL * 3600UL * 1000UL;
+  const unsigned long T20 = 20UL * 3600UL * 1000UL;
   unsigned long noise_seed = 0xBEEF;
 
   for (unsigned long now = 0; now < DAY; now += 100) {
@@ -102,9 +112,16 @@ void test_office_day_24h(void) {
     if (now == T8) handle_button_press(seq, c, now);            // start seq
     if (now == T8 + 60000UL) handle_button_press(seq, c, now);  // abort
     if (now == T8 + 3600000UL) handle_button_press(seq, c, now);  // restart
-    if (now == T12) spoof.trigger(now, 10000);                  // web FIRE
+    if (now == T12)
+      spoof.trigger(now, (unsigned long)c.spoof_seconds * 1000UL,
+                    (unsigned long)c.s2_seconds * 1000UL);  // web FIRE
     if (now == T18) {
       c.relay_mode = RELAY_ALL_ON;
+      seq.start(now);
+    }
+    if (now == T20) {
+      c.relay_mode = RELAY_CHASE;
+      c.relay_count = 4;
       seq.start(now);
     }
     // Hourly noise burst (must never emit).
@@ -137,8 +154,9 @@ void test_office_day_24h(void) {
       polls++;
       tracker.note_poll(now);
       size_t rl = 0;
-      const uint8_t *reply =
-          select_reply(f, c, spoof.active(now), sf, rl);
+      uint8_t stage = spoof.stage(now);
+      const uint8_t *sf = (stage == 2) ? sfB : ((stage == 1) ? sfA : nullptr);
+      const uint8_t *reply = select_reply(f, c, stage, sf, rl);
       if (!reply) {
         TEST_FAIL_MESSAGE("read got silence");
         return;
@@ -149,10 +167,16 @@ void test_office_day_24h(void) {
       }
       replies++;
       if (f.reg == 0x03) {
-        if (spoof.active(now)) {
-          spoof_replies++;
-          if (reply != sf) {
-            TEST_FAIL_MESSAGE("spoof window did not serve spoof frame");
+        if (stage == 1) {
+          spoof1++;
+          if (reply != sfA) {
+            TEST_FAIL_MESSAGE("stage 1 did not serve stage-1 frame");
+            return;
+          }
+        } else if (stage == 2) {
+          spoof2++;
+          if (reply != sfB) {
+            TEST_FAIL_MESSAGE("stage 2 did not serve stage-2 frame");
             return;
           }
         } else {
@@ -170,7 +194,7 @@ void test_office_day_24h(void) {
           if (parser.feed(write03[i], f)) whits++;
         if (whits == 1) {
           size_t wrl = 0;
-          if (select_reply(f, c, spoof.active(now), sf, wrl))
+          if (select_reply(f, c, spoof.stage(now), sfB, wrl))
             write_got_reply = true;
         }
       }
@@ -185,6 +209,11 @@ void test_office_day_24h(void) {
     if (now == T8 + 3600000UL + 124000UL)
       saw_off_after_hold = !seq.running() && seq.onCount() == 0;
     if (now == T18 + 100UL) allon_at_18 = seq.onCount() == 8;
+    // v2.3 chase probes (count 4, step 500): single lit relay, wraps R4->R1.
+    if (now == T20 + 100UL)
+      chase_single_at_20 = seq.relayOn(0) && seq.onCount() == 1;
+    if (now == T20 + 2100UL)
+      chase_wrap_at_20 = seq.relayOn(0) && seq.onCount() == 1;
     // 250 ms LED grid.
     if (now % 250UL == 0) {
       if (tracker.active(now))
@@ -196,20 +225,60 @@ void test_office_day_24h(void) {
 
   TEST_ASSERT_EQUAL_UINT(86400, polls);  // one poll per second, all day
   TEST_ASSERT_EQUAL_UINT(polls, replies);
-  TEST_ASSERT_EQUAL_UINT(10, spoof_replies);  // exactly the 10 s window
+  TEST_ASSERT_EQUAL_UINT(5, spoof1);   // stage 1 ("100"): exactly 5 s
+  TEST_ASSERT_EQUAL_UINT(10, spoof2);  // stage 2 (88.8/188): exactly 10 s
   TEST_ASSERT_FALSE(write_got_reply);
   TEST_ASSERT_TRUE(saw_r1_at_8);
   TEST_ASSERT_TRUE(saw_r8_at_8);
   TEST_ASSERT_TRUE(saw_off_after_abort);
   TEST_ASSERT_TRUE(saw_off_after_hold);
   TEST_ASSERT_TRUE(allon_at_18);
+  TEST_ASSERT_TRUE(chase_single_at_20);
+  TEST_ASSERT_TRUE(chase_wrap_at_20);
   TEST_ASSERT_TRUE(green_evals > red_evals * 100);  // green all day
   TEST_ASSERT_TRUE(golden03 > 86000);
+}
+
+void test_loop_cycles(void) {
+  // Burn-in loop: 2 relays, fast steps, 2 pauses, limit 3 -> stops alone.
+  Bms2Config c;
+  c.step_delay_ms = 100;
+  c.hold_seq_ms = 500;
+  c.loop_enabled = true;
+  c.cycle_pause_ms = 300;
+  c.cycle_limit = 3;
+  c.relay_count = 2;
+  RelaySequencer s;
+  s.begin(&c);
+  s.start(0);  // R1
+  s.tick(100);  // R2 on, hold 100 -> 600
+  TEST_ASSERT_EQUAL_UINT(0, s.cyclesDone());
+  s.tick(599);
+  TEST_ASSERT_TRUE(s.running());
+  s.tick(600);  // cycle 1 -> pause till 900
+  TEST_ASSERT_EQUAL_UINT(1, s.cyclesDone());
+  TEST_ASSERT_TRUE(s.running());
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(899);
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  s.tick(900);  // cycle 2 starts with R1
+  TEST_ASSERT_TRUE(s.relayOn(0));
+  s.tick(1000);  // R2, hold 1000 -> 1500
+  s.tick(1500);  // cycle 2 -> pause till 1800
+  TEST_ASSERT_EQUAL_UINT(2, s.cyclesDone());
+  s.tick(1800);  // cycle 3 starts
+  s.tick(1900);  // R2, hold 1900 -> 2400
+  s.tick(2400);  // cycle 3 = limit -> STOP
+  TEST_ASSERT_EQUAL_UINT(3, s.cyclesDone());
+  TEST_ASSERT_FALSE(s.running());
+  TEST_ASSERT_EQUAL_UINT8(0, s.onCount());
+  TEST_ASSERT_EQUAL_UINT(6, s.actuations());  // 2 per cycle x 3
 }
 
 void run_all() {
   RUN_TEST(test_select_matrix);
   RUN_TEST(test_office_day_24h);
+  RUN_TEST(test_loop_cycles);
 }
 
 int main() {

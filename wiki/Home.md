@@ -11,9 +11,11 @@ over RS485, so compatible meters, displays, or hosts can be exercised
   (option A) while still counting them as live traffic.
 - Targets: ESP32-S3 DevKitC-1 (8 MB) and N16R8 (16 MB + OPI PSRAM), MAX485,
   external LEDs (GPIO10/11) plus onboard WS2812 RGB (GPIO48) mirroring both.
-- `STATUS?` over USB serial replies `GREEN 2.2` / `RED 2.2` (automation hook).
+- `STATUS?` over USB serial replies `GREEN 2.3` / `RED 2.3` (automation hook).
 - v2.x: 8-relay sequencer + always-on AP dashboard + fault spoof — see [[Relays]].
-- v2.1: website reliability (host-executed web tests, contract gate, 24 h sim).
+- v2.2: captive portal (login pops on join) + fixed 192.168.4.1.
+- v2.3: relay count + chase, 2-stage spoof, per-mode ms holds, industrial pack
+  (loop/labels/counters/autostart), persistent logins, manual + auto OTA.
 
 Start here: [[Flashing]] to load it, [[Hardware]] to wire it,
 [[Protocol]] for the byte format, [[Relays]] for the test bench,
