@@ -34,18 +34,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
+      - id: gate
+        run: |
           if [ -z "$WOKWI_CLI_TOKEN" ]; then
             echo "WOKWI_CLI_TOKEN not set - skipping headless sim (see wiki/Emulators.md)"
-            exit 0
+            echo "run=false" >> $GITHUB_OUTPUT
+          else
+            echo "run=true" >> $GITHUB_OUTPUT
           fi
         env:
           WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with: { python-version: "3.12" }
       - run: pip install platformio
+        if: steps.gate.outputs.run == 'true'
       - run: pio run -e esp32-s3-devkitc-1
+        if: steps.gate.outputs.run == 'true'
       - run: curl -L https://wokwi.com/ci/install.sh | sh
+        if: steps.gate.outputs.run == 'true'
       - run: wokwi-cli wokwi --timeout 90000 --scenario wokwi/sim.yaml
+        if: steps.gate.outputs.run == 'true'
         env:
           WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}

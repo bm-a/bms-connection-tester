@@ -18,8 +18,8 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.1** current · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.1` fixes · `v1.0` frozen (ZIP + tag) |
-| Tests | **66 passing** (52 via `pio test -e native` + 14 web via `sh run_tests.sh`) + 8-day soak |
+| Releases | **v2.2** current · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **67 passing** (52 via `pio test -e native` + 15 web via `sh run_tests.sh`) + 8-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
 
@@ -59,7 +59,8 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.1` / `RED 2.1`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.2` / `RED 2.2`.
+- Joining the AP pops the login page automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
   dashboard (usually `192.168.4.1`), log in, configure.
@@ -82,8 +83,8 @@ pio test -e native       # 52 Unity tests: checksum, logic, parser, stress, rela
 pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile
 ```
 
-Emulator results for v2.1 (Termux + Debian proot):
-- Native 66/66 (52 pio + 14 web) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
+Emulator results for v2.2 (Termux + Debian proot):
+- Native 67/67 (52 pio + 15 web) + web-contract PASS + soak `691040/691040` — PASS (old 32 untouched).
 - Virtual bus (`sh tools/virtual_bus.sh`): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
 - Dashboard JS: `node --check` clean; JS↔firmware contract gate green.
@@ -96,6 +97,7 @@ Emulator results for v2.1 (Termux + Debian proot):
 
 ## Versions
 
+- **v2.2** — captive portal (login page pops on join) + fixed 192.168.4.1.
 - **v2.1** — website reliability: 14 host-executed web tests + contract gate,
   `select_reply()` now host-covered, 24 h office-day sim, Wokwi relay modules
   + automation scenario + token-gated CI sim. No behavior change (bench-confirmed

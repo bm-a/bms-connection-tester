@@ -1,4 +1,4 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.1.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.2.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
@@ -16,7 +16,7 @@
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.1\n" / "RED 2.1\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.2\n" / "RED 2.2\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"

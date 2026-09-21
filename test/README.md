@@ -1,4 +1,4 @@
-# test/ — automated tests (66 passing: 52 via pio + 14 web via g++)
+# test/ — automated tests (67 passing: 52 via pio + 15 web via g++)
 
 Each subdirectory is an independent Unity test app (PlatformIO convention),
 also compilable with plain `g++` (see `run_tests.sh` fallback).
@@ -32,4 +32,4 @@ also compilable with plain `g++` (see `run_tests.sh` fallback).
 Plus `tools/check_web_contract.py` — dashboard JS ↔ firmware route/key gate.
 
 Run: `pio test -e native` (52: all except `test_web`) or `sh ../run_tests.sh`
-(full 66: g++ suites + contract + `test_web` + `test_system` + soak).
+(full 67: g++ suites + contract + `test_web` + `test_system` + soak).

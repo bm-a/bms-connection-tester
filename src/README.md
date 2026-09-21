@@ -2,7 +2,7 @@
 
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
-  adaptive tracker, canned frames, `FW_VERSION` (`"2.1"`).
+  adaptive tracker, canned frames, `FW_VERSION` (`"2.2"`).
 - `relay_ctrl.h` / `relay_ctrl.cpp` — v2.0 hardware-independent add-on:
   8-relay sequencer (sequential/all-ON, 3 button behaviors, hold timer),
   debounced inputs, spoof window + spoof-frame builder, NVS-backed config
@@ -10,7 +10,7 @@
 - `web_ui.h` / `web_ui.cpp` — v2.0 ESP-only: always-on AP, login session,
   dashboard (relays/sequence/spoof/admin), NVS load/save. Never host-built.
 - `main.cpp` — Arduino sketch: frozen RS485 RX → parse → reply path, 250 ms
-  LED eval, `STATUS?` (`GREEN 2.1` / `RED 2.1`), plus v2.0 relay/web/spoof
+  LED eval, `STATUS?` (`GREEN 2.2` / `RED 2.2`), plus v2.0 relay/web/spoof
   handling (all non-blocking, RS485 keeps priority).
 
 Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11, onboard RGB=48 (WS2812,

@@ -18,8 +18,9 @@
 
 ## Web dashboard (always on, offline OK)
 1. Power the ESP → AP **`BMS-Tester`** appears (no office network needed).
-2. Join it (default password `bms12345`), open `192.168.4.1`, log in
-   (`admin` / `admin123` — change immediately in Admin card).
+2. Join it (default password `bms12345`) — the login page pops up by itself;
+   if not, open `192.168.4.1`. Phone clutching mobile data instead? Turn
+   mobile data OFF (or tap "stay connected") — the box has no internet.
 3. **Relays card:** live 8-tile grid (tap to force ON/OFF), START / STOP ALL.
 4. **Sequence card:** mode (Sequential 1–8 / All ON), step ms, hold s
    (0 = forever), button behavior (hold+abort / locked / restart), logic.

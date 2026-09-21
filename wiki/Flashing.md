@@ -1,6 +1,6 @@
-# Flashing — all different ways (v2.1)
+# Flashing — all different ways (v2.2)
 
-Pick **one** method. All four install the same v2.1 logic; only the tool differs.
+Pick **one** method. All four install the same v2.2 logic; only the tool differs.
 
 ## 1. Ready binaries with esptool (any PC, no IDE)
 1. `pip install esptool`
@@ -16,8 +16,8 @@ esptool.py --chip esp32s3 --port <PORT> --baud 460800 write-flash \
 ```
 
 Verify with the SHA-256 sums in `firmware/README.md` / `firmware-n16r8/README.md`:
-8 MB `firmware.bin` = `8c393b37…d7204419c9` (761,536 bytes);
-N16R8 `firmware.bin` = `164f43de…63fe062d8` (764,048 bytes).
+8 MB `firmware.bin` = `acb44424…32d74e0` (768,048 bytes);
+N16R8 `firmware.bin` = `22716b22…7396e18` (770,544 bytes).
 
 ## 2. Browser flasher (no installs)
 Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher/),
@@ -40,5 +40,5 @@ Both compile the same `src/` — verified with Xtensa GCC 8.4.0.
    green follows the first meter poll.
 
 ## After flashing
-Send `STATUS?` on the USB serial (115200): expect `RED 2.1` silent,
-`GREEN 2.1` while a meter polls. Then see [[Hardware]] for wiring checks.
+Send `STATUS?` on the USB serial (115200): expect `RED 2.2` silent,
+`GREEN 2.2` while a meter polls. Then see [[Hardware]] for wiring checks.

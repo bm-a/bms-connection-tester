@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.2] — 2026-09-24
+### Fixed
+- Web page now actually opens on phones: captive portal (DNS catch-all to
+  192.168.4.1) pops the login page on join; unknown URLs redirect to the
+  dashboard instead of a dead 404; AP IP pinned to 192.168.4.1 via
+  `softAPConfig`. Report + wiki now warn about the classic trap: phones route
+  around "no internet" networks — turn mobile data off / stay connected.
+### Added
+- Portal-redirect flow covered by a new host test (15 web tests total).
+
 ## [v2.1] — 2026-09-23
 ### Added
 - 16 website reliability tests (`test_web`, host-executed real `web_ui.cpp`

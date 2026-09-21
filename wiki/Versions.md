@@ -1,5 +1,13 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.2] — 2026-09-24
+### Fixed
+- Login page pops automatically on join (captive portal DNS catch-all +
+  unknown-URL redirect); AP IP pinned to 192.168.4.1. Report + wiki warn:
+  turn mobile data off, phones route around "no internet" networks.
+### Added
+- Portal-redirect flow host test (15 web tests).
+
 ## [v2.1] — 2026-09-23
 ### Added
 - 14 host-executed website tests + JS↔firmware contract gate + 24 h office-day
