@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include "bms_protocol.h"
 
 // v2.0 relay sequencer + spoof window + debounce + config.
 // Hardware-independent (no Arduino dependency) so it compiles on the host
@@ -128,3 +129,10 @@ class SpoofWindow {
 // temp raw = 2731 + tenth (JBD 0.1K offset), SOC direct byte.
 void build_spoof_frame(const Bms2Config &cfg, uint8_t out[34]);
 #define SPOOF_FRAME_LEN 34
+
+// ---- reply selection: the exact rule main.cpp's loop uses (host-tested) ----
+// Returns golden/cell/name via reply_for(), except reg 0x03 reads during an
+// active spoof window answer spoof_frame. Writes/unknown stay silent.
+const uint8_t *select_reply(const JbdFrame &f, const Bms2Config &cfg,
+                            bool spoof_active, const uint8_t *spoof_frame,
+                            size_t &out_len);

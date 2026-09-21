@@ -46,6 +46,19 @@ g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/tes
 ./.test_spoof
 rm -f .test_relay .test_spoof
 
+echo "=== web contract (dashboard JS vs web_ui.cpp routes/keys) ==="
+python3 tools/check_web_contract.py
+
+echo "=== native: test_web (Unity, website logic on host stubs) ==="
+g++ -std=c++17 -DARDUINO -I test/test_web -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp src/web_ui.cpp test/test_web/test_web.cpp .unity/unity.c -o .test_web
+./.test_web
+rm -f .test_web
+
+echo "=== native: test_system (Unity, 24h office-day reliability sim) ==="
+g++ -O2 -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/test_system/test_system.cpp .unity/unity.c -o .test_system
+./.test_system
+rm -f .test_system
+
 echo "=== soak: 8-day continuous-run simulation ==="
 g++ -O2 -std=c++17 -I src src/bms_protocol.cpp tools/soak_sim.cpp -o .soak_sim
 ./.soak_sim

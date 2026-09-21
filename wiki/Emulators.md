@@ -1,11 +1,13 @@
-# Emulators — test everything without the battery (v2.0 results)
+# Emulators — test everything without the battery (v2.1 results)
 
-## Layer 1 — native tests + soak (Termux, always)
-`sh run_tests.sh` (g++ + local Unity fallback) and `pio test -e native`:
-checksum (7), logic (8), parser (13), stress (4), relay (12), spoof (6) =
-**50/50 PASS**, plus `tools/soak_sim.cpp` 8-day run (`691040 polls /
-691040 replies`, millis-wrap crossed, green-on-resume) — PASS.
-Protocol core untouched since v1.x; dashboard JS passes `node --check`.
+## Layer 1 — native tests + soak + contract (Termux, always)
+`sh run_tests.sh` (g++ + local Unity fallback) and `pio test -e native` (52):
+checksum (7), logic (8), parser (13), stress (4), relay (12), spoof (6),
+system (2) = **52/52 pio**; plus `test_web` (14, g++ host stubs) and the
+`check_web_contract.py` gate = **66/66 total**, plus `tools/soak_sim.cpp`
+8-day run (`691040 polls / 691040 replies`, millis-wrap crossed,
+green-on-resume) — PASS. Protocol core untouched since v1.x; dashboard JS
+passes `node --check`.
 
 ## Layer 2 — virtual bus (Debian proot + socat, no ESP32)
 `socat` PTY pair + a host DUT harness linking the real `src/bms_protocol.cpp`
@@ -16,14 +18,19 @@ against `tools/virtual_meter.py` scenarios:
 Note: pyserial's modem ioctls fail on proot PTYs, so the harness uses raw-fd
 I/O; the shipped `virtual_meter.py` is unchanged and used on real serial ports.
 
-## Layer 3 — Wokwi browser sim (functional proof, incl. RGB + relays)
-`wokwi/diagram.json`: DUT S3 + discretes (10/11) + **NeoPixel on GPIO48** +
-**8 relay LEDs (5/6/7/8/9/12/13/14)** + button (15) + spoof button (21) +
-meter S3 (cross-wired UART, logic-level RS485). `wokwi/meter.ino` cycles
-03/04/05 @ 1 s and prints replies. Open in wokwi.com with the PIO
-`firmware.bin`/`firmware.elf`: discretes + RGB follow the polls
-(green while polling, red ~2 s after stopping the meter); press the Wokwi
-button to watch the relay sequence, spoof button for the 10 s test values.
+## Layer 3 — Wokwi browser + headless sim (functional proof)
+`wokwi/diagram.json`: DUT S3 + discretes (10/11) + **NeoPixel on GPIO48**
+(DIN/VDD/VSS) + **8 relay modules (npn = energize-on-LOW, NO-contact indicator
+LEDs)** + button (15) + spoof button (21, `1.l`/`2.l`) + meter S3.
+Pin names verified against docs.wokwi.com (this caught real bugs: VCC/GND and
+`1`/`2` were wrong). `wokwi/meter.ino` cycles 03/04/05 @ 1 s and prints replies.
+- Browser: open in wokwi.com with the PIO `firmware.bin`/`firmware.elf`.
+- Headless/CI: `wokwi-cli wokwi --timeout 90000 --scenario wokwi/sim.yaml`
+  (needs `WOKWI_CLI_TOKEN`; CI `wokwi-sim` job runs it when the secret exists):
+  meter replies → button press → relay pins LOW in sequence → spoof press →
+  `22 B0` on the meter console.
+- Honest limit: ESP32 Wi-Fi AP mode is outside the verified sim surface;
+  dashboard HTTP has no emulator — it is covered by `test_web` + contract gate.
 
 ## Layer 4 — QEMU-S3 (boot only, known gap)
 Built per `bm-a/esp32s3-qemu-arm64` (source build in proot, sanitized PATH,

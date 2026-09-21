@@ -1,7 +1,7 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
-> Last updated 2026-09-22 for **v2.0** (relay bench). Rule going forward:
+> Last updated 2026-09-23 for **v2.1** (website reliability). Rule going forward:
 > §12's release checklist REQUIRES updating this file in the same commit as
 > any feature — a body left stale behind an addendum is a bug (2026-09-22).
 > Audience: the next AI agent (or future me) picking this project up cold.
@@ -26,7 +26,7 @@ for 10 s. No screens needed.
   The Word report for dad keeps the e-rickshaw framing on purpose.)
 - **People:** user = Bhavishya Madan (GitHub `bm-a`). Dad = electronics-strong,
   code-weak; gets status via a WhatsApp Word report, not GitHub.
-- **Current release: v2.0** (`71b0bc6`, tag `v2.0`). v1.x responder core FROZEN
+- **Current release: v2.1** (tag `v2.1`; reliability release, no behavior change). v1.x responder core FROZEN
   (parser, option-A, tracker, golden frames, LEDs, STATUS?, original 32 tests
   byte-identical). v1.0 frozen (ZIP + git tag, untouched since).
 
@@ -36,7 +36,7 @@ for 10 s. No screens needed.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 50 Unity tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`, `v1.1`, `v1.2`, `v2.0`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2 (7 assets) + v2.0 (7 assets); wiki live (7 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 66 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`, `v1.1`, `v1.2`, `v2.0`, `v2.1`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1 (7 assets each); wiki live (7 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -71,8 +71,16 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   timer, boot-safe OFF-first, polarity toggle), always-on AP dashboard
   (`src/web_ui.*`: dark UI, login, NVS `bms2`, admin reset, `BMS-Tester`),
   spoof window (88.8/88.8/88.8/188 on `0x03`, configurable, auto-revert);
-  18 new tests (**50/50**); Wokwi relay LEDs + buttons; CI builds both envs.
+  18 new tests (**50/50** at the time); Wokwi relay LEDs + buttons; CI builds both envs.
   Responder core frozen and re-proven on the same source.
+- **v2.1** (tag `v2.1`): website reliability, zero behavior change —
+  14 host-executed web tests (real `web_ui.cpp` on Arduino stubs:
+  `test/test_web/Arduino.h|WiFi.h|WebServer.h|Preferences.h`),
+  `tools/check_web_contract.py` gate, `select_reply()` extracted host-covered,
+  `test_system` 24 h office-day sim (86,400 polls, per-reply CK validation),
+  Wokwi diagram fixed per official docs + 8 relay-module parts + `sim.yaml`
+  automation with token-gated CI job. Bench-confirmed relay idle HIGH /
+  ON-when-LOW = active-LOW default stands. **66/66 total** (52 pio + 14 web).
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
@@ -125,7 +133,7 @@ Core pieces (`bms_protocol.*`):
 - `reply_for(reg, is_write, len)` — 0x03/04/05 read → canned frame; else NULL.
 - `PollTracker` — EMA of poll intervals; threshold = clamp(2×EMA+500, 2 s, 10 s).
 - `matches_request()` + `connection_active()` — v1.0 compat, kept for tests.
-- `FW_VERSION` = `"2.0"`; `STATUS?` replies `GREEN 2.0` / `RED 2.0`
+- `FW_VERSION` = `"2.1"`; `STATUS?` replies `GREEN 2.1` / `RED 2.1`
   (first token stable — HIL test splits on whitespace).
 
 Canned frames (frozen literals, NEVER recomputed at runtime):
@@ -155,7 +163,10 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 - `Bms2Config` — all web-tunable values + NVS schema (namespace `bms2`).
 - `web_ui` (ESP-only): AP `BMS-Tester` always on (fixed channel, changeable),
   session-cookie login (30 min sliding), JSON API + single-page dark dashboard
-  (`node --check` clean), NVS load/save, factory reset + reboot.
+  (`node --check` clean + `check_web_contract.py` gate), NVS load/save
+  (explicit defaults-reset before overlay), factory reset + reboot.
+- Reply selection lives in `select_reply()` (`relay_ctrl`, host-tested in
+  `test_system`); `main.cpp` calls it — no inline selection logic.
 
 ---
 
@@ -178,11 +189,25 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 
 ---
 
-## 7. Tests — 50/50 + soak + virtual bus (how to run, what they prove)
+## 7. Tests — 66/66 + soak + virtual bus + contract (how to run, what they prove)
 
-- `pio test -e native` → 6 suites: test_checksum (7), test_logic (8),
-  test_parser (13), test_stress (4), **test_relay (12), test_spoof (6)**.
-  **Last CI run: all green (50/50).** Old 32 byte-identical since v1.1.
+- `pio test -e native` → 7 suites: test_checksum (7), test_logic (8),
+  test_parser (13), test_stress (4), **test_relay (12), test_spoof (6),
+  test_system (2)**. **Last CI run: all green (52/52).** Old 32 byte-identical
+  since v1.1. `test_web` (14) is g++-only (needs `-DARDUINO` + stubs) → total
+  **66/66** via `sh run_tests.sh`.
+- `test_web` highlights: real `web_ui.cpp` executes on host — login/session/
+  validation/NVS/API/fuzz/reset. Stub-fidelity bugs it caught (and fixed):
+  per-TU mock clocks (→ `inline` shared clock), NVS `clear()` missing the
+  number store, test isolation via static `ident` (→ defaults-reset in
+  `web_setup`, behavior-neutral on hardware). All three were test-harness or
+  robustness fixes, never responder logic.
+- `test_system` highlights: `select_reply()` matrix (golden/spoof/disabled/
+  null-frame/04-05/write/unknown) + 24 h office-day sim (86,400 polls, every
+  reply CK-validated, exact 10 s spoof window, relay schedule probes,
+  write-silence mid-spoof, green-all-day). Runs in ~0.05 s.
+- `tools/check_web_contract.py` — JS endpoints/ids/state-keys/POST-keys vs
+  firmware routes, exit 0 = PASS (CI `web` job + run_tests.sh).
 - `sh run_tests.sh` → same suites via g++ fallback + **soak sim** + HIL
   (auto-skip without hardware).
 - New-suite highlights: sequential stepping/timing, hold expiry/forever,
@@ -220,13 +245,15 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 `build_src_filter = +<bms_protocol.cpp> +<relay_ctrl.cpp>`,
 `test_filter` = 6 suites), `s3_tests` (on-target ELFs).
 Pinned reality: espressif32@7.1.3, Xtensa GCC 8.4.0 (esp-2021r2-patch5),
-Arduino 2.0.x (IDF 4.4 based). v2.0 `firmware.bin` = 761,408 bytes
-(`8f4565da…c61c0d8302`); `firmware-n16r8/firmware.bin` = 763,920 bytes
-(`89d93a4f…1367cf1c5d`). Golden bytes + `2.0` + `BMS-Tester` + dashboard
+Arduino 2.0.x (IDF 4.4 based). v2.1 `firmware.bin` = 761,536 bytes
+(`8c393b37…d7204419c9`); `firmware-n16r8/firmware.bin` = 764,048 bytes
+(`164f43de…63fe062d8`). Golden bytes + `2.1` + `BMS-Tester` + dashboard
 strings verified byte-present in both. `firmware/` + `firmware-n16r8/` hold
 bootloader + partitions + esptool READMEs (flash 0x0 / 0x8000 / 0x10000).
 `arduino/` = same firmware as IDE sketch (7 tabs incl. new files).
-`.github/workflows/ci.yml` runs native + **both firmware envs** + soak (green).
+`.github/workflows/ci.yml` runs native (52) + web (contract + test_web) +
+**both firmware envs** + soak + token-gated `wokwi-sim` (green; sim skipped
+without `WOKWI_CLI_TOKEN` secret).
 
 **CRITICAL — two homes:** Termux home (`/data/data/com.termux/files/home`,
 shared into proot containers) vs container-local roots. These live INSIDE the
@@ -275,9 +302,9 @@ Re-confirmed with the v2.0 8 MB image (22/84) — identical signature, no regres
 Hypothesis: DIO-era command bytes hitting the single-line SSI model + an
 unmodeled register region. IDF-based guests are unaffected per Espressif CI;
 Arduino guests were never QEMU-supported. Verdict: **emulator gap, not firmware
-— our code is never reached.** Practical emulation path = Wokwi (`wokwi/`
-v2.0: meter cycles 03/04/05 + 8 relay LEDs + button/spoof buttons + NeoPixel;
-JSON-validated, browser run is manual).
+— our code is never reached.** Re-confirmed on v2.1 image (same signature).
+Practical emulation = Wokwi (`wokwi/` v2.1: verified pins, relay modules,
+`sim.yaml` automation; browser run manual, headless needs `WOKWI_CLI_TOKEN`).
 `tools/run_qemu_s3.sh` = one-command boot test for real Linux/Mac.
 Next agent: to continue, decode what `0x10` is in DIO context (possible status-
 register or continuous-read mode byte) and identify the `0x10200C` peripheral;
@@ -298,7 +325,7 @@ or deprioritize — host tests + soak already prove the firmware.
   It is NOT stored in any file. **Still recommend the user revoke/rotate it**
   — chat logs persist. (Outstanding since v1.1.)
 - Commit identity: `bm-a` / `bm-a@users.noreply.github.com`.
-- Releases: v1.0 (ZIP), v1.1 (3 bins + docx), v1.2 + v2.0 (7 assets each:
+- Releases: v1.0 (ZIP), v1.1 (3 bins + docx), v1.2 + v2.0 + v2.1 (7 assets each:
   8 MB triple plain-named + `n16r8-` triple — GitHub forbids duplicate asset
   names, so N16R8 files are uploaded renamed). Wiki backend provisioned
   (one browser click); push via the `.wiki.git` clone.
@@ -308,14 +335,19 @@ or deprioritize — host tests + soak already prove the firmware.
 
 ## 11. Pending / next steps (ordered)
 
-1. **Bench test v2.0 with real meter + SmartElex module** (the one thing that
+1. **Bench test v2.1 with real meter + SmartElex module** (the one thing that
    matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) button runs
    the relay sequence with configured delay, relays click in order, no boot
    click; (c) AP `BMS-Tester` visible, dashboard drives relays; (d) spoof shows
-   88.8/88.8/88.8/188 % for 10 s then reverts. Needs: 12 V coil supply with
-   common GND. Anomalies → likely a one-constant fix or polarity default flip.
-2. **HIL pytest** (`HIL_BUS_PORT`/`HIL_CDC_PORT`) + manual Wokwi run + dashboard
-   browser pass once hardware/PC available. QEMU `0x10`/`0x10200C` — optional.
+   88.8/88.8/88.8/188 % for 10 s then reverts. Bench-confirmed already:
+   relay idle HIGH, ON-when-LOW (active-LOW default correct). Needs: 12 V coil
+   supply with common GND.
+2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
+   firmware headless (button→pins, spoof→`22 B0`); also answers whether
+   `WiFi.softAP` boots in the sim (dashboard HTTP itself has no emulator —
+   covered by `test_web` instead).
+3. **HIL pytest** + manual Wokwi run + dashboard browser pass once hardware/PC
+   available. QEMU `0x10`/`0x10200C` — optional.
 3. **Possible v2.1:** per-relay custom labels on dashboard; STA+AP fallback for
    offices WITH Wi-Fi; `delay(1)` power trim (obsolete while AP is always on).
 4. **Housekeeping:** rotate the chat-exposed PAT (outstanding since 2026-09-18);

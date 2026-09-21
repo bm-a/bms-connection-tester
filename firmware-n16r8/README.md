@@ -1,6 +1,6 @@
-# Ready-to-flash binaries — v2.0 (ESP32-S3 N16R8, 16 MB flash + OPI PSRAM)
+# Ready-to-flash binaries — v2.1 (ESP32-S3 N16R8, 16 MB flash + OPI PSRAM)
 
-Built 2026-09-22 from this exact source (`pio run -e s3-n16r8`,
+Built 2026-09-23 from this exact source (`pio run -e s3-n16r8`,
 Xtensa GCC 8.4.0, Arduino 2.0.x). Same firmware logic as `firmware/`,
 only the flash/PSRAM map differs. Use for N16R8 boards (16 MB flash,
 8 MB octal PSRAM, onboard WS2812 on GPIO48).
@@ -24,8 +24,8 @@ Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher
 load the three files at the addresses above, flash, done.
 
 ## Verify
-- `firmware.bin` (763,920 bytes)
-  SHA-256: `89d93a4fd6288947cd0fcdab9ab8510509f2b1931c599b001998ec1367cf1c5d`
+- `firmware.bin` (764,048 bytes)
+  SHA-256: `164f43de7eff89c02bffe19fa260534cee6d37dce18c9ec898d52da63fe062d8`
 - `bootloader.bin` (15,104 bytes)
   SHA-256: `1776e4dd896a69d0a5c2e79957b0e2a88aa4129b1381d6478683515a1f6af343`
 - `partitions.bin` (3,072 bytes)

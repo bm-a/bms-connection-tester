@@ -1,0 +1,41 @@
+# Wokwi automation scenario: v2.0 relay bench (needs WOKWI_CLI_TOKEN).
+# Run: pio run -e esp32-s3-devkitc-1 && wokwi-cli wokwi --timeout 90000 --scenario wokwi/sim.yaml
+# Proves on the REAL compiled firmware: RS485 replies on the meter console,
+# button -> relay GPIOs sequence (active-LOW), spoof button -> 88.8 frame.
+# Pin names verified against docs.wokwi.com (neopixel VDD/VSS/DIN,
+# pushbutton 1.l/2.l, relay-module IN/VCC/GND/COM/NO with npn = energize-on-LOW).
+name: 'BMS tester v2 bench'
+version: 1
+author: 'bms-connection-tester'
+steps:
+  - wait-serial: 'rx:'
+  - delay: 2000ms
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 1
+  - delay: 150ms
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 0
+  - delay: 700ms
+  - expect-pin:
+      part-id: dut
+      pin: 5
+      expected: 0
+  - delay: 3200ms
+  - expect-pin:
+      part-id: dut
+      pin: 14
+      expected: 0
+  - set-control:
+      part-id: spoofbtn
+      control: pressed
+      value: 1
+  - delay: 150ms
+  - set-control:
+      part-id: spoofbtn
+      control: pressed
+      value: 0
+  - wait-serial: '22 B0'

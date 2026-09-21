@@ -151,3 +151,18 @@ void build_spoof_frame(const Bms2Config &cfg, uint8_t out[34]) {
   out[31] = (uint8_t)(ck >> 8);
   out[32] = (uint8_t)(ck & 0xFF);
 }
+
+// ---- reply selection (mirrors main.cpp's loop exactly) ----
+const uint8_t *select_reply(const JbdFrame &f, const Bms2Config &cfg,
+                            bool spoof_active, const uint8_t *spoof_frame,
+                            size_t &out_len) {
+  size_t rl = 0;
+  const uint8_t *reply = reply_for(f.reg, f.is_write, rl);
+  if (!f.is_write && f.reg == 0x03 && cfg.spoof_enabled && spoof_active &&
+      spoof_frame) {
+    reply = spoof_frame;
+    rl = SPOOF_FRAME_LEN;
+  }
+  out_len = rl;
+  return reply;
+}

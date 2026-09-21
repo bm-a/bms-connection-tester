@@ -3,6 +3,32 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.1] — 2026-09-23
+### Added
+- 16 website reliability tests (`test_web`, host-executed real `web_ui.cpp`
+  on Arduino stubs): auth, session expiry, validation/clamping, NVS round-trip,
+  relay/seq/spoof/admin handlers, POST fuzz, factory reset.
+- `test_system` 24 h office-day sim: 86,400 polls with per-reply checksum
+  validation, exact 10 s spoof window, relay schedule probes, abort/restart,
+  hourly noise, write-silence mid-spoof — all green in 0.05 s.
+- `tools/check_web_contract.py`: dashboard JS ↔ firmware route/key consistency
+  gate (runs in `run_tests.sh` + CI).
+- `wokwi/sim.yaml` automation scenario (button → relay pins, spoof → `22 B0`
+  on meter console) + token-gated CI sim job; diagram fixed against official
+  docs (NeoPixel VDD/VSS, button 1.l/2.l) and upgraded to 8 real relay-module
+  parts (npn = energize-on-LOW, matching active-LOW default) with NO-contact
+  indicator LEDs.
+### Changed
+- `select_reply()` extracted to `relay_ctrl` (behavior-identical; main loop
+  uses it — now host-covered), `web_setup` resets identity to defaults before
+  NVS overlay (deterministic repeated setup).
+- `FW_VERSION`/`STATUS?` report `2.1`. Confirmed bench fact: relay idle HIGH,
+  ON when LOW = active-LOW default is correct, no polarity change.
+### Fixed
+- Host-stub fidelity bugs found by the new suites (separate mock clocks per
+  TU, NVS clear missing number store) — stubs now match real core semantics
+  (`constrain` macro, 2-arg `indexOf`).
+
 ## [v2.0] — 2026-09-22
 ### Added
 - 8-relay sequencer (`src/relay_ctrl.*`, host-tested): SEQUENTIAL R1→R8 with

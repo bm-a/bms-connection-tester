@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Beautiful dad-friendly Word report — v2.0 (multi-scenario release)."""
+"""Beautiful dad-friendly Word report — v2.1 (multi-scenario release)."""
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -75,7 +75,7 @@ def callout(title, text, fill="FFF6D6"):
 sec = doc.sections[0]
 fp = sec.footer.paragraphs[0]
 fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = fp.add_run("RS485 Connection Tester v2.0  —  Build & Test Report   |   Page ")
+r = fp.add_run("RS485 Connection Tester v2.1  —  Build & Test Report   |   Page ")
 r.font.size = Pt(9)
 r.font.color.rgb = GREY
 fld = OxmlElement("w:fldSimple")
@@ -94,18 +94,18 @@ r.bold = True
 r.font.color.rgb = NAVY
 sp = doc.add_paragraph()
 sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = sp.add_run("Build & Test Report v2.0 — for an electronics engineer, no coding needed")
+r = sp.add_run("Build & Test Report v2.1 — for an electronics engineer, no coding needed")
 r.font.size = Pt(13)
 r.italic = True
 r.font.color.rgb = GREY
 doc.add_paragraph()
 table(["Item", "Detail"], [
     ["Board", "ESP32-S3 DevKitC-1 + MAX485 module"],
-    ["Version", "v2.0 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed"],
-    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.0 only"],
+    ["Version", "v2.1 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed"],
+    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.1 only"],
     ["Date", "September 2026"],
-    ["Firmware", "firmware.bin — v2.0 8 MB build, compiled + verified (SHA in firmware/README.md)"],
-    ["Tests", "50 / 50 passing (protocol + lamps + faults + 8-day soak + v2.0 relay/spoof)"],
+    ["Firmware", "firmware.bin — v2.1 8 MB build, compiled + verified (SHA in firmware/README.md)"],
+    ["Tests", "66 / 66 passing (protocol + lamps + faults + soak + relay/spoof/web/24h sim)"],
     ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Nothing to press."],
 ], widths=[1.6, 4.6])
 cp = doc.add_paragraph()
@@ -121,7 +121,7 @@ for item in [
     "1.  What this box does (start here)",
     "2.  Parts list",
     "3.  Wiring — the complete circuit",
-    "4.  How v2.0 works (every meter type, no code)",
+    "4.  How v2.1 works (every meter type, no code)",
     "5.  Using it on the assembly line",
     "6.  Getting the software onto the board (3 easy methods)",
     "7.  Build & test report (numbers included)",
@@ -139,7 +139,7 @@ doc.add_paragraph(
 doc.add_paragraph("GREEN lamp ON  =  wiring correct, meter and box are talking.", style="List Bullet")
 doc.add_paragraph("RED lamp ON  =  wiring wrong (or meter off, wires swapped, wire broken).", style="List Bullet")
 doc.add_paragraph(
-    "Nothing to press, reset or read. v2.0 handles every meter variant by itself: fast or slow polling, meters that "
+    "Nothing to press, reset or read. v2.1 handles every meter variant by itself: fast or slow polling, meters that "
     "ask for extra data (cell voltages, device name), and meters that send configuration writes — green lights for all "
     "of them as long as the wires carry real traffic.")
 
@@ -174,16 +174,16 @@ table(["Signal", "From → To", "Notes"], [
 callout("First check, always: ",
         "if the box never turns green, swap A and B at the screw terminal and try again. Safe, instant, fixes most cases.")
 doc.add_paragraph("Pin choices are S3-safe (avoid strapping 0/3/45/46, USB 19/20, flash 26–37, console 43/44). "
-                  "Unchanged from v1.0 — a v1.0-wired box runs v2.0 firmware with zero rewiring.", style="List Bullet")
+                  "Unchanged from v1.0 — a v1.0-wired box runs v2.1 firmware with zero rewiring.", style="List Bullet")
 
 # ================= 4 =================
-doc.add_heading("4. How v2.0 works (the idea, no code)", level=1)
+doc.add_heading("4. How v2.1 works (the idea, no code)", level=1)
 for s in [
     "The meter asks questions in the JBD battery language at 9600 baud — usually register 0x03 (voltage/current/charge), sometimes 0x04 (cell voltages) or 0x05 (device name), occasionally configuration writes.",
     "The box checks every incoming message completely (start, command, length, safety checksum, end byte). Random factory noise can never fake one — proven with a million random bytes in testing.",
     "Known questions get the matching canned answer (0x03 is the byte-exact recording of a real full battery: 52.0 V, 100 %; 0x04/0x05 are consistent synthesized answers). Writes and unknown questions get silence — but they still count as ‘the meter is talking’, so green still lights. Deliberate choice: a tester must never confuse a meter with a wrong answer.",
     "Green/red is now self-adjusting: the box measures the meter's poll rhythm and sets its patience between 2 and 10 seconds. Fast meters, slow meters, jittery meters — all show steady green; a truly silent line always goes red. No configuration, no buttons, forever.",
-    "Invisible helper: over USB the box answers STATUS? with GREEN 2.0 / RED 2.0 (the number is the firmware version). Only for automatic tests.",
+    "Invisible helper: over USB the box answers STATUS? with GREEN 2.1 / RED 2.1 (the number is the firmware version). Only for automatic tests.",
 ]:
     doc.add_paragraph(s, style="List Number")
 
@@ -228,15 +228,15 @@ doc.add_heading("7. Build & test report", level=1)
 doc.add_heading("7.1 Firmware compiled for real — SUCCESS", level=2)
 doc.add_paragraph(
     "Built with the genuine Espressif Xtensa GCC 8.4.0 toolchain (PlatformIO + Arduino framework), "
-    "6 cores, incremental + cache: v2.0 compiled in 46 seconds. Binary inspected afterward:")
+    "6 cores, incremental + cache: v2.1 compiled in 46 seconds. Binary inspected afterward:")
 table(["Artifact", "Detail"], [
-    ["firmware.bin", "v2.0 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, relay sequencer, AP dashboard; SHAs in firmware/README.md."],
-    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.0 binaries refreshed; golden bytes + version + AP strings verified inside)"],
+    ["firmware.bin", "v2.1 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, relay sequencer, AP dashboard; SHAs in firmware/README.md."],
+    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.1 binaries refreshed; golden bytes + version + AP strings verified inside)"],
     ["bootloader + partitions", "Standard S3 loader and flash layout, refreshed with this build."],
     ["On-target test builds", "All three unit-test programs also compile + link for the S3 chip (they execute once a board is plugged in)."],
     ["QEMU S3 boot test", "QEMU 9.2.2 built from source on this phone; it boots our firmware to the Arduino flash-init step. Tracing proved QEMU's flash model lacked RDID 0x90/0xAB and GD25Q64 SFDP — both patched (separate emulator repo). Only an undecodable DIO-era cmd 0x77 remains: emulator gap, our code is never reached. Wokwi S3 is the practical Arduino-emulation path."],
 ], widths=[1.7, 4.5])
-doc.add_heading("7.2 Automated tests — 50 / 50 PASS (run_tests.sh)", level=2)
+doc.add_heading("7.2 Automated tests — 66 / 66 PASS (run_tests.sh)", level=2)
 table(["Group", "Tests", "Result"], [
     ["Checksums + golden frame (7)", "FFFD / FCDA / FCA8 / FA86 / F65A (2nd Docklight 0x2A variant), byte-exact 0x03 frame, exact-yes / 7xcorrupt-no.", "7 PASS"],
     ["Lamp logic, adaptive (8)", "Boot red, green fast, red after window, self-heal, slow-poll adapt, 2 s floor / 10 s cap, rollover, legacy compat.", "8 PASS"],
@@ -276,10 +276,10 @@ callout("Remember: ", "the real battery pack is never needed on the line — tha
 # ================= 10 =================
 doc.add_heading("10. Project folder map + version history", level=1)
 table(["Path", "What it is"], [
-    ["src/main.cpp, src/bms_protocol.*", "v2.0 program (parser + dispatcher + adaptive window)."],
+    ["src/main.cpp, src/bms_protocol.*", "v2.1 program (parser + dispatcher + adaptive window)."],
     ["VERSION", "2.0 (also baked into STATUS? replies)."],
-    ["arduino/bms_connection_tester/", "Same v2.0 as an Arduino sketch + README."],
-    ["firmware/*.bin", "Ready-to-flash v2.0 binaries + flash README."],
+    ["arduino/bms_connection_tester/", "Same v2.1 as an Arduino sketch + README."],
+    ["firmware/*.bin", "Ready-to-flash v2.1 binaries + flash README."],
     ["test/test_checksum|test_logic|test_parser", "32 automated tests, all passing."],
     ["tools/soak_sim.cpp", "8-day run: 691,040 polls answered, rollover crossed, no reset."],
     ["captures/", "Original Docklight xlsx + README (ground-truth vectors)."],
@@ -289,14 +289,14 @@ table(["Path", "What it is"], [
     ["tools/run_qemu_s3.sh", "One-command S3 emulation boot test (real Linux/Mac)."],
     ["wokwi/", "Browser simulation (meter now cycles 0x03/0x04/0x05)."],
     ["run_tests.sh", "Runs everything runnable in one command."],
-    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.0 work. Current release: v2.0."],
+    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.1 work. Current release: v2.1."],
 ], widths=[2.6, 3.6])
 doc.add_paragraph()
 ep = doc.add_paragraph()
 ep.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = ep.add_run("— End of report v2.0. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
+r = ep.add_run("— End of report v2.1. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
 r.italic = True
 r.font.color.rgb = GREY
 
 doc.save("/data/data/com.termux/files/home/bms-connection-tester/RS485-Tester-Report.docx")
-print("saved v2.0 RS485-Tester-Report.docx")
+print("saved v2.1 RS485-Tester-Report.docx")

@@ -366,6 +366,14 @@ static void handle_admin() {
 
 void web_setup(WebCtx &ctx) {
   G = &ctx;
+  // Start from compiled defaults, then overlay NVS. (On real hardware the
+  // statics already hold defaults at boot, so this is a no-op there; it
+  // also makes repeated setup calls deterministic.)
+  strncpy(ident.ap_ssid, WEB_AP_SSID_DEFAULT, sizeof(ident.ap_ssid));
+  strncpy(ident.ap_pass, WEB_AP_PASS_DEFAULT, sizeof(ident.ap_pass));
+  ident.ap_channel = WEB_AP_CHANNEL_DEFAULT;
+  strncpy(ident.admin_user, "admin", sizeof(ident.admin_user));
+  strncpy(ident.admin_pass, "admin123", sizeof(ident.admin_pass));
   cfg_load();  // NVS -> cfg + identity (or defaults)
   if (G->on_config_changed) G->on_config_changed();  // build spoof frame
   // AP ALWAYS ON: no STA, no timeouts, works with zero office network.
