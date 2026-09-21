@@ -1,17 +1,18 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v1.1.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v1.2.
 // Listens for the meter's JBD polls (any register) and replies with canned
 // frames for 0x03/0x04/0x05; silent on writes/unknown (option A).
 // Green LED = meter talking (adaptive window), red = not.
 // No buttons, no latch, no display.
 //
-// Wiring (ESP32-S3-DevKitC-1):
+// Wiring (ESP32-S3-DevKitC-1 / S3 N16R8):
 //   GPIO17 (TX) -> MAX485 DI | GPIO16 (RX) -> MAX485 RO
 //   GPIO4 -> MAX485 DE+RE tied (HIGH=TX, LOW=RX, 10k pull-down to GND)
 //   GPIO10 -> green LED (+220R to GND) | GPIO11 -> red LED (+220R to GND)
+//   GPIO48 -> onboard WS2812 RGB (mirrors green/red, no wiring needed)
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 1.1\n" / "RED 1.1\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 1.2\n" / "RED 1.2\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"
@@ -21,6 +22,14 @@
 #define PIN_RS485_DE    4
 #define PIN_LED_GREEN  10
 #define PIN_LED_RED    11
+// Onboard WS2812 RGB (S3 N16R8 / DevKitC-1 with RGB). Mirrors the
+// external LEDs so the box works with zero extra wiring.
+// Built-in neopixelWrite() needs no extra library (Arduino-ESP32).
+#ifndef RGB_BUILTIN
+#define RGB_BUILTIN 48
+#endif
+#define PIN_RGB RGB_BUILTIN
+#define RGB_BRIGHT 32  // WS2812 is blinding at 255; 16-32 is plenty
 
 #define EVAL_INTERVAL_MS 250UL  // brisk eval so fast/slow polls both feel live
 
@@ -33,6 +42,11 @@ static void apply_leds(bool on) {
   connected = on;
   digitalWrite(PIN_LED_GREEN, on ? HIGH : LOW);
   digitalWrite(PIN_LED_RED, on ? LOW : HIGH);
+  // Onboard RGB mirrors the discretes: green = talking, red = silent.
+  // RMT-driven, safe to call from the 250 ms eval (never the hot RX loop).
+#if defined(ARDUINO)
+  neopixelWrite(PIN_RGB, on ? 0 : RGB_BRIGHT, on ? RGB_BRIGHT : 0, 0);
+#endif
 }
 
 static void send_frame(const uint8_t *frame, size_t len) {

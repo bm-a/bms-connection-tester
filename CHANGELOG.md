@@ -3,6 +3,30 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v1.2] — 2026-09-21
+### Added
+- Onboard WS2812 RGB mirror (GPIO48 via built-in `neopixelWrite`, no extra
+  library): shows the same green/red link state as the external LEDs, so the
+  box works with zero LED wiring. Brightness 32/255, driven from the 250 ms
+  eval (never the hot RX path).
+- ESP32-S3 N16R8 build (`pio run -e s3-n16r8`): 16 MB flash + OPI PSRAM +
+  `default_16MB.csv` partitions; `esp32-s3-devkitc-1` (8 MB) kept for Wokwi.
+  Arduino IDE settings documented (Flash 16MB + OPI PSRAM + USB CDC Enabled).
+- Wokwi NeoPixel part (`rgb1` on GPIO48) next to the discrete LEDs; meter
+  stimulus unchanged (cycles 03/04/05 @ 1 s).
+### Verified
+- 32/32 native tests + 8-day soak still green (protocol core untouched).
+- Both firmware envs compile (Xtensa GCC 8.4.0): 8 MB profile + N16R8 profile.
+- Virtual-bus emulation (socat PTY pair + host DUT harness linking the real
+  `bms_protocol.cpp`): 03/04/05 golden byte-exact, silence on write/unknown,
+  noise resync, red-after-silence — PASS.
+- QEMU-S3 boot with v1.2 firmware reproduces the known emulator gap
+  (`Unknown cmd 0x10` + `0x10200C` reads, Arduino-guest flash assert) — no
+  firmware regression, functional proof via Wokwi instead.
+### Changed
+- `FW_VERSION` / `STATUS?` report `1.2`; `docs/MODULES.md`, `arduino/README.md`,
+  `wokwi/README.md`, `src/README.md`, `llms.txt` updated for RGB + N16R8.
+
 ## [v1.1] — 2026-09-18
 ### Added
 - Multi-register support: canned replies for `0x03` (golden capture), `0x04`

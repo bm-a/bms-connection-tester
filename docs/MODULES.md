@@ -1,12 +1,16 @@
 # Hardware modules
 
-## 1. ESP32-S3 DevKitC-1 (application MCU)
+## 1. ESP32-S3 DevKitC-1 / N16R8 (application MCU)
 
-- Espressif ESP32-S3R?/N8: dual-core Xtensa LX7 @ 240 MHz, 512 KB SRAM,
-  8 MB quad-SPI flash, native USB (CDC + JTAG).
+- Espressif ESP32-S3: dual-core Xtensa LX7 @ 240 MHz, 512 KB SRAM,
+  native USB (CDC + JTAG).
+  - DevKitC-1 N8: 8 MB quad-SPI flash.
+  - **N16R8 (this build): 16 MB flash + 8 MB octal PSRAM** — use PIO env
+    `s3-n16r8` (`flash 16MB, psram opi, default_16MB.csv`).
 - Arduino core 2.0.x provides `Serial` (USB/UART0 console) and `Serial2`,
   which the GPIO matrix can route to any pins — here RX = GPIO16, TX = GPIO17.
-- GPIOs used: **4** (RS485 direction), **10/11** (LEDs), **16/17** (UART2).
+- GPIOs used: **4** (RS485 direction), **10/11** (LEDs), **16/17** (UART2),
+  **48** (onboard WS2812 RGB, output-only).
   All avoid strapping (0/3/45/46), USB-JTAG (19/20), flash/PSRAM (26–37)
   and the UART0 console (43/44). (Classic-ESP32 GPIO25 does not exist on S3.)
 
@@ -29,7 +33,9 @@
 - Green (GPIO10) / red (GPIO11), each via 220 Ω to GND (~8 mA — bright,
   well under pin and LED limits). Driven as strict opposites in one function,
   so both-on / both-off (other than unpowered) is impossible by construction.
-- Boot red; green ≤ 1 s after first valid frame; red ≤ window after silence.
+- Onboard WS2812 RGB (GPIO48, `neopixelWrite`, brightness 32/255) mirrors
+  the discretes: green = talking, red = silent. No extra library needed.
+  Boot red on both; green ≤ 1 s after first valid frame; red ≤ window after silence.
 
 ## 4. Power
 

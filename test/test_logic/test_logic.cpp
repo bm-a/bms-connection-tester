@@ -4,7 +4,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-// v1.1 adaptive window via PollTracker. Boot red, green on polls,
+// Adaptive window via PollTracker (since v1.1). Boot red, green on polls,
 // red after silence, self-heal, rollover-safe, adaptive to slow polls.
 void test_tracker_boots_red(void) {
   PollTracker t;

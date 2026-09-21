@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Virtual JBD meter: polls the tester like real e-rickshaw meters.
 
-Covers every scenario (v1.1): register sweep, cadence sweep, faults.
+Covers every scenario (v1.2): register sweep, cadence sweep, faults.
 
     python3 tools/virtual_meter.py PORT [--reg 03] [--period 1.0]
         [--jitter 0.0] [--mode normal] [--count 3]
