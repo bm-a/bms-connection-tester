@@ -3,6 +3,12 @@
 > Written 2026-09-18, before Termux storage compression.
 > Last updated 2026-09-21 for **v2.3** (relay count/chase, 2-stage spoof,
 > per-mode holds, industrial pack, persistent logins, OTA). Rule going forward:
+> COMPACTION CHECKPOINT 2026-09-21: user compacting Termux storage. All 3
+> repos verified pushed + clean (main `2b23226` + tag `v2.3` upstream, release
+> live, CI green; handbook `ba3ac6f`; emulator `1fd0b2a`). `releases/` (564 KB,
+> gitignored offline backup) must be copied somewhere compaction won't touch.
+> If `/opt/*` inside Debian is gone post-compaction, rebuild order is
+> pioenv → PIO packages (+Xtensa tarball workaround) → QEMU (sanitized PATH).
 > §12's release checklist REQUIRES updating this file in the same commit as
 > any feature — a body left stale behind an addendum is a bug (2026-09-22).
 > Audience: the next AI agent (or future me) picking this project up cold.
@@ -402,6 +408,8 @@ or deprioritize — host tests + soak already prove the firmware.
 
 ## 11. Pending / next steps (ordered)
 
+0. **Post-compaction resume:** say "continue" — todo list is ordered top-down
+   (HANDOFF delta → QEMU Stage 0 → A → B → C → D → bench + housekeeping).
 1. **Bench test v2.3 with real meter + SmartElex module** (the one thing that
    matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) AP
    `BMS-Tester` visible → login page pops on join (or 192.168.4.1, mobile
@@ -418,10 +426,20 @@ or deprioritize — host tests + soak already prove the firmware.
    `WiFi.softAP` boots in the sim (dashboard HTTP itself has no emulator —
    covered by `test_web` instead).
 3. **HIL pytest** + manual Wokwi run + dashboard browser pass once hardware/PC
-   available. QEMU `0x10`/`0x10200C` — optional.
-3. **Possible v2.1:** per-relay custom labels on dashboard; STA+AP fallback for
-   offices WITH Wi-Fi; `delay(1)` power trim (obsolete while AP is always on).
-4. **Housekeeping:** rotate the chat-exposed PAT (outstanding since 2026-09-18);
+   available.
+4. **QEMU full-S3 program (user-approved, staged, phone-proot testing):**
+   Stage 0 exact-test harness (`tools/qemu_boot_test.sh`: assert zero
+   `Unknown cmd 0x10` + zero `0x10200C` + `STATUS?` → `RED`); Stage A boot
+   past flash-init (identify `er` via `info mtree`, byte-level SPI trace,
+   patch as `patches/qemu-s3-flash-part2.patch` in the emulator repo);
+   Stage B GPIO observability; Stage C UART2/RS485 via `virtual_bus.sh`;
+   Stage D Wi-Fi verdict spike (prototype or declare Wokwi the path).
+   Signatures: ~22× `0x10` interleaved with ~84× `0x10200C`, then
+   `startup.c:328` assert loop. Stop rules: unmodeled-peripheral wall →
+   bank evidence + options (no silent grind); proot unexecutable → CI
+   boot-smoke instead. (Old "Possible v2.1" ideas are DONE in v2.3:
+   relay labels, STA uplink, `delay(1)` obsolete.)
+5. **Housekeeping:** rotate the chat-exposed PAT (outstanding since 2026-09-18);
    re-check CI after any push; Google index lag is normal.
 
 ---
@@ -433,7 +451,8 @@ RS485-Tester-Report.docx run_tests.sh src/ test/ tools/ arduino/ firmware/
 firmware-n16r8/ wokwi/ captures/ docs/ scripts/ wiki/ releases/ .github/
 .gitignore .unity/ .pio/`
 (`.pio .unity releases/ *.log tc.json .test_*` git-ignored; `releases/` holds
-v1.0 ZIP + 2 git bundles — offline full-history backup, verified by test-clone.)
+v1.0 ZIP + 2 git bundles — offline full-history backup, verified by test-clone.
+Back it up before ANY storage compaction: it exists nowhere else.)
 Wiki canonical sources live in `wiki/` (Home, Flashing, Hardware, Protocol,
 Emulators, Versions, Relays) and are pushed to the `.wiki.git` backend.
 `src/ota.*` (OTA decisions) + `test/test_ota/` + `test/test_web/Update.h`
@@ -441,8 +460,11 @@ Emulators, Versions, Relays) and are pushed to the `.wiki.git` backend.
 (`WiFi.h`), flash-commit counting (`Preferences.h`), and upload handlers
 (`WebServer.h`).
 Termux home `archive/` — pre-existing clutter, leave alone.
-Emulator work (`/opt/qemu-src`, `/opt/qemu-s3`, `/opt/pioenv`) is inside the
-Debian container — see §8 before wiping proot data.
+Emulator work (`/opt/qemu-src` 1.1 GB, `/opt/qemu-s3` 94 MB, `/opt/pioenv`
+76 MB, `/root/.platformio` large) is inside the Debian container — see §8
+before wiping proot data. Wiping it costs ~1 h rebuild (QEMU 20–40 min +
+PIO packages + Xtensa tarball workaround); losing `.pio` (102 MB) is free
+(re-downloads).
 
 **Release checklist — EVERY feature release MUST do all of these in the
 release commit (lesson learned 2026-09-22: HANDOFF body went stale at v1.1
@@ -460,6 +482,8 @@ while README/CHANGELOG moved on — never again):**
    then commit → tag → push → `gh release create` (n16r8 assets renamed) →
    confirm CI green.
 
-Resume checklist: `git log --oneline | head -3` → `git status --short` →
-`pio test -e native` (Termux) → `sh run_tests.sh` → `sh tools/virtual_bus.sh`
-(in proot) → compare against §7 numbers.
+Resume checklist: `ls /opt/qemu-src/build/qemu-system-xtensa && pio --version`
+(toolchain-alive check — if empty, rebuild per §8) → `git log --oneline |
+head -3` → `git status --short` → `pio test -e native` (Termux) →
+`sh run_tests.sh` → `sh tools/virtual_bus.sh` (in proot) → compare
+against §7 numbers (105/105 + contract).
