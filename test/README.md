@@ -1,4 +1,4 @@
-# test/ — automated tests (137 passing: 93 via pio + 44 web via g++)
+# test/ — automated tests (152 passing: 103 via pio + 49 web via g++)
 
 Each subdirectory is an independent Unity test app (PlatformIO convention),
 also compilable with plain `g++` (see `run_tests.sh` fallback).
@@ -28,9 +28,14 @@ also compilable with plain `g++` (see `run_tests.sh` fallback).
 - `test_spoof/` (11) — stage-1 ("100") + stage-2 (88.8/88.8/88.8/188) frame
   bytes, checksum self-consistency, custom values, `SpoofPlan` stage
   timing/handoff/cancel/retrigger/rollover, legacy window (frozen) timing.
+- `test_meter/` (10) — v2.6 link-gap heuristic: first GREEN opens meter #1,
+  RESTARTs on steady GREEN never open meters, cycle+gap = pass, retry loop =
+  one verdict, sub-3 s flickers stay, abort+gap = fail, day reset + boot
+  restore, 200-meter day boundary, millis-wrap + 50 k-attempt soak, mid-cycle
+  gap defers its close until IDLE.
 - `test_ota/` (6) — version compare (incl. `2.10 > 2.9`), per-variant asset
   pick, download-URL build + tag sanitizing, auto-check gate matrix.
-- `test_web/` (44, g++-only) — real `web_ui.cpp` on host stubs (`Arduino.h`,
+- `test_web/` (49, g++-only) — real `web_ui.cpp` on host stubs (`Arduino.h`,
   `WiFi.h` + STA/RSSI/IP, `WebServer.h` + request/upload drivers incl.
   pass-last order, `Preferences.h` + commit counter, `Update.h` + single-end
   + failure injection, `ESPmDNS.h`, `esp_system.h`): per-request admin
@@ -40,7 +45,9 @@ also compilable with plain `g++` (see `run_tests.sh` fallback).
   count / chase-sweeps / spoof-pin+save+trigger / loop / labels / counters /
   STA + one-shot test + on-demand join / OTA (+install, URL, interval) /
   Tasmota `/update` upload (gates, rejects, order-independence, streamed-only
-  password) / console verbs / backup v2 + restore v1/v2 / keep-WiFi reset +
+  password) / console verbs (`DAYRESET`, meter batch in `STATUS`) /
+  `/api/meter` reset-only + link-gap closes over the real `web_tick` path /
+  backup v2 + restore v1/v2 / keep-WiFi reset +
   bootcount / info fields, POST fuzz, factory reset, portal redirects.
 - `test_system/` (3) — `select_reply()` matrix (golden/stage-1/stage-2/
   disabled/silent paths) + 24 h office-day sim: 86,400 polls, per-reply
@@ -52,5 +59,5 @@ Plus `tools/check_web_contract.py` — dashboard JS ↔ firmware route/key gate
 (incl. dynamic `lblN` keys, `/api/ota`, `/update` form, new v2.4 endpoints,
 per-mode element ids, single-`Update.end(true)` + no-`SIZE_UNKNOWN` rules).
 
-Run: `pio test -e native` (93: all except `test_web`) or `sh ../run_tests.sh`
-(full 137: g++ suites + contract + `test_web` + `test_system` + soak).
+Run: `pio test -e native` (103: all except `test_web`) or `sh ../run_tests.sh`
+(full 152: g++ suites + contract + `test_web` + `test_system` + soak).

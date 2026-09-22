@@ -2,13 +2,14 @@
 
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
-  adaptive tracker, canned frames, `FW_VERSION` (`"2.5"`).
+  adaptive tracker, canned frames, `FW_VERSION` (`"2.6"`).
 - `relay_ctrl.h` / `relay_ctrl.cpp` — hardware-independent bench add-on:
   8-relay sequencer (sequential/all-ON/chase, relay count, 3 button behaviors,
   per-mode holds/sweeps, loop/pause/limit, stagger, direction, QC counters,
   chase break-before-make, post-stop dead-band, run-register snapshots),
+  v2.6 `MeterBatch` link-gap meter heuristic (host-tested, no extra GPIO),
   debounced inputs, 2-stage spoof plan + frame builder, NVS-backed config
-  struct. Host-tested (`test_relay`, `test_spoof`).
+  struct. Host-tested (`test_relay`, `test_spoof`, `test_meter`).
 - `fw_upload.h` — hardware-independent update gates (Tasmota rules: explicit
   sketch budget, exact variant-asset match, image-head check, one error
   vocabulary). Host-tested (`test_upload`); enforced by both update paths.
@@ -21,8 +22,9 @@
   manual `/update` upload, config backup/restore, custom OTA URL, mDNS.
   Host-tested on stubs (`test_web`).
 - `main.cpp` — Arduino sketch: frozen RS485 RX → parse → reply path, 250 ms
-  LED eval, `STATUS?` (`GREEN 2.5` / `RED 2.5`), plus relay/web/spoof/OTA
-  handling (all non-blocking, RS485 keeps priority).
+  LED eval, `STATUS?` (`GREEN 2.6` / `RED 2.6`), plus relay/web/spoof/OTA
+  handling (all non-blocking, RS485 keeps priority; v2.6 meter heuristic is
+  fed inside `web_tick()`).
 
 Pins: TX=17, RX=16, DE=4, green LED=10, red LED=11, onboard RGB=48 (WS2812,
 `neopixelWrite`, no extra library), relays R1–R8 = 5/6/7/8/9/12/13/14,

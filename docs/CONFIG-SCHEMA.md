@@ -6,7 +6,7 @@ key-value (namespace `bms2`); structure lives in the JSON export layer.
 Secrets (`ap_pass`, `admin_pass`, `sta_pass`) are in **no** section —
 never exported, never restored, re-entered by hand.
 
-Backup shape: `{"config":2,"fw":"2.5","relays":{...},"spoof":{...},
+Backup shape: `{"config":2,"fw":"2.6","relays":{...},"spoof":{...},
 "trigger":{...},"network":{...},"ota":{...},"meta":{...}}`.
 Restore accepts v2 sectioned **and** v1 flat (`{"backup":1,...}`, migrated
 through the same table); anything else is rejected with a named error.

@@ -18,10 +18,25 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.5** current · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **134 passing** (93 via `pio test -e native` + 41 web, via `sh run_tests.sh`) + 8-day soak |
+| Releases | **v2.6** current · `v2.5` portal/schema/harness · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **152 passing** (103 via `pio test -e native` + 49 web, via `sh run_tests.sh`) + 30-day soak |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
+
+## What v2.6 adds (daily meter estimate, round link dots, one-file flash)
+
+- **Daily meter counting, software-only estimate** (no button, no new GPIO):
+  the box watches link gaps — RED ≥ 3 s closed by GREEN = reseat = new
+  meter; steady GREEN across RESTARTs/retries = same meter; sub-3 s
+  flickers stay; mid-cycle gaps defer to IDLE. Dashboard card shows
+  meters/attempts/pass/fail (pass = a full cycle before the swap) with a
+  manual New-day reset (no RTC; boot persists; backups exclude counters).
+- **Round link dots** (green/red) in the dashboard header beside the LINK pill.
+- **One-file flash images**: `firmware/bms-tester-8mb.bin` +
+  `firmware-n16r8/bms-tester-n16r8.bin` (merged bootloader+partitions+app,
+  single `write-flash 0x0` command, structure-verified).
+- **Proof**: `test_meter` (10 Unity tests) + 5 web meter tests + 8 emu HTTP
+  checks over the new `/__bus` control; 62/62 emu + 10/10 soak + 152/152 total.
 
 ## What v2.5 adds (trigger save, portal landing, structured config, emulation)
 
@@ -148,31 +163,36 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 ## Verify it
 
 ```sh
-sh run_tests.sh          # full 134: g++ suites + web contract + test_web + test_upload + soak (always); HIL when attached
-pio test -e native       # 93 Unity tests: checksum, logic, parser, stress, relay, spoof, system, ota, upload
+sh run_tests.sh          # full 152: g++ suites + web contract + test_web + test_upload + test_meter + soak (always); HIL when attached
+pio test -e native       # 103 Unity tests: checksum, logic, parser, stress, relay, spoof, meter, system, ota, upload
 pio run -e esp32-s3-devkitc-1 -e s3-n16r8  # both firmware profiles compile (run inside proot-debian: glibc toolchain)
 ```
 
-Emulator results for v2.5 (Termux + Debian proot):
-- Socket harness (`tools/fw_emu`, real handlers over real HTTP): 54 checks
+Emulator results for v2.6 (Termux + Debian proot):
+- Socket harness (`tools/fw_emu`, real handlers over real HTTP): 62 checks
   PASS (portal, relay flows, spoof/trigger, uploads, backup/restore,
-  console, resets, STA/OTA, info) + 48 h run (10 checks) PASS.
-- Native 137/137 (93 pio + 44 web + contract) + web-contract PASS + 30-day
+  console, resets, STA/OTA, info, meter heuristic + round dots via new
+  `/__bus` bus-state control) + 48 h run (10 checks) PASS.
+- Native 152/152 (103 pio + 49 web + contract) + web-contract PASS + 30-day
   soak (2.59 M polls, rollover crossed) — PASS (frozen v1.x untouched).
 - Virtual bus (`sh tools/virtual_bus.sh`, in proot-debian for /tmp): 03/04/05 golden, silences,
   resync, red-after-silence — PASS.
 - Dashboard + portal pages: `w3m -dump` renders verified; JS `node --check`
   clean; JS↔firmware contract gate green (incl. single-end, no-SIZE_UNKNOWN,
   portal-surface rules).
-- Wokwi: diagram DUT pins verified against firmware (relays 5,6,7,8,9,12,13,14 · LEDs 10,11 · RGB 48 · UART 16,17 · button 15 · spoof 21);
+- Wokwi: diagram DUT pins verified against firmware (relays 5,6,7,8,9,12,13,14 · LEDs 10,11 · RGB 48 · UART 16,17 · button 15 · kill 18 · spoof 21; v2.6 adds no pins);
   headless run needs `WOKWI_CLI_TOKEN` (CI-gated).
 - QEMU-S3: parked (Stage-0 flash model clean; guest resets in 2nd-stage bootloader SITE1) — see HANDOFF.
 
-`firmware/firmware.bin` SHA-256: see `firmware/README.md` (refreshed for v2.4).
-`firmware-n16r8/firmware.bin` SHA-256: see `firmware-n16r8/README.md`.
+`firmware/bms-tester-8mb.bin` SHA-256: see `firmware/README.md` (refreshed for v2.6; merged single-file image + separate files).
+`firmware-n16r8/bms-tester-n16r8.bin` SHA-256: see `firmware-n16r8/README.md`.
 
 ## Versions
 
+- **v2.6** — software-only daily meter estimate (link gaps ≥ 3 s = new
+  meter, no button/GPIO), round link dots, one-file merged flash images,
+  `test_meter` + web/emu meter coverage. 152/152 tests (103 pio + 49 web),
+  62/62 emu + 10/10 soak.
 - **v2.5** — trigger save, portal landing, structured config, on-demand STA,
   whitespace-tolerant JSON, socket harness (64/64) + 30-day soak.
   137/137 tests.

@@ -1,4 +1,4 @@
-// Month-long soak simulation of the tester firmware logic (v2.5).
+// Month-long soak simulation of the tester firmware logic (v2.6).
 // Uses the REAL src/bms_protocol.cpp (parser + dispatcher + tracker) and
 // the REAL src/relay_ctrl.cpp (sequencer + spoof plan), driven exactly like
 // main.cpp's loop: feed poll bytes -> note_poll -> reply -> evaluate on a
