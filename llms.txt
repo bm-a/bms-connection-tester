@@ -28,7 +28,10 @@ console, config backup/restore, custom OTA URL, one-shot STA uplink test,
 info card, mDNS, keep-WiFi/bootcount resets. v2.5 adds trigger save (pin +
 enable + polarity), captive-portal landing for phones, structured config
 schema (v1+v2 backups), on-demand STA join, whitespace-tolerant JSON, socket
-emulation harness (64/64 over real HTTP) + 30-day soak. v1.x responder core frozen.
+emulation harness (64/64 over real HTTP) + 30-day soak. v2.6 adds a
+software-only daily meter estimate (link gaps ≥ 3 s = new meter, no button,
+no new GPIO), round link dots on the dashboard, and one-file merged flash
+images per board. v1.x responder core frozen.
 
 Also known as / search terms: JBD BMS emulator, JBD BMS simulator, Xiaoxiang
 BMS tester, smart BMS responder, RS485 BMS spoof, e-rickshaw meter tester,
@@ -51,7 +54,7 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.5` / `RED 2.5`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.6` / `RED 2.6`.
 
 ## Code map
 

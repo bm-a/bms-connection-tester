@@ -46,3 +46,12 @@ byte-present inside the shipped `firmware.bin`.
 - Modbus RTU frames occasionally share the wire — different protocol, ignored.
 - Charge/discharge captures whose checksums match no formula are treated as
   transcription errors and excluded from the test vectors (documented in code).
+
+## v2.6 note: no protocol change
+
+Daily meter counting adds no wire traffic and no new register: the JBD
+protocol carries no meter ID, so "retry same meter" vs "next meter" is
+unknowable from protocol data alone. The count is a software estimate from
+link gaps (RED ≥ 3 s closed by GREEN = reseat = new meter), never a
+per-unit identification. Link state (GREEN/RED) and relay actuations are
+unchanged.

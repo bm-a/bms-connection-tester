@@ -1,4 +1,4 @@
-# Config schema v2 (firmware v2.5+)
+# Config schema v2 (firmware v2.5+; meters added v2.6)
 
 One shared validation table, enforced identically by `/api/config`,
 `/api/spoof`, `/api/restore`, and the emulation drivers. NVS stays flat
@@ -71,3 +71,23 @@ seconds 1–120. `0x04`/`0x05` never change.
 | JSON key | NVS | Notes |
 |---|---|---|
 | boot | bootn | boot counter (Reset-99 zeroes, no reboot) |
+
+## meters.* (v2.6 daily meter-test counting — NOT config, NOT in backups)
+
+Daily QC tallies, approximate by design (no meter ID exists on the wire).
+Reported read-only in `/api/state` under `cfg` as `m_met/m_att/m_ps/m_fl`.
+Fed automatically every loop from the live link state (`web_tick`): a RED
+gap ≥ 3 s (`LINK_GAP_NEW_METER_MS`) closed by GREEN = reseat = new meter;
+steady GREEN across RESTARTs/retries = same meter; sub-3 s flickers stay;
+a gap that elapses mid-cycle defers its close until IDLE. The only operator
+control is `/api/meter {"cmd":"reset"}` (manual New-day, no RTC) plus the
+console `DAYRESET`. Never through `/api/config` or restore. Deliberately
+excluded from backup/restore: a restored backup must not resurrect
+yesterday's tallies. NVS keys `m_met/m_att/m_ps/m_fl` (flat, `putUInt`),
+flushed on close/reset only (1 write per meter — decades of endurance;
+attempts ride along in the same batch, so a power cut loses at most the
+current meter's attempts), restored at boot, never cleared at boot.
+Verdict rule: every accepted `start()` opens an attempt; a completed cycle
+latches pass; closing a meter records pass if a cycle completed since the
+last close, else fail ("closed out with no completed cycle" — the only
+honest fail signal). A close with no open attempt just opens meter #1.

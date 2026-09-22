@@ -4,6 +4,8 @@
 // state are driven through the side control port (FW_EMU_CTL, default 8081):
 //   GET /__time?ms=N   set clock, run web_tick + seq.tick at N
 //   GET /__link?up=1   STA link up (0 = down)
+//   GET /__bus?up=1    RS485 bus link up (0 = down; drives the green/red
+//                      LEDs + the v2.6 meter heuristic, like real bus traffic)
 //   GET /__update       Update-stub state (finished/error/end_calls/bytes)
 //   GET /__flags        ota install/check calls + restart flag (then clear)
 //   GET /__chip?sketch=N&flash=N  free-sketch / flash size overrides
@@ -127,6 +129,10 @@ static void ctl_poll() {
     g_wifi_status = (q("up") == "1") ? WL_CONNECTED : WL_DISCONNECTED;
     web_tick(g_mock_millis);
     snprintf(body, sizeof(body), "{\"ok\":1,\"link\":%d}", g_wifi_status);
+  } else if (path == "/__bus") {
+    g_link = (q("up") == "1");
+    web_tick(g_mock_millis);
+    snprintf(body, sizeof(body), "{\"ok\":1,\"bus\":%d}", g_link ? 1 : 0);
   } else if (path == "/__update") {
     snprintf(body, sizeof(body),
              "{\"finished\":%d,\"error\":%d,\"ends\":%d,\"bytes\":%u,"

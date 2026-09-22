@@ -53,5 +53,9 @@ void web_wifi_set(bool on);
 // v2.3: STA uplink state for main.cpp's OTA gate. 0 = off, 1 = connecting,
 // 2 = online (has address; internet assumed when online).
 int web_sta_state();
+// v2.6 daily meter counting (R39-R40): software-only link-gap heuristic,
+// fed from web_tick() every loop. No button, no extra GPIO.
+// v2.6 manual "new day" reset (no RTC; boot persists).
+void web_meter_reset();
 
 #endif  // ARDUINO

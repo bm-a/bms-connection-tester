@@ -63,6 +63,28 @@
 - WiFi kill: GPIO18 to GND drops the AP + portal + server at once (mDNS
   too); release to bring everything back. Default on at boot.
 
+## Daily meter counting (v2.6, approximate — no button, no new GPIO)
+
+The JBD protocol carries no meter ID — the box only sees link state and
+relay actuations — so the count is a software estimate from link gaps,
+never inferred per-unit exact. Rules:
+- First GREEN sighting opens meter #1.
+- A RED gap ≥ 3 s closed by GREEN = reseat = new meter (closes the previous
+  one, opens the next: `meters/attempts/pass/fail`).
+- Steady GREEN across RESTARTs/retries = same meter, always. Sub-3 s
+  flickers (slow poll, noise) never open a meter.
+- Every accepted START opens an **attempt** (retries included); a completed
+  cycle latches **pass**; a meter closed with no completed cycle counts
+  **fail** ("closed out with no completed cycle" — the only honest signal).
+- A gap that elapses mid-cycle defers its close until IDLE, so the
+  in-flight cycle's verdict lands on the right meter.
+- Day boundary is manual: **New day (reset)** on the dashboard (no RTC;
+  a reboot never clears — a power flicker must not eat QC data; a seated
+  unit re-opens as #1 at once).
+- 1 NVS write per meter (never per actuation/tick); counters are NOT in
+  backups (a restore must not resurrect yesterday's tallies).
+- Console: `DAYRESET` (admin-gated); `STATUS` shows the batch.
+
 ## Web dashboard: see [[Dashboard]] for every card and field.
 
 ## Button behaviors (Sequence card → Button)

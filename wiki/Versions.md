@@ -1,5 +1,23 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.6] — unreleased
+### Added
+- Daily meter-test counting (software-only estimate, no button, no new
+  GPIO): `MeterBatch` (meters/attempts/pass/fail in RAM, flat NVS
+  `m_met/m_att/m_ps/m_fl` flushed on close/reset only), fed from the live
+  link state every loop — RED gap ≥ 3 s closed by GREEN = reseat = new
+  meter; steady GREEN across RESTARTs = same meter; flickers stay; mid-cycle
+  gaps defer to IDLE. Manual New-day reset (no RTC; boot persists, backups
+  exclude counters, seated unit re-opens as #1). Console `DAYRESET`.
+- Round link dots (green/red) in the dashboard header beside the LINK pill.
+- One-file flash images: `firmware/bms-tester-8mb.bin` +
+  `firmware-n16r8/bms-tester-n16r8.bin` (merged bootloader+partitions+app,
+  `write-flash 0x0 <file>`, structure-verified).
+- Spoof edit+save confirmed as the existing two-stage feature (no new mode):
+  stage 1 = all-1s (100), stage 2 = all-8s (88.8/188), both editable.
+- 10-test `test_meter` suite + 5 web meter tests + 8 emu HTTP checks
+  (plus new `/__bus` emu control for the RS485 bus state).
+
 ## [v2.5] — 2026-09-22
 ### Fixed
 - Multipart upload auth: the done handler demanded streamed field AND parsed

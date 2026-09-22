@@ -18,6 +18,7 @@ Firmware envs: `esp32-s3-devkitc-1` vs `s3-n16r8`
 | S3 GPIO48 | onboard WS2812 RGB (no wiring; mirrors green/red via `neopixelWrite`, brightness 32) |
 | S3 GPIO5/6/7/8/9/12/13/14 | → relay module IN1–IN8 (v2.0; 12 V coils, own supply, common GND) |
 | S3 GPIO15 | → button to GND (v2.0; internal pull-up) |
+| S3 GPIO18 | → WiFi-kill to GND (v2.3.1; ground = AP off; internal pull-up) |
 | S3 GPIO21 | → spoof trigger to GND (v2.0; internal pull-up) |
 | MAX485 VCC / GND | 3.3 V (NOT 5 V) / common GND with meter |
 | MAX485 A/B | → meter A/B, twisted pair; 120 Ω across A–B on long runs |

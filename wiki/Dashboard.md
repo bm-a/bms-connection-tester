@@ -1,4 +1,4 @@
-# Dashboard field reference (v2.5)
+# Dashboard field reference (v2.6)
 
 Open: join AP **`BMS-Tester`** (`bms12345`) → phones get a landing page with
 a big **Open Dashboard** button + Safari/Chrome steps (the mini-browser
@@ -15,7 +15,16 @@ never clobbered. Every Save commits to NVS ~1.5 s after the click
   "relays settling"); STOP ALL = everything OFF + manual forces cleared +
   loop cancelled (counters kept for QC).
 - **Tiles**: live R1–R8 (tap = force ON/OFF). Past the Count = greyed out.
-  Header: `seq RUNNING/IDLE · cyc N · act M` (completed cycles, turn-ON edges).
+  Header: `seq RUNNING/IDLE · cyc N · act M` (completed cycles, turn-ON edges),
+  plus two round link dots (green/red mirrors of the LINK pill) at the top.
+
+## Meters today card (v2.6, approx)
+- Live `meters N · attempts A · pass P · fail F`, estimated from link gaps:
+  a RED gap ≥ 3 s (reseat) counts a new meter; retries with the unit plugged
+  in never do; brief flickers stay. Pass = a full cycle completed before the
+  swap. No button — nothing to press.
+- **New day (reset)**: clear all four (asks first). No RTC — you declare
+  the day boundary; reboots never clear; a seated unit re-opens as #1.
 
 ## Sequence config card (only the active mode's rows show)
 | Field | Units | Range | Default | Applies to | Save owner |

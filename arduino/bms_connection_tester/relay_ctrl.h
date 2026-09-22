@@ -112,6 +112,111 @@ inline uint8_t sanitize_spoof_pin(uint8_t p) {
 #define RELAY_STOP_DEADBAND_MS 500u
 #define CHASE_BBM_MS 20u
 
+// ---- v2.6 daily meter-test counting (R32-R40) ----
+// The JBD protocol carries no meter ID: the ESP only sees link state and
+// relay actuations, so "retry same meter" vs "next meter" is unknowable on
+// the wire. Decided (no operator button, no extra GPIO): a software-only
+// APPROXIMATE counter driven by link gaps. Operator workflow this relies
+// on: a failed/retried test does NOT unplug the meter (link stays GREEN),
+// while a new meter means physical reseat (connector out, unit swapped in)
+// which drops the link to RED for seconds. So: RED->GREEN after a RED gap
+// >= LINK_GAP_NEW_METER_MS closes the previous meter and opens a new one;
+// brief flickers (slow poll, noise) stay on the same meter. Approximate by
+// design — stated honestly on the dashboard, not sold as exact.
+// Verdict rule (the only honest one from existing state): every accepted
+// start() opens an attempt; a cycles_done_ edge latches pass; closing a
+// meter records pass if a cycle completed since the last close, else fail.
+// A close with no open attempt just opens meter #1 (no verdict — nothing
+// was tested yet). Closing is deferred while the sequencer runs (a reseat
+// mid-cycle must not misattribute the in-flight verdict); the pending close
+// lands on the next IDLE eval.
+// Pure RAM here (host-testable); web_ui persists totals to NVS (flat keys,
+// flushed on close/reset only — never per actuation/tick).
+#define LINK_GAP_NEW_METER_MS 3000u
+struct MeterBatch {
+  uint32_t meters = 0;     // link-gap closes (physical units, approximate)
+  uint32_t attempts = 0;   // accepted sequence starts (retries included)
+  uint32_t pass = 0;       // meters with >=1 completed cycle before close
+  uint32_t fail = 0;       // meters closed out with no completed cycle
+  bool attempt_open = false;  // a start() happened since the last close
+  bool pass_latched = false;  // a cycle completed since the last close
+  void onStart() { attempts++; attempt_open = true; }
+  void onCycle() { pass_latched = true; }  // idempotent under loop mode
+  void begin() {  // boot: total amnesia (web_ui overlays NVS totals after)
+    meters = attempts = pass = fail = 0;
+    attempt_open = pass_latched = false;
+    pending_close_ = false;
+    link_ = false;
+    had_green_ = false;
+    red_since_ = 0;
+  }
+  // Call every eval with the live link state + sequencer running flag
+  // (HOLD/CHASE/PAUSE count as running). Rollover-safe (unsigned math).
+  void noteLink(bool link, unsigned long now, bool seq_running) {
+    if (!link) {
+      if (link_) { link_ = false; red_since_ = now; }  // falling edge
+      return;
+    }
+    if (link_) return;  // steady GREEN: same meter, nothing to do
+    // Rising edge: RED -> GREEN.
+    link_ = true;
+    if (!had_green_) {  // first sighting since boot: meter #1, no verdict
+      had_green_ = true;
+      meters++;
+      attempt_open = false;
+      pass_latched = false;
+      return;
+    }
+    if ((now - red_since_) < LINK_GAP_NEW_METER_MS) return;  // flicker: same
+    if (seq_running) {  // reseat mid-cycle: defer close until IDLE
+      pending_close_ = true;
+      return;
+    }
+    closeMeter();
+  }
+  // Main loop calls this each IDLE eval so a deferred close lands promptly.
+  void pollIdle(bool seq_running) {
+    if (pending_close_ && link_ && !seq_running) {
+      pending_close_ = false;
+      closeMeter();
+    }
+  }
+  void dayReset() {  // manual "new day" (no RTC on the box; boot persists)
+    meters = attempts = pass = fail = 0;
+    attempt_open = pass_latched = false;
+    pending_close_ = false;
+    // A unit seated NOW is today's meter #1 (else the bench would read 0
+    // all day until the first reseat). Nothing plugged: 0 until first GREEN.
+    if (link_) {
+      meters = 1;
+      had_green_ = true;
+    } else {
+      had_green_ = false;
+    }
+  }
+  void setTotals(uint32_t m, uint32_t a, uint32_t p, uint32_t f) {
+    meters = m;
+    attempts = a;
+    pass = p;
+    fail = f;
+  }
+ private:
+  bool link_ = false;          // last fed link state
+  bool had_green_ = false;     // ever seen GREEN (first sighting = meter #1)
+  bool pending_close_ = false;  // gap elapsed mid-cycle, close at IDLE
+  unsigned long red_since_ = 0;
+  void closeMeter() {
+    pending_close_ = false;
+    if (attempt_open) {
+      if (pass_latched) pass++;
+      else fail++;
+      attempt_open = false;
+      pass_latched = false;
+    }
+    meters++;
+  }
+};
+
 // ---- 8-relay sequencer: pure millis() state machine, no delay() ----
 class RelaySequencer {
  public:
@@ -143,6 +248,12 @@ class RelaySequencer {
   // v2.3 QC counters (since begin(); stopAll preserves them).
   unsigned long cyclesDone() const { return cycles_done_; }
   unsigned long actuations() const { return acts_; }
+  // v2.6 daily meter counting (R32-R40). stopAll() preserves the batch
+  // (aborting a run is not closing out a meter); only link-gap closes and
+  // dayReset() mutate it. begin() zeroes it; web_ui overlays persisted NVS
+  // totals after.
+  MeterBatch &meter() { return meter_; }
+  const MeterBatch &meter() const { return meter_; }
  private:
   enum Phase : uint8_t { PH_IDLE, PH_RUNNING, PH_HOLD, PH_CHASE, PH_PAUSE };
   const Bms2Config *cfg_ = nullptr;
@@ -164,12 +275,16 @@ class RelaySequencer {
   unsigned long bbm_until_ = 0;
   unsigned long cycles_done_ = 0;    // v2.3 completed cycles (hold expiries)
   unsigned long acts_ = 0;           // v2.3 relay turn-ON edges (QC counter)
+  MeterBatch meter_;                 // v2.6 daily meter batch (see above)
   bool seq_[RELAY_COUNT] = {false};
   bool forced_[RELAY_COUNT] = {false};
   bool forced_state_[RELAY_COUNT] = {false};
   void enterHold(unsigned long now);
   void enterPause(unsigned long now);  // v2.3 loop rest, then restart
   void cycleDone(unsigned long now);   // hold expired: loop or stop
+  // Loop-restart re-entry must NOT open a new attempt (same meter, same run);
+  // only operator/HTTP starts count. R40.
+  bool startImpl(unsigned long now, bool count_attempt);
   uint16_t stepGap() const;            // step_delay or ALL-ON stagger
   uint8_t mapStep(uint8_t k) const;    // v2.3 direction: position -> relay
   void lightStep(uint8_t k);           // light exactly position k (+counter)
