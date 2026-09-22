@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Beautiful dad-friendly Word report — v2.5 (trigger save, portal landing, emulation)."""
+"""Beautiful dad-friendly Word report — v2.6 (meter estimate, round dots, one-file flash)."""
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -75,7 +75,7 @@ def callout(title, text, fill="FFF6D6"):
 sec = doc.sections[0]
 fp = sec.footer.paragraphs[0]
 fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = fp.add_run("RS485 Connection Tester v2.5  —  Build & Test Report   |   Page ")
+r = fp.add_run("RS485 Connection Tester v2.6  —  Build & Test Report   |   Page ")
 r.font.size = Pt(9)
 r.font.color.rgb = GREY
 fld = OxmlElement("w:fldSimple")
@@ -94,18 +94,18 @@ r.bold = True
 r.font.color.rgb = NAVY
 sp = doc.add_paragraph()
 sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = sp.add_run("Build & Test Report v2.5 — for an electronics engineer, no coding needed")
+r = sp.add_run("Build & Test Report v2.6 — for an electronics engineer, no coding needed")
 r.font.size = Pt(13)
 r.italic = True
 r.font.color.rgb = GREY
 doc.add_paragraph()
 table(["Item", "Detail"], [
     ["Board", "ESP32-S3 DevKitC-1 (or N16R8) + MAX485 module + 8-channel relay module"],
-    ["Version", "v2.5 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; per-mode relay bench; 2-stage fault values + trigger save; phone-friendly portal landing; config web page + Tasmota-grade firmware updates"],
-    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.5 (trigger/portal/schema/emulation on v2.4)"],
+    ["Version", "v2.6 — answers 0x03/0x04/0x05, silent on the rest; self-adjusts to any poll speed; per-mode relay bench; 2-stage fault values + trigger save; phone-friendly portal landing; config web page + Tasmota-grade firmware updates; daily meter estimate from link gaps; round link dots; one-file flash images"],
+    ["Previous", "v1.0 frozen untouched (ZIP + git tag) — this report covers v2.6 (meter estimate/dots/merged images on v2.5)"],
     ["Date", "September 2026"],
-    ["Firmware", "firmware.bin — v2.5 8 MB build, compiled + verified (SHA in firmware/README.md)"],
-    ["Tests", "137 / 137 passing + socket harness 64/64 (protocol + lamps + faults + 30-day soak + relay/BBM/dead-band/spoof-save+trigger/console/backup-v2/OTA-URL+ondemand/upload-gates/portal-landing/whitespace-JSON) + w3m page renders"],
+    ["Firmware", "bms-tester-8mb.bin — v2.6 8 MB merged image (bootloader + partitions + app, one flash command), compiled + verified (SHAs in firmware/README.md)"],
+    ["Tests", "152 / 152 passing + socket harness 72/72 (protocol + lamps + faults + 30-day soak + relay/BBM/dead-band/spoof-save+trigger/console/backup-v2/OTA-URL+ondemand/upload-gates/portal-landing/whitespace-JSON/meter-gaps/round-dots) + w3m page renders"],
     ["Use", "Green lamp = wiring correct, red lamp = wiring wrong. Button runs the relay sequence. Phone/laptop + web page configures everything."],
 ], widths=[1.6, 4.6])
 callout("Passwords — keep this file safe: ",
@@ -123,7 +123,7 @@ for item in [
     "1.  What this box does (start here)",
     "2.  Parts list",
     "3.  Wiring — the complete circuit (lamps + relays + button)",
-    "4.  How v2.5 works (every meter type, no code)",
+    "4.  How v2.6 works (every meter type, no code)",
     "5.  Using it on the assembly line (lamps, button, web page)",
     "6.  Getting the software onto the board (3 easy methods)",
     "7.  Build & test report (numbers included)",
@@ -193,12 +193,13 @@ table(["Signal", "From → To", "Notes"], [
     ["Relay outputs", "Each COM/NO/NC → one meter function", "Up to 3 A per channel. NO = closes when relay clicks."],
     ["Button", "S3 GPIO15 → button → GND", "Built-in pull-up; short press runs the sequence, 10 s hold wipes settings."],
     ["Spoof trigger", "S3 GPIO21 → contact → GND (optional)", "Or press FIRE on the web page instead."],
+    ["WiFi kill", "S3 GPIO18 → switch → GND (optional)", "Ground it to turn the Wi-Fi off completely; release to bring it back."],
 ], widths=[1.2, 2.4, 2.6])
 callout("12 V rule: ",
         "the ESP is USB-powered, the relay coils are 12 V-powered, and their grounds are tied together. Relays will never click without the 12 V adapter.")
 
 # ================= 4 =================
-doc.add_heading("4. How v2.5 works (the idea, no code)", level=1)
+doc.add_heading("4. How v2.6 works (the idea, no code)", level=1)
 for s in [
     "The meter asks questions in the JBD battery language at 9600 baud — usually register 0x03 (voltage/current/charge), sometimes 0x04 (cell voltages) or 0x05 (device name), occasionally configuration writes.",
     "The box checks every incoming message completely (start, command, length, safety checksum, end byte). Random factory noise can never fake one — proven with a million random bytes in testing.",
@@ -206,9 +207,10 @@ for s in [
     "Green/red is now self-adjusting: the box measures the meter's poll rhythm and sets its patience between 2 and 10 seconds. Fast meters, slow meters, jittery meters — all show steady green; a truly silent line always goes red. No configuration, no buttons, forever.",
     "Relays: one button press switches the first N relays in order with an adjustable pause between clicks (default half a second), holds each mode for its own time in milliseconds, then releases — or switches them all at once, or sweeps a single lit relay (chase wave, both directions). Three button styles are selectable: hold-then-auto-off with re-press abort, run-to-the-end ignoring presses, or re-press restarts from R1. Burn-in extras: loop the cycle with a cooling pause, stop after N cycles, stagger the all-at-once inrush, name each relay (HORN, LIGHT…), and count cycles + relay clicks for QC. The web page also toggles each relay by hand.",
     "Fault test: a second input (or the web FIRE button) first shows a realistic full pack (100 V / 100 A / 100 °C / 100 %) for 5 seconds, then the over-range pattern (88.8 / 88.8 / 88.8 / 188 %) for 10 seconds — then everything returns to normal by itself. Both stages (values + seconds) are adjustable. Note: if the meter shows 100 instead of 188, that is the meter capping the display — the box provably sends 188.",
-    "Web dashboard: the box permanently broadcasts its own Wi-Fi network (no office internet needed). Any phone or laptop joins it and opens the control page — live relay buttons, delay/mode settings, fault-test values, firmware updates, admin password. Tick ‘remember this device’ to stay logged in for 30 days, even across power cuts. All settings survive power cuts.",
-    "Firmware updates: two ways. Offline: open the Firmware upload page and send the matching .bin file (works with zero internet). Automatic: enter a phone-hotspot Wi-Fi once — the box checks GitHub for new releases and installs them itself when the bench is idle.",
-    "Invisible helper: over USB the box answers STATUS? with GREEN 2.3 / RED 2.3 (the number is the firmware version). Only for automatic tests.",
+    "Web dashboard: the box permanently broadcasts its own Wi-Fi network (no office internet needed). Any phone or laptop joins it and opens the control page — live relay buttons, delay/mode settings, fault-test values, firmware updates. No login: the admin password (default admin123) is asked only for reboot, reset, upload and saves. The page header shows two round link dots (green/red) mirroring the lamps. All settings survive power cuts.",
+    "Firmware updates: two ways. Offline: flash the ONE merged file (bms-tester-8mb.bin for 8 MB boards, bms-tester-n16r8.bin for N16R8) at address 0x0 — bootloader, partitions and app in a single command — or open the Firmware upload page and send the matching .bin file (works with zero internet). Automatic: enter a phone-hotspot Wi-Fi once — the box checks GitHub for new releases and installs them itself when the bench is idle.",
+    "Daily meter estimate: the box cannot tell meters apart on the wire (no meter ID exists), so it estimates from link gaps — a red gap of 3 seconds or more that turns green again means the worker swapped in a new meter; retries with the meter still plugged in never count. The dashboard shows meters / attempts / pass / fail (pass = a full relay cycle finished before the swap). Brief flickers never count, and a swap mid-cycle waits for idle before counting. The ‘New day’ button clears the four numbers (no clock on the box — the worker declares the day). Approximate by design, stated honestly on the page.",
+    "Invisible helper: over USB the box answers STATUS? with GREEN 2.6 / RED 2.6 (the number is the firmware version). Only for automatic tests.",
 ]:
     doc.add_paragraph(s, style="List Number")
 
@@ -234,9 +236,11 @@ doc.add_heading("5.3 Web dashboard (phone/laptop, no office Wi-Fi needed)", leve
 for s in [
     "On the phone/laptop, join Wi-Fi network BMS-Tester with password bms12345. A login page pops up by itself; if not, open 192.168.4.1 in the browser.",
     "Phone says ‘no internet’ or keeps using mobile data? Turn mobile data OFF (or tap ‘stay connected’) — the box has no internet, it IS the network.",
-    "Login: user admin, password admin123.",
-    "FIRST: open the Admin card and change the Wi-Fi password and the login password. (Locked out later? Hold the box button 10 s — factory reset, back to the passwords above.)",
+    "No login page — the dashboard opens directly. The admin password (default admin123) is asked only for reboot, reset, upload and saves.",
+    "FIRST: open the Admin card and change the Wi-Fi password and the admin password. (Locked out later? Hold the box button 10 s — factory reset, back to the passwords above.)",
+    "Top of the page: two round dots (green/red) mirror the lamps, next to the LINK pill.",
     "Relays card: live green tiles = ON; tap any tile to force it; START runs the sequence, STOP ALL releases everything.",
+    "Meters card (v2.6): meters / attempts / pass / fail for the day — an estimate from link gaps, no button to press. ‘New day (reset)’ clears the four numbers (it asks first).",
     "Sequence card: mode (1-by-1, chase wave, or all-at-once), how many relays (1–8), step pause in ms, hold time per mode in ms (0 = stay on), loop + cooling pause + cycle limit for burn-in, all-at-once stagger, direction, button style, relay logic. Save stores it through power cuts.",
     "Relay labels card: give each relay a name (HORN, LIGHT…) — workers see names, not R-numbers.",
     "Fault card: stage 1 (100s) and stage 2 (88.8/188) values + seconds each, press FIRE — the meter shows stage 1, then stage 2, then returns to normal by itself.",
@@ -254,12 +258,12 @@ doc.add_heading("Method A — ready binaries + esptool (fastest, no IDE)", level
 for s in [
     "On any PC:  pip install esptool",
     "Plug in the S3 (DATA cable), find the port.",
-    "Run (replace PORT):  esptool.py --chip esp32s3 --port PORT --baud 460800 write-flash 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin  (files in firmware/)",
+    "Run (replace PORT and pick ONE file for the board — 8 MB vs N16R8):  esptool.py --chip esp32s3 --port PORT --baud 460800 write-flash 0x0 bms-tester-8mb.bin  (files in firmware/ and firmware-n16r8/)",
     "Unplug, fit in the box. Boots red, green on first poll.",
 ]:
     doc.add_paragraph(s, style="List Number")
 callout("No-install alternative: ",
-        "a browser flasher (e.g. espthings.io/tools/esp32-flasher) with the same three files at 0x0 / 0x8000 / 0x10000.")
+        "a browser flasher (e.g. espthings.io/tools/esp32-flasher) with the same single file at 0x0. Advanced: the folders also carry bootloader.bin + partitions.bin + firmware.bin for the classic three-address flash (0x0 / 0x8000 / 0x10000).")
 doc.add_heading("Method B — PlatformIO (exact project)", level=2)
 for s in [
     "VS Code + ‘PlatformIO IDE’ extension. File → Open Folder → bms-connection-tester.",
@@ -280,13 +284,15 @@ doc.add_paragraph(
     "Built with the genuine Espressif Xtensa GCC 8.4.0 toolchain (PlatformIO + Arduino framework): "
     "both S3 profiles compiled SUCCESS (8 MB + N16R8). Binary inspected afterward:")
 table(["Artifact", "Detail"], [
-    ["firmware.bin", "v2.5 8 MB build — three canned replies (0x03/0x04/0x05) plus STATUS?, per-mode relay bench, AP dashboard + console, 2-stage spoof + trigger save, phone landing page, Tasmota-grade OTA; SHAs in firmware/README.md."],
-    ["SHA-256 (firmware.bin)", "see firmware/README.md (v2.5 binaries refreshed; golden bytes + version + AP strings verified inside)"],
+    ["bms-tester-8mb.bin", "v2.6 8 MB merged image — bootloader + partitions + app in ONE file (flash to 0x0): three canned replies (0x03/0x04/0x05) plus STATUS?, per-mode relay bench, AP dashboard + console, 2-stage spoof + trigger save, phone landing page, Tasmota-grade OTA, meter estimate + round dots; SHAs in firmware/README.md."],
+    ["SHA-256 (merged image)", "ba08f166fbdcaa40fbd8391479a3cf7687f3154eefeef8c7fae1bec31d8727b9 (1,070,800 bytes; bootloader E9 @0x0, partition magic @0x8000, app E9 @0x10000 verified)"],
+    ["SHA-256 (firmware.bin)", "4dc08487668ff9c37e15cc0bdc0c0bf24d19c8da32e3c1f0dd9516b1d313bbf9 (1,005,264 bytes; golden bytes + 2.6 + BMS-Tester verified inside)"],
+    ["N16R8 image", "firmware-n16r8/bms-tester-n16r8.bin — same logic, 16 MB map (847f6c94…2c9ae3875e08db82842, 1,073,328 bytes)."],
     ["bootloader + partitions", "Standard S3 loader and flash layout, refreshed with this build."],
     ["On-target test builds", "All unit-test programs also compile + link for the S3 chip (they execute once a board is plugged in)."],
     ["QEMU S3 boot test", "Parked at v2.4: Stage-0 flash model clean (GD WRSR2-QE + burst-wrap fixes banked), guest resets in the 2nd-stage bootloader (init returns 0x0a) — emulator gap, not firmware. Wokwi S3 + virtual-bus PTY emulation are the practical paths."],
 ], widths=[1.7, 4.5])
-doc.add_heading("7.2 Automated tests — 137 / 137 PASS (run_tests.sh) + socket harness 64/64", level=2)
+doc.add_heading("7.2 Automated tests — 152 / 152 PASS (run_tests.sh) + socket harness 72/72", level=2)
 table(["Group", "Tests", "Result"], [
     ["Checksums + golden frame (7)", "FFFD / FCDA / FCA8 / FA86 / F65A (2nd Docklight 0x2A variant), byte-exact 0x03 frame, exact-yes / 7xcorrupt-no.", "7 PASS"],
     ["Lamp logic, adaptive (8)", "Boot red, green fast, red after window, self-heal, slow-poll adapt, 2 s floor / 10 s cap, rollover, legacy compat.", "8 PASS"],
@@ -295,8 +301,9 @@ table(["Group", "Tests", "Result"], [
     ["Relay bench (36)", "Boot OFF, stepping, per-mode holds, ALL-ON (+ default stagger ramp), chase + 20 ms break-before-make, count live-shrink safety, loop/pause/limit, direction, counters, button behaviors, force-in-chase, RESTART keeps forces, stop dead-band, mid-cycle latching, polarity, rollover, debounce.", "36 PASS"],
     ["Spoof 2-stage (11)", "Stage-1 ‘100’ + stage-2 88.8/88.8/88.8/188 bytes, checksum validity, custom values, stage handoff/cancel/retrigger, rollover.", "11 PASS"],
     ["OTA logic (6)", "Version compare (2.10 > 2.9), per-board file pick, safe download links, idle-only auto-check gate.", "6 PASS"],
-    ["Website, host-executed (44)", "No login wall (per-request passwords), NVS migration, portal landing + redirect, validation + named rejects, whitespace-tolerant JSON, coalesced saves, per-mode config, spoof save/fire/trigger, Tasmota upload gates + rejects, console, backup v2 + restore v1/v2, STA test + on-demand join, OTA URL/interval/install, mDNS, keep-WiFi/bootcount resets, info fields, fuzz, factory reset.", "44 PASS"],
-    ["Socket harness, real HTTP (54+10)", "drive_emu.py: portal, relay flows, spoof/trigger, uploads, backup/restore, console, resets, STA/OTA, info — over the real handlers. drive_soak.py: 48 virtual hours looped, counters exact, NVS coalescing, spoof mid-run, clean stop.", "64 PASS"],
+    ["Website, host-executed (49)", "No login wall (per-request passwords), round link dots + meters card, NVS migration, portal landing + redirect, validation + named rejects, whitespace-tolerant JSON, coalesced saves, per-mode config, spoof save/fire/trigger, Tasmota upload gates + rejects, console (+DAYRESET, meter batch in STATUS), /api/meter reset + link-gap closes over the real tick, backup v2 + restore v1/v2, STA test + on-demand join, OTA URL/interval/install, mDNS, keep-WiFi/bootcount resets, info fields, fuzz, factory reset.", "49 PASS"],
+    ["Socket harness, real HTTP (62+10)", "drive_emu.py: portal, relay flows, spoof/trigger, uploads, backup/restore, console, resets, STA/OTA, info, meter gaps + round dots (new /__bus bus-state control) — over the real handlers. drive_soak.py: 48 virtual hours looped, counters exact, NVS coalescing, spoof mid-run, clean stop.", "72 PASS"],
+    ["Meter heuristic (10)", "First GREEN opens #1, RESTARTs never open meters, cycle+gap = pass, retry loop = one verdict, flickers stay, abort+gap = fail, day reset + boot restore, 200-meter day boundary, millis-wrap + 50 k soak, mid-cycle gap defers to IDLE.", "10 PASS"],
     ["Month soak (pure logic)", "30 virtual days from day 40 across the millis() wrap: 2.59 M polls answered, 309 k looped cycles, exact stage/force/stop behavior, 30 NVS commits, silence → red → green, no reset.", "SOAK PASS"],
     ["Update gates (5)", "Explicit sketch budget, variant asset pick, exact filename match (suffix-trap proof), image-head magic + flash-size matrix, error vocabulary.", "5 PASS"],
     ["System 24 h sim (3)", "Reply-selection matrix + 86,400-poll office day: every reply checksum-validated, exact 5 s + 10 s spoof stages, relay + chase schedule, loop cycles, noise, green all day.", "3 PASS"],
@@ -304,8 +311,8 @@ table(["Group", "Tests", "Result"], [
 doc.add_paragraph("The hardware-in-loop test (real board + adapter asserting exact replies and GREEN→RED timing) runs "
                   "itself the moment hardware is detected; until then it skips. The virtual meter gained scenario modes "
                   "(--reg, --period, --jitter, --mode normal/slowstop/noise/write/unknown) for bench testing.")
-doc.add_heading("7.3 Week-long continuous run — SOAK PASS", level=2)
-doc.add_paragraph("tools/soak_sim.cpp drives the real firmware logic through 8 simulated days: 691,040 polls, all answered, daily noise bursts rejected, silence gaps correctly red, the 32-bit millis() rollover crossed mid-run, and green-on-resume with no reset. Runs in 0.04 s as part of run_tests.sh.")
+doc.add_heading("7.3 Month-long continuous run — SOAK PASS", level=2)
+doc.add_paragraph("tools/soak_sim.cpp drives the real firmware logic through 30 simulated days: 2,591,400 polls answered, 309,625 looped cycles, silence gaps correctly red, the 32-bit millis() rollover crossed mid-run, 30 NVS commits, and green-on-resume with no reset. Runs in under a second as part of run_tests.sh.")
 doc.add_heading("7.4 Testing caught real bugs (proof the suite works)", level=2)
 doc.add_paragraph(
     "1) The new parser emitted a frame when a corrupted checksum was followed by 0x77 — fixed by gating emission on "
@@ -321,6 +328,11 @@ doc.add_paragraph(
 doc.add_paragraph(
     "Carried-over v1.0 finding: reply checksums exclude the echoed command byte (FCDA, not FCD7) — so all canned replies "
     "are frozen literals, never recomputed at runtime.", style="List Bullet")
+doc.add_paragraph(
+    "7) v2.6 meter work: the first day-reset design read 0 all day until the first reseat (a seated unit now re-opens "
+    "as #1 at once, empty bench stays 0); a boot must forget link edges or NVS totals double-count (begin() is total "
+    "amnesia, totals overlay after); the emulator's STA-link switch never touched the bus LEDs, so the meter tests "
+    "drove nothing until the dedicated /__bus control existed. All three are now covered by tests.", style="List Bullet")
 
 # ================= 8 =================
 doc.add_heading("8. Troubleshooting", level=1)
@@ -335,7 +347,8 @@ table(["Symptom", "Fix (in order)"], [
     ["188 % shows 100", "The meter caps the display — the box provably sends 188 (valid checksum). Use stage 1 (100) for a realistic demo."],
     ["Phone cannot see BMS-Tester", "Box fully booted? (takes ~5 s with Wi-Fi). Forget + rejoin; confirm a DATA USB cable powers it."],
     ["Web page won't open", "Joined BMS-Tester (not office Wi-Fi)? Open 192.168.4.1 exactly."],
-    ["Login rejected", "Changed earlier? Ask who changed it. Else hold the box button 10 s (factory reset) → admin/admin123 back."],
+    ["Login rejected", "Changed earlier? Ask who changed it. Else hold the box button 10 s (factory reset) → admin123 back. (There is no login page — the password is asked only for reboot/reset/upload/saves.)"],
+    ["Meter count looks off", "It is an estimate from link gaps, not a per-unit ID: a swap needs 3+ s of red before green returns; quick unplug-replug stays on the same meter. ‘New day (reset)’ clears the four numbers."],
     ["PC cannot see S3", "DATA cable first, then CP210x/CH343 driver; pick the USB-UART port."],
 ], widths=[1.6, 4.6])
 
@@ -350,13 +363,15 @@ callout("Remember: ", "the real battery pack is never needed on the line — tha
 # ================= 10 =================
 doc.add_heading("10. Project folder map + version history", level=1)
 table(["Path", "What it is"], [
-    ["src/main.cpp, src/bms_protocol.*", "v2.4 program (frozen responder core)."],
-    ["src/relay_ctrl.*, src/web_ui.*, src/ota.*, src/fw_upload.h", "v2.4 relay bench + dashboard + update gates."],
-    ["VERSION", "2.3 (also baked into STATUS? replies)."],
-    ["arduino/bms_connection_tester/", "Same v2.4 as an Arduino sketch + README (10 tabs)."],
-    ["firmware/*.bin + firmware-n16r8/*.bin", "Ready-to-flash v2.4 binaries + flash READMEs with SHAs."],
-    ["test/ (9 suites)", "105 automated tests, all passing (incl. relay bench, OTA, website + 24 h sim)."],
-    ["tools/soak_sim.cpp", "8-day run: 691,040 polls answered, rollover crossed, no reset."],
+    ["src/main.cpp, src/bms_protocol.*", "v2.6 program (frozen responder core)."],
+    ["src/relay_ctrl.*, src/web_ui.*, src/ota.*, src/fw_upload.h", "v2.6 relay bench + dashboard (meter estimate, round dots) + update gates."],
+    ["VERSION", "2.6 (also baked into STATUS? replies)."],
+    ["arduino/bms_connection_tester/", "Same v2.6 as an Arduino sketch + README (10 tabs)."],
+    ["firmware/bms-tester-8mb.bin + firmware-n16r8/bms-tester-n16r8.bin", "Ready-to-flash v2.6 merged images (one file per board) + separate files + flash READMEs with SHAs."],
+    ["test/ (10 suites)", "152 automated tests, all passing (incl. meter heuristic, relay bench, OTA, website + 24 h sim)."],
+    ["tools/soak_sim.cpp", "30-day run: 2,591,400 polls answered, rollover crossed, no reset."],
+    ["tools/fw_emu/", "Socket harness + drivers (62 checks) + 48 h run (10 checks) + /__bus control."],
+    ["docs/CONFIG-SCHEMA.md", "Sectioned config schema (v1+v2 backups) + meters.* rules."],
     ["tools/virtual_bus.sh", "One-shot PTY emulation: real protocol core vs scripted meter."],
     ["captures/", "Original Docklight xlsx + README (ground-truth vectors)."],
     ["releases/", "Frozen bms-connection-tester-v1.0.zip (git-ignored)."],
@@ -366,14 +381,14 @@ table(["Path", "What it is"], [
     ["wokwi/", "Browser simulation + sim.yaml headless scenario (relays, buttons, meter)."],
     ["wiki/", "Online manual mirror (Relays page has the web guide)."],
     ["run_tests.sh", "Runs everything runnable in one command."],
-    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.x work. Current release: v2.5."],
+    ["bms-connection-tester-v1.0.zip + git tag v1.0", "Frozen v1.0 — untouched by v2.x work. Current release: v2.6."],
 ], widths=[2.6, 3.6])
 doc.add_paragraph()
 ep = doc.add_paragraph()
 ep.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = ep.add_run("— End of report v2.5. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
+r = ep.add_run("— End of report v2.6. This document + the wiring table in §3 is all any electronics engineer needs to build, flash and maintain it. —")
 r.italic = True
 r.font.color.rgb = GREY
 
 doc.save("/data/data/com.termux/files/home/bms-connection-tester/RS485-Tester-Report.docx")
-print("saved v2.5 RS485-Tester-Report.docx")
+print("saved v2.6 RS485-Tester-Report.docx")

@@ -64,16 +64,16 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 - `src/ota.{h,cpp}` — OTA decision logic: version compare, asset pick, download URL, auto-check gate (host-tested, no Arduino deps).
 - `src/web_ui.{h,cpp}` — always-on AP dashboard (no login wall; per-request admin password for sensitive actions), per-mode menu, NVS v3 + migration, captive portal, STA uplink + test, Tasmota-grade manual `/update` upload + OTA check/install/URL, console, backup/restore, mDNS (ESP-only).
 - `src/main.cpp` — Arduino loop: frozen RS485 path + relay/web/spoof/OTA handling.
-- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_ota|test_upload|test_system` — 93 Unity tests (pio) + `test_web` (44, g++ host stubs) + `tools/check_web_contract.py` gate + `tools/fw_emu` socket harness.
+- `test/test_checksum|test_logic|test_parser|test_stress|test_relay|test_spoof|test_meter|test_ota|test_upload|test_system` — 103 Unity tests (pio) + `test_web` (49, g++ host stubs) + `tools/check_web_contract.py` gate + `tools/fw_emu` socket harness.
 - `tools/virtual_meter.py` — host-side meter simulator with scenario modes.
 - `wokwi/sim.yaml` — headless automation scenario (needs WOKWI_CLI_TOKEN).
 - `tools/dut_emu.cpp` + `tools/raw_meter.py` + `tools/virtual_bus.sh` — PTY virtual-bus emulation (no ESP32).
-- `tools/soak_sim.cpp` — 8-day continuous-run proof. `firmware/*.bin` + `firmware-n16r8/*.bin` — flash-ready.
+- `tools/soak_sim.cpp` — 30-day continuous-run proof. `firmware/bms-tester-8mb.bin` + `firmware-n16r8/bms-tester-n16r8.bin` — one-file merged flash images (+ separate files).
 - `arduino/` — same firmware as Arduino IDE sketch. `wokwi/` — browser simulation (relays + buttons).
 
 ## Verified facts (do not contradict without evidence)
 
-- 103/103 tests pass (incl. original frozen 32); both S3 firmware profiles compile
+- 152/152 tests pass (incl. original frozen 32); both S3 firmware profiles compile
   (Xtensa GCC 8.4.0); golden reply bytes verified inside firmware.bin (SHA-256 in README.md).
 - Reply checksums exclude the echoed command byte (FCDA, not FCD7).
 - The 188 % spoof pattern is proven on-the-wire correct (valid checksum); meters

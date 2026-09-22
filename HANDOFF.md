@@ -1,9 +1,9 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
-> Last updated 2026-09-22 for **v2.5** (trigger save, portal landing,
-> structured config, on-demand STA, tolerant JSON, socket harness 64/64,
-> 30-day soak).
+> Last updated 2026-09-22 for **v2.6** (software-only daily meter estimate,
+> round link dots, one-file merged flash images, `test_meter` in pio native,
+> `/__bus` emu control, 152/152, 62/62 emu, v2.6 docx).
 > COMPACTION CHECKPOINT 2026-09-21: user compacting Termux storage. All 3
 > repos verified pushed + clean (main `2b23226` + tag `v2.3` upstream, release
 > live, CI green; handbook `ba3ac6f`; emulator `1fd0b2a`). `releases/` (564 KB,
@@ -40,8 +40,10 @@ GPIO18; fixed GitHub tag parse + dashboard Install button.
   The Word report for dad keeps the e-rickshaw framing on purpose.)
 - **People:** user = Bhavishya Madan (GitHub `bm-a`). Dad = electronics-strong,
   code-weak; gets status via a WhatsApp Word report, not GitHub.
-- **Current release: v2.3.1** (bench patch on v2.3; no login wall, sticky
-  saves, UTF-8, chase sweeps, spoof GPIO, GPIO18 kill switch, OTA install).
+- **Current release: v2.6** (software-only daily meter estimate from link
+  gaps, round link dots, one-file merged flash images per board; no login
+  wall, sticky saves, UTF-8, chase sweeps, spoof GPIO, GPIO18 kill switch,
+  OTA install).
   v1.x responder core FROZEN (parser, option-A, tracker, golden frames, LEDs,
   STATUS?, original 32 tests byte-identical). v1.0 frozen (ZIP + git tag,
   untouched since).
@@ -52,7 +54,7 @@ GPIO18; fixed GitHub tag parse + dashboard Install button.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 137 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.5`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3/v2.3.1/v2.4/v2.5 (7 assets each); wiki live (8 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 152 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.6`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3/v2.3.1/v2.4/v2.5 (7 assets each) + v2.6 (9 assets: 2 merged + 6 separate + docx); wiki live (8 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -146,6 +148,21 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   commits) + `docs/EMULATION-v2.5.md`. Harness-caught fixes: multipart-arg
   403s, whitespace rejects, test-then-install gap, missing `seq.begin()` in
   emu, console ok-masking. **137/137 total** (93 pio + 44 web).
+- **v2.6** (this release): software-only daily meter estimate — `MeterBatch`
+  (meters/attempts/pass/fail in RAM, flat NVS `m_met/m_att/m_ps/m_fl`
+  flushed on close/reset only), fed from the live link state in `web_tick()`:
+  RED gap ≥ 3 s (`LINK_GAP_NEW_METER_MS`) closed by GREEN = reseat = new
+  meter; steady GREEN across RESTARTs = same meter; sub-3 s flickers stay;
+  mid-cycle gaps defer to IDLE; manual New-day reset (no RTC; boot persists
+  via `begin()` amnesia + NVS overlay; seated unit re-opens as #1; backups
+  exclude counters); console `DAYRESET`. Round link dots (`#dotG/#dotR`) in
+  the dashboard header. One-file merged flash images per board
+  (`bms-tester-8mb.bin` / `bms-tester-n16r8.bin`, `merge_bin`,
+  structure-verified). `test_meter` (10) added to pio native filter (103);
+  `/__bus` emu control for the RS485 state (the STA `__link` never touched
+  bus LEDs). Harness-caught: dayReset seat-count, begin-vs-dayReset link
+  amnesia, STA/bus link conflation. **152/152 total** (103 pio + 49 web);
+  emu 62/62 + 10/10 soak; v2.6 docx.
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
@@ -169,6 +186,7 @@ ESP32 — S3 has no GPIO25; S3 GPIO range is 0–21 + 26–48).
 | S3 GPIO15 (v2.0) | → button to GND (pull-up; 10 s hold = factory reset) |
 | S3 GPIO21 (v2.0) | → spoof trigger to GND (pull-up; v2.3.1: configurable, see below) |
 | S3 GPIO18 (v2.3.1) | → WiFi kill to GND (pull-up; grounded = AP+portal+server off) |
+| *(v2.6 adds NO pins — meter counting is pure software)* | |
 | MAX485 VCC / GND | 3.3 V (NOT 5 V) / common GND with meter |
 | MAX485 A/B | → meter A/B, twisted pair, short run |
 
@@ -200,7 +218,7 @@ Core pieces (`bms_protocol.*`):
 - `reply_for(reg, is_write, len)` — 0x03/04/05 read → canned frame; else NULL.
 - `PollTracker` — EMA of poll intervals; threshold = clamp(2×EMA+500, 2 s, 10 s).
 - `matches_request()` + `connection_active()` — v1.0 compat, kept for tests.
-- `FW_VERSION` = `"2.3"`; `STATUS?` replies `GREEN 2.3` / `RED 2.3`
+- `FW_VERSION` = `"2.6"`; `STATUS?` replies `GREEN 2.6` / `RED 2.6`
   (first token stable — HIL test splits on whitespace).
 
 Canned frames (frozen literals, NEVER recomputed at runtime):
@@ -229,7 +247,11 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
   (`cyclesDone()`/`actuations()`). v2.4: chase 20 ms break-before-make,
   500 ms post-stop start dead-band, run-register snapshots (timing latched,
   count-shrink live), force-in-chase idles the wave, RESTART keeps forces,
-  step ≥ 100 dflt 250 / stagger dflt 50 / pause 500–60000 dflt 2000.
+  step ≥ 100 dflt 250 / stagger dflt 50 / pause 500–60000 dflt 2000. v2.6:
+  `MeterBatch` link-gap heuristic (`noteLink`/`pollIdle`/`closeMeter`,
+  `begin()` amnesia vs `dayReset()` seat-count), accepted starts open
+  attempts (`startImpl` flag keeps loop-restarts out), `cycleDone` latches
+  pass. Never touches relays — pure counters.
 - `DebouncedInput` (30 ms, edge-once), `SpoofWindow` (legacy single-stage,
   frozen + tested), `SpoofPlan` (v2.3 two-stage: `stage()` → 0/1/2).
 - `build_spoof_frame(cfg, stage, out)` — golden copy + patched V/A/SOC/temps
@@ -253,6 +275,10 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
   reboot (one `web_reboot_now` path), boot counter + reset reason,
   portal landing for probes/CNA (button + Safari steps, rest 302s),
   on-demand STA join for check/install/URL, whitespace-tolerant JSON,
+  v2.6 meter card (meters/attempts/pass/fail + New-day reset) + round link
+  dots (`#dotG/#dotR`) + `/api/meter` (reset-only) + console `DAYRESET` +
+  `STATUS` batch + NVS `m_met/m_att/m_ps/m_fl` (close/reset flush, boot
+  restore, excluded from backups) + `meter_feed()` in `web_tick()`,
   WiFi kill switch (`web_wifi_set`, GPIO18, debounced in `main.cpp`).
 - `ota` (`ota.h`, host-tested pure logic; network in `main.cpp`): semver
   compare, per-variant asset pick (`-DFW_IS_N16R8=1` on the n16r8 env —
@@ -283,17 +309,21 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 
 ---
 
-## 7. Tests — 137/137 + soak + virtual bus + contract + socket emu (how to run, what they prove)
+## 7. Tests — 152/152 + soak + virtual bus + contract + socket emu (how to run, what they prove)
 
-- `pio test -e native` → 9 suites: test_checksum (7), test_logic (8),
+- `pio test -e native` → 10 suites: test_checksum (7), test_logic (8),
   test_parser (13), test_stress (4), **test_relay (36), test_spoof (11),
-  test_ota (6), test_upload (5), test_system (3)**. **Last run: all green
-  (93/93).** Old 32 byte-identical since v1.1. `test_web` (44) is g++-only
-  (needs `-DARDUINO` + stubs) → total **137/137** via `sh run_tests.sh`.
+  test_meter (10), test_ota (6), test_upload (5), test_system (3)**.
+  **Last run: all green (103/103).** Old 32 byte-identical since v1.1.
+  `test_web` (49) is g++-only (needs `-DARDUINO` + stubs) → total **152/152**
+  via `sh run_tests.sh`.
 - `tools/fw_emu/`: socket harness (real handlers, real HTTP, virtual time):
-  `drive_emu.py` 54 checks + `drive_soak.py` 10 checks (48 virtual hours).
+  `drive_emu.py` 62 checks + `drive_soak.py` 10 checks (48 virtual hours).
   Boot `fw_emu` (built from `emu_main.cpp`), run both drivers. `w3m -dump`
-  renders verify pages. See `docs/EMULATION-v2.5.md`.
+  renders verify pages. `/__bus` drives the RS485 bus LEDs + meter heuristic
+  (`/__link` is STA-only — conflating them cost a debugging round in v2.6).
+  See `docs/EMULATION-v2.5.md` (v2.5 per-feature report; v2.6 deltas in wiki
+  Versions + CHANGELOG).
 - `test_web` highlights: real `web_ui.cpp` executes on host — per-request
   admin password gates (admin/OTA/update incl. multipart field plumbing),
   WiFi kill-switch transitions, spoof-pin clamp + persist, OTA install gate,
@@ -523,17 +553,19 @@ or deprioritize — host tests + soak already prove the firmware.
 
 0. **Post-compaction resume:** say "continue" — todo list is ordered top-down
    (HANDOFF delta → QEMU Stage 0 → A → B → C → D → bench + housekeeping).
-1. **Bench test v2.5 with real meter + SmartElex module** (the one thing
+1. **Bench test v2.6 with real meter + SmartElex module** (the one thing
    that matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) join
    from an iPhone → mini-browser shows the landing page → Open Dashboard in
    Safari works (or manual 192.168.4.1); Android same via Chrome; (c) trigger
    Save stores pin/enable/polarity with no fire; polarity flip changes the
    physical-switch sense; (d) per-mode menu + chase + dead-band + rejects as
-   v2.4; (e) wrong-file upload names its error, right file progresses →
-   reboots → `STATUS?` → `2.5`; (f) STA test → on-demand URL upgrade installs;
-   (g) GPIO18 kill still kills.
-   If the page still won't open: confirm flashed firmware is v2.5
-   (`STATUS?` → `2.5`; v1.x has no WiFi at all), AP visible, exact URL/error.
+   v2.4; (e) one-file flash per board (`write-flash 0x0 bms-tester-*.bin`) →
+   boots → `STATUS?` → `2.6`; (f) STA test → on-demand URL upgrade installs;
+   (g) GPIO18 kill still kills; (h) meter card: first GREEN = #1, reseat gap
+   ≥ 3 s opens #2 with pass/fail verdict, retries don't count, New-day
+   resets.
+   If the page still won't open: confirm flashed firmware is v2.6
+   (`STATUS?` → `2.6`; v1.x has no WiFi at all), AP visible, exact URL/error.
    Needs: 12 V coil supply with common GND; 48 V rail per relay COM, each NO
    to its OWN load (never two outputs on different potentials).
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
@@ -574,7 +606,8 @@ Emulators, Versions, Relays, Dashboard) and are pushed to the `.wiki.git` backen
 (upload stub) are v2.3 additions; v2.4 adds `src/fw_upload.h` +
 `test/test_upload/` + stubs `ESPmDNS.h`/`esp_system.h` (info card/mDNS);
 v2.5 adds `tools/fw_emu/` (socket harness + drivers) + `docs/CONFIG-SCHEMA.md`
-+ `docs/EMULATION-v2.5.md` + stub `uri()` (portal tests).
++ `docs/EMULATION-v2.5.md` + stub `uri()` (portal tests); v2.6 adds
+`test/test_meter/` + `/__bus` control + merged `bms-tester-*.bin` images.
 Termux home `archive/` — pre-existing clutter, leave alone.
 Emulator work (`/opt/qemu-src` 1.1 GB, `/opt/qemu-s3` 94 MB, `/opt/pioenv`
 76 MB, `/root/.platformio` large) is inside the Debian container — see §8
@@ -590,7 +623,8 @@ while README/CHANGELOG moved on — never again):**
 3. `CHANGELOG.md` new entry; `README.md` versions/table/SHAs; `docs/MODULES.md`
    pins; `llms.txt` counts + code map; `test/README.md` counts;
    `tools/README.md` if helpers changed; `arduino/README.md` wiring/tabs;
-   `wokwi/README.md` if diagram changed.
+   `wokwi/README.md` if diagram changed; `platformio.ini` test_filter for new
+   suites; `tools/make_report.py` strings + regen docx.
 4. `firmware/` + `firmware-n16r8/` rebuilt from exact source + SHAs in READMEs;
    `RS485-Tester-Report.docx` regenerated via `make_report.py`.
 5. `wiki/` sources updated + pushed to `.wiki.git`.
@@ -603,5 +637,5 @@ Resume checklist: `ls /opt/qemu-src/build/qemu-system-xtensa && pio --version`
 head -3` → `git status --short` → `pio test -e native` (Termux) →
 `sh run_tests.sh` → `sh tools/virtual_bus.sh` (in proot — /tmp) → emu
 drivers (`fw_emu` + `drive_emu.py` + `drive_soak.py`, ports 18080/18081) →
-compare against §7 numbers (137/137 + contract + 64/64 emu). Firmware builds
+compare against §7 numbers (152/152 + contract + 72/72 emu). Firmware builds
 run ONLY in proot-debian per §8 (Termux pio = host tests only).

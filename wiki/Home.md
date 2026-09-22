@@ -21,6 +21,9 @@ over RS485, so compatible meters, displays, or hosts can be exercised
 - v2.4: Tasmota-grade update path, per-mode relay menu (chase BBM + stop
   dead-band), spoof save-only, console, config backup/restore, custom OTA
   URL, STA uplink test, info card, mDNS — see [[Dashboard]].
+- v2.6: software-only daily meter estimate (link gaps ≥ 3 s = new meter, no
+  button/GPIO), round link dots on the dashboard, one-file merged flash
+  images per board — see [[Dashboard]] and [[Flashing]].
 - v2.5: trigger save (pin + enable + polarity, no firing), captive-portal
   landing (phones get an Open-Dashboard page for Safari/Chrome), structured
   config schema (v1+v2 backups), on-demand STA join, whitespace-tolerant
