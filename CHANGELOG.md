@@ -2,19 +2,57 @@
 
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
+plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
 ## [v2.6] — 2026-09-22
 ### Added
 - Daily meter-test counting, software-only estimate (no button, no new
-  GPIO): link gap ≥ 3 s closed by GREEN = reseat = new meter; steady GREEN
-  across RESTARTs/retries = same meter; sub-3 s flickers stay; mid-cycle
-  gaps defer their close until IDLE. Meters/attempts/pass/fail in RAM +
-  flat NVS (flushed on close/reset only), manual New-day reset (no RTC,
-  boot persists, backups exclude counters). Console `DAYRESET`.
-- Round link dots (green/red) in the dashboard header beside the LINK pill.
-- One-file flash images per board (`bms-tester-8mb.bin`,
-  `bms-tester-n16r8.bin`): merged bootloader+partitions+app, single
-  `write-flash 0x0` command, structure-verified.
+  GPIO): `MeterBatch` (meters/attempts/pass/fail in RAM, flat NVS
+  `m_met/m_att/m_ps/m_fl` flushed on close/reset only), fed from the live
+  link state in `web_tick()` every loop. RED gap ≥ 3 s (`LINK_GAP_NEW_METER_MS`)
+  closed by GREEN = reseat = new meter; steady GREEN across RESTARTs/retries
+  = same meter; sub-3 s flickers stay on the same meter; a gap that elapses
+  mid-cycle defers its close until IDLE so the in-flight verdict lands on the
+  right meter. Manual New-day reset (no RTC on the box; boot persists via
+  `begin()` amnesia + NVS overlay; a seated unit re-opens as meter #1; an
+  empty bench stays 0 until first GREEN). Backups deliberately exclude
+  counters (a restore must not resurrect yesterday's tallies). Console
+  `DAYRESET` (admin-gated); `STATUS` prints the batch (`met=/att=/ps=/fl=`).
+- Round link dots (green/red, `#dotG`/`#dotR`) in the dashboard header beside
+  the LINK pill, driven by the same state — plus a "Meters today (approx)"
+  card (live tallies + honest "estimate, no button needed" note + New-day
+  reset). No `NEXT METER` button anywhere (a button version was built, then
+  removed in the same release — the heuristic is the shipped behavior).
+- One-file merged flash images per board (`firmware/bms-tester-8mb.bin`,
+  `firmware-n16r8/bms-tester-n16r8.bin`: bootloader + partitions + app via
+  `merge_bin`, structure-verified `E9`@0x0 / partition magic@0x8000 / app
+  `E9`@0x10000, version + AP strings byte-present). Rolled out uniformly to
+  every release v1.0–v2.5 (built from each tag's own source, old 3-file sets
+  kept as the advanced path).
+- `test/test_meter/` (10 Unity tests: first-GREEN opens #1, RESTARTs never
+  open meters, cycle+gap = pass, retry loop = one verdict, flickers stay,
+  abort+gap = fail, day reset + boot restore, 200-meter day boundary,
+  millis-wrap + 50 k-attempt soak, mid-cycle gap defers to IDLE) — wired
+  into the `pio test -e native` filter (now 10 suites, 103 tests).
+- 5 web meter tests (link gaps driven over the real `web_tick` path, busy
+  deferral, NVS persist-across-reboot, console verbs, dashboard surface incl.
+  "no NEXT button" assertion) + 8 emu HTTP checks + new `/__bus` control-port
+  endpoint driving the RS485 bus LEDs (the STA `__link` never touched them).
+### Changed
+- `FW_VERSION`/`STATUS?` → `2.6`. `/api/meter` is reset-only (`{"cmd":"reset"}`);
+  `/api/state` exposes `m_met/m_att/m_ps/m_fl`; console help lists `DAYRESET`.
+- `docs/CONFIG-SCHEMA.md` gains `meters.*`; `docs/MODULES.md` notes v2.6 adds
+  no GPIO; `docs/PROTOCOL.md` confirms no wire change; wiki (Dashboard,
+  Relays, Hardware, Flashing, Emulators, Home, Versions) + `llms.txt` +
+  READMEs + `test/README.md` + `tools/README.md` + `arduino/README.md` all
+  describe v2.6; `RS485-Tester-Report.docx` regenerated v2.6 (also fixes stale
+  v2.5-report bits: login-page instructions dead since v2.3.1, `STATUS? 2.3`,
+  8-day soak numbers, v2.4 folder map).
+### Verified
+- 152/152 (`run_tests.sh`: 7+8+13+4+36+11+10+6+5 Unity + contract + 49 web +
+  3 system) + 30-day soak (2,591,400 polls, 309,625 cycles, wrap crossed,
+  30 NVS commits) + both PIO envs SUCCESS + emu 62/62 + 48 h soak 10/10.
 
 ## [v2.5] — 2026-09-22
 ### Fixed
@@ -23,7 +61,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   upload 403'd (host stub masked it by injecting args). Streamed field
   alone now decides; security unchanged (wrong password still aborts).
 - JSON helpers rejected `"key": value` whitespace (python-requests style);
-  all three (`has`/`jnum`/`jstr`) share a tolerant core now.
+  all three (`has`/`jnum`/`jstr`) share a tolerant core now (same bug class
+  as the v2.3.1 OTA tag-space parse).
 - Test-then-install was broken by design (one-shot STA test drops its link,
   but installs demanded a live link): check/install/URL now join with saved
   creds themselves (15 s, Tasmota-style blocking).
@@ -35,6 +74,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (`tools/fw_emu`: real handlers over real HTTP, 54 checks), 48 h
   end-to-end run (10 checks), 30-day soak (2.59 M polls, 309 k cycles,
   30 NVS commits), `docs/EMULATION-v2.5.md` per-feature report.
+### Verified
+- 137/137 (93 pio + 44 web) + contract + soak + virtual-bus + both PIO envs.
 
 ## [v2.4] — 2026-09-22
 ### Fixed
@@ -51,191 +92,127 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   run-register snapshots (mid-cycle edits apply next cycle), timing floors
   (step ≥ 100 ms, stagger default 50, pause 500–60000 ms).
 - Real firmware builds caught two host-stub lies: `Update.write` takes
-  non-const (fixed + stub aligned), and this Arduino core has no
-  `ESP.getResetReason()` (now `esp_reset_reason()` + vocabulary).
+  `uint8_t*` (not `char*`), and `String += char` binds the int overload
+  (decimal garbage in the streamed password) — firmware appends via 1-char
+  C string now.
 ### Changed
-- Dashboard shows only the active mode's fields; spoof FIRE split into
-  Save-only vs Fire; OTA check cadence editable; Save + reboot button.
-- Test counts: 134/134 (36 relay, 41 web, 5 upload gates) + contract
-  (single-end + no-SIZE_UNKNOWN rules) + soak + virtual-bus + both PIO envs.
+- Dashboard shows only the active mode's fields (per-mode menu); spoof card
+  has Save-only next to FIRE; OTA check interval editable; AP/STA saves
+  offer Save vs Save + reboot.
 ### Added
-- Web console, config backup/restore (passwords never exported), custom OTA
-  URL + Upgrade-from-URL, one-shot STA uplink test, Information card,
-  mDNS `bmstester.local`, keep-WiFi reset, boot-counter reset, reset-reason
-  tracking. New wiki [[Dashboard]] page; [[Relays]] rewritten per-mode.
+- Web console (`START STOP FIRE CANCEL STATUS UPTIME VERSION REBOOT RESET
+  HELP`; hardware verbs admin-gated), config backup/restore (sectioned v2,
+  passwords never exported), custom OTA URL + Upgrade-from-URL, one-shot STA
+  uplink test (30 s, no reboot), Information card (variant/flash/sketch/heap/
+  uptime/bootcount/reset reason/RSSI/MAC/pin map), mDNS `bmstester.local`,
+  keep-WiFi reset, boot-counter reset.
+### Verified
+- 134/134 (93 pio incl. 5 upload-gate tests + 41 web) + contract (single-end
+  rule, no-`SIZE_UNKNOWN`, portal-surface rules) + soak + virtual-bus + both
+  PIO envs.
 
 ## [v2.3.1] — 2026-09-21
 ### Fixed
-- Dashboard save race: the 1 s state refresh overwrote any field the moment
-  it lost focus, so clicking Save after editing posted the stale device
-  value ("options reset to before one" unless you beat the poll). The 1 s
-  tick is now status-only (link/relays/counters/OTA/STA); form fields fill
-  once on load and after each successful save, user-edited (dirty) fields
-  are never clobbered, and failed fetches no longer kill the tick.
-- Same root cause explained the "chase sweeps only 3 relays" bench report:
-  the chase engine was correct — the persisted relay count was stale.
-  With saves sticking, count/chase/hold edits apply as shown.
-- Garbled dashboard letters: pages had no charset; all three now declare
-  UTF-8 (`⚡ → ∞ °` render correctly, incl. portal mini-browsers).
-- GitHub OTA check never matched: the API pretty-prints `"tag_name": "v2.3"`
-  (space after colon) but the parser wanted no space — every check died as
-  "bad api reply". Tolerant parse + a dashboard **Install update** button
-  (password-gated) so a found release is one tap away.
+- Saves stick: the 1 s tick is status-only; forms fill on load + after saves
+  (dirty-tracking + fetch-failure tolerance); user edits never clobbered.
+- UTF-8 on all pages (garbled letters gone); OTA check tag parse tolerates
+  the API's space-after-colon + dashboard Install button works.
 ### Changed
-- Login wall removed (WPA2 AP password is the gate). Reboot, factory reset,
-  `/update` upload, OTA-admin and AP/admin saves now ask for the admin
-  password per request (default `admin123`, changeable; blank = keep).
-  Password values no longer appear in `/api/state`.
-- Chase hold is now automatic: `Chase sweeps` (default 3, 0 = forever);
-  effective hold = sweeps × relays × step, retuned at every start.
-  The old `Hold chase ms` field is retired (stale NVS key ignored).
+- Login wall REMOVED (WPA2 is the gate): reboot/reset/upload/OTA-admin/AP
+  saves ask the admin password per request (default `admin123`); passwords
+  scrubbed from `/api/state`.
+- Chase hold is automatic (`Chase sweeps`, default 3, 0 = forever).
 ### Added
-- Spoof trigger GPIO is configurable on the dashboard (default 21, saved on
-  FIRE). Only proven-safe free DIOs are accepted (1, 2, 21, 38–44, 47);
-  anything else falls back to 21. The pin re-arms live on change.
-- WiFi kill switch: grounding GPIO18 (free, non-strapping) drops the AP +
-  portal + server immediately; releasing it brings everything back.
-  Default on at boot, debounced like the main button.
-### Notes
-- `nvs_open failed: NOT_FOUND` once on first boot is benign (read-only
-  open before the first commit creates the namespace).
+- Spoof trigger GPIO configurable (safe-pin allowlist, else 21, live re-arm).
+  WiFi kill switch: ground GPIO18 to drop AP+portal+server, release restores.
+### Removed
+- Session logins + remember-me NVS slots; legacy `hch` hold (replaced by
+  `swp` auto-hold — upgraders keep 3 sweeps).
+### Verified
+- 103/103 (77 pio + 26 web) + contract + soak.
 
 ## [v2.3] — 2026-09-21
 ### Added
-- Relay count (first N of 8 participate, web `Relays`, beyond-N forced OFF
-  and greyed out) + chase-wave mode (single lit relay sweeping R1→Rn, wraps;
-  3rd `rmode`, all 3 button behaviors apply).
-- 2-stage spoof: stage 1 ("100" realistic full pack, 5 s) then stage 2
-  (88.8/88.8/88.8/188 pattern, 10 s), then auto-revert — both stages fully
-  editable (values + seconds each) from the web or pin trigger.
-- Per-mode holds in milliseconds (`hseq`/`hch`/`hall`, 0 = forever each;
-  ALL-ON default 5 min soak). The old seconds `hold` is gone (it caused the
-  "relays won't turn off" confusion at 0).
-- Industrial pack: loop + inter-cycle pause + cycle limit (burn-in),
-  ALL-ON stagger (inrush ramp), direction fwd/rev, 8 relay labels (QC names
-  on tiles), cycle + actuation counters on the dashboard, boot auto-start.
-- Persistent logins: "remember this device" (30-day NVS token slots ×4,
-  reboot-safe); HttpOnly + SameSite=Lax cookies.
-- OTA: manual `/update` firmware upload (works fully offline) + automatic
-  GitHub-release checks/installs when the optional STA uplink (phone hotspot)
-  is online. AP stays always-on regardless; auto-gate requires idle bench +
-  60 s silent bus + no running sequence.
-- Live firmware version on the dashboard (from `/api/state`, never stale).
-- 38 new tests: **105/105 passing** (70 pio-native incl. new `test_ota`,
-  29 web, contract gate). NVS `bms2` v3 with v2→v3 migration tested
-  (seconds×1000 fanned to all holds, singles→stage 2, 100-first order).
+- Relay count (first N of 8; beyond-N forced OFF + greyed tiles) + chase-wave
+  mode (3rd sequence mode: single lit relay sweeping R1→Rn→R1, wraps, both
+  directions, all button modes apply).
+- 2-stage spoof (stage 1 "100" 5 s → stage 2 88.8/88.8/88.8/188 10 s; values
+  + seconds both editable; upgraders' single-stage values migrate to stage 2).
+- Per-mode holds in ms (`hseq`/`hall`, 0 = forever each); industrial pack:
+  loop + pause + cycle limit, ALL-ON stagger (inrush ramp), direction, 8
+  relay labels, cycle/actuation QC counters, boot auto-start.
+- Persistent logins (remember-me, 30-day NVS slots ×4); OTA via offline
+  `/update` upload or automatic GitHub checks/installs over the optional STA
+  uplink; coalesced config saves (dirty-flag, 1.5 s flush — no loop stalls).
+- NVS `bms2` v3 with tested v2→v3 migration (seconds×1000 fanned to holds).
+- 38 new tests (**105/105**: 70 pio + 29 web; contract gate + soak alongside).
 ### Changed
-- Config saves no longer stall the loop: handlers mark dirty, `web_tick()`
-  commits once after 1.5 s idle (3 rapid saves = 1 flash write, proven by
-  test); reboot/reset flush synchronously first.
-- `FW_VERSION`/`STATUS?` report `2.3`.
-### Fixed
-- Host-stub fidelity bug #4: single-char `String::indexOf(' ')` returns
-  garbage on the stub (truncated auth cookies depending on token content) —
-  cookie parsing now uses the `const char*` overload (caught by 2 web tests).
-- Dashboard `handle_state` statement terminated early by a stray `;`, dropping
-  the spoof keys from `/api/state` (caught by 2 web tests before release).
+- `FW_VERSION`/`STATUS?` → `2.3`; dashboard version is live from the device.
 
-## [v2.2] — 2026-09-24
+## [v2.2] — 2026-09-21
 ### Fixed
-- Web page now actually opens on phones: captive portal (DNS catch-all to
-  192.168.4.1) pops the login page on join; unknown URLs redirect to the
-  dashboard instead of a dead 404; AP IP pinned to 192.168.4.1 via
-  `softAPConfig`. Report + wiki now warn about the classic trap: phones route
-  around "no internet" networks — turn mobile data off / stay connected.
+- Login page pops automatically on join (captive portal DNS catch-all +
+  unknown-URL 302 redirect); AP IP pinned to 192.168.4.1. Report + wiki warn:
+  turn mobile data off — phones route around "no internet" networks.
 ### Added
-- Portal-redirect flow covered by a new host test (15 web tests total).
-
-## [v2.1] — 2026-09-23
-### Added
-- 16 website reliability tests (`test_web`, host-executed real `web_ui.cpp`
-  on Arduino stubs): auth, session expiry, validation/clamping, NVS round-trip,
-  relay/seq/spoof/admin handlers, POST fuzz, factory reset.
-- `test_system` 24 h office-day sim: 86,400 polls with per-reply checksum
-  validation, exact 10 s spoof window, relay schedule probes, abort/restart,
-  hourly noise, write-silence mid-spoof — all green in 0.05 s.
-- `tools/check_web_contract.py`: dashboard JS ↔ firmware route/key consistency
-  gate (runs in `run_tests.sh` + CI).
-- `wokwi/sim.yaml` automation scenario (button → relay pins, spoof → `22 B0`
-  on meter console) + token-gated CI sim job; diagram fixed against official
-  docs (NeoPixel VDD/VSS, button 1.l/2.l) and upgraded to 8 real relay-module
-  parts (npn = energize-on-LOW, matching active-LOW default) with NO-contact
-  indicator LEDs.
+- Portal-redirect flow host test (15 web tests → **67/67** total).
 ### Changed
-- `select_reply()` extracted to `relay_ctrl` (behavior-identical; main loop
-  uses it — now host-covered), `web_setup` resets identity to defaults before
-  NVS overlay (deterministic repeated setup).
-- `FW_VERSION`/`STATUS?` report `2.1`. Confirmed bench fact: relay idle HIGH,
-  ON when LOW = active-LOW default is correct, no polarity change.
-### Fixed
-- Host-stub fidelity bugs found by the new suites (separate mock clocks per
-  TU, NVS clear missing number store) — stubs now match real core semantics
-  (`constrain` macro, 2-arg `indexOf`).
+- `FW_VERSION`/`STATUS?` → `2.2`.
 
-## [v2.0] — 2026-09-22
+## [v2.1] — 2026-09-21
 ### Added
-- 8-relay sequencer (`src/relay_ctrl.*`, host-tested): SEQUENTIAL R1→R8 with
-  configurable step delay, or ALL-ON mode; 3 web-selectable button behaviors
-  (hold-X-s + re-press abort / run-to-completion locked / re-press restarts);
-  web per-relay overrides + START/STOP ALL; boot-safe OFF-before-pinMode;
-  active-LOW default with web polarity toggle (SmartElex 12 V class).
-- Always-on WiFi AP web UI (`src/web_ui.*`, ESP-only): dark professional
-  dashboard (relays grid, sequence config, fault spoof, admin), login session
-  with configurable admin user/password, NVS persistence, factory reset via
-  Admin page or 10 s button long-press. AP defaults `BMS-Tester`/`bms12345`,
-  channel 6 — all changeable; works fully offline (no office network needed).
-- Spoof window: pin (GPIO21) or web FIRE shows 88.8 V / 88.8 A / 88.8 °C /
-  188 % on `0x03` for a configurable 1–120 s (default 10 s), then auto-reverts;
-  values/duration/source all web-configurable; frozen checksum rule applied.
-- 18 new tests (`test_relay` 12, `test_spoof` 6): **50/50 passing**; old 32
-  untouched. Wokwi relay LEDs + buttons; CI builds both firmware envs.
+- 14 host-executed website tests + JS↔firmware contract gate
+  (`tools/check_web_contract.py`) + 24 h office-day sim (86,400 polls,
+  per-reply checksum validation) + Wokwi automation scenario (`sim.yaml`)
+  with token-gated CI sim job (**66/66** total).
+- Wokwi diagram verified against official docs and fixed (NeoPixel VDD/VSS,
+  button pins); 8 real relay-module parts with NO-contact indicator LEDs.
 ### Changed
-- `FW_VERSION`/`STATUS?` report `2.0`. Radio now on (AP always broadcasting);
-  power guidance updated. v1.x responder behavior frozen and re-proven
-  (native + virtual-bus + soak all green on the same source).
-### Fixed
-- WebServer 2.0.x `collectHeaders` array-form call (caught by firmware build).
+- `select_reply()` host-covered refactor (behavior-identical).
+  `FW_VERSION`/`STATUS?` → `2.1`. Bench-confirmed: relay idle HIGH,
+  ON-when-LOW = active-LOW default.
+
+## [v2.0] — 2026-09-21
+### Added
+- 8-relay sequencer (sequential/all-ON, 3 button behaviors: hold-abort /
+  run-lock / restart; boot-safe OFF-first drive; polarity toggle); always-on
+  AP dashboard (login auth, NVS persistence, admin reset); spoof window
+  (88.8/88.8/88.8/188 on `0x03`, configurable duration, auto-revert).
+- 18 new tests (**50/50**); Wokwi relay LEDs + buttons; CI builds both envs.
+### Changed
+- `FW_VERSION`/`STATUS?` → `2.0`; radio on (AP always broadcasting).
+  v1.x responder core frozen and re-proven.
 
 ## [v1.2] — 2026-09-21
 ### Added
-- Onboard WS2812 RGB mirror (GPIO48 via built-in `neopixelWrite`, no extra
-  library): shows the same green/red link state as the external LEDs, so the
-  box works with zero LED wiring. Brightness 32/255, driven from the 250 ms
-  eval (never the hot RX path).
-- ESP32-S3 N16R8 build (`pio run -e s3-n16r8`): 16 MB flash + OPI PSRAM +
-  `default_16MB.csv` partitions; `esp32-s3-devkitc-1` (8 MB) kept for Wokwi.
-  Arduino IDE settings documented (Flash 16MB + OPI PSRAM + USB CDC Enabled).
-- Wokwi NeoPixel part (`rgb1` on GPIO48) next to the discrete LEDs; meter
-  stimulus unchanged (cycles 03/04/05 @ 1 s).
-### Verified
-- 32/32 native tests + 8-day soak still green (protocol core untouched).
-- Both firmware envs compile (Xtensa GCC 8.4.0): 8 MB profile + N16R8 profile.
-- Virtual-bus emulation (socat PTY pair + host DUT harness linking the real
-  `bms_protocol.cpp`): 03/04/05 golden byte-exact, silence on write/unknown,
-  noise resync, red-after-silence — PASS.
-- QEMU-S3 boot with v1.2 firmware reproduces the known emulator gap
-  (`Unknown cmd 0x10` + `0x10200C` reads, Arduino-guest flash assert) — no
-  firmware regression, functional proof via Wokwi instead.
+- Onboard WS2812 RGB mirror (GPIO48, built-in `neopixelWrite`, brightness 32):
+  same green/red state as the discretes, zero extra wiring, driven from the
+  250 ms eval (never the hot RX loop).
+- N16R8 build (`s3-n16r8`: 16 MB flash, OPI PSRAM, `default_16MB.csv`);
+  8 MB env kept for Wokwi. Wokwi NeoPixel part on GPIO48; `firmware-n16r8/`
+  ready-to-flash triple; Arduino IDE board menu documented.
 ### Changed
-- `FW_VERSION` / `STATUS?` report `1.2`; `docs/MODULES.md`, `arduino/README.md`,
-  `wokwi/README.md`, `src/README.md`, `llms.txt` updated for RGB + N16R8.
+- `FW_VERSION`/`STATUS?` → `1.2`; MODULES/arduino/wokwi/src READMEs, llms.txt.
+### Verified
+- 32/32 + soak green; both envs compile; virtual-bus PASS; golden bytes +
+  `STATUS?` strings byte-present in both `firmware.bin` images.
 
 ## [v1.1] — 2026-09-18
 ### Added
-- Multi-register support: canned replies for `0x03` (golden capture), `0x04`
-  (14S cell voltages), `0x05` (device name); silence on writes/unknown (option A).
-- Adaptive green window (2 s floor, 10 s cap) — any poll cadence shows steady green.
-- Streaming checksum-verified JBD parser with noise re-sync and overlong rejection.
-- 21 new tests (parser, dispatcher, adaptive tracker, 10 M fuzz, exhaustive
-  corruptions, cadence sweep, bus saturation, 8-day soak): **32/32 passing**.
-- `arduino/` IDE sketch, `firmware/` ready-to-flash binaries, `captures/` ground truth,
-  `tools/virtual_meter.py` scenario modes, `tools/soak_sim.cpp`, Wokwi meter cycling 03/04/05.
+- Multi-register canned replies (`0x03` golden 52.0 V/100 %, `0x04` 14×3714 mV,
+  `0x05` name); silence on writes/unknown (option A — explicit user-confirmed
+  choice); adaptive 2–10 s link window (EMA of poll intervals); streaming
+  checksum-verified parser with noise re-sync; 21 new tests (**32/32**);
+  `arduino/`, `firmware/` triple, `captures/`, `virtual_meter.py` scenario
+  modes, `soak_sim.cpp`, Wokwi meter.
 ### Fixed
-- Parser gated emission on checksum success (corrupt + trailing `0x77` no longer emits).
-- Arduino `binary.h` `B1` macro collision (states renamed `JST_*`).
+- Parser emits only on checksum success (a corrupt-CK + trailing `0x77` used
+  to emit — gated, now covered by test); Arduino `B1` macro collision
+  (parser states renamed `JST_*`, broke the S3 build once).
 
 ## [v1.0] — 2026-09-18
 ### Added
-- Initial release: 0x03-only responder, fixed 2 s window, green/red LEDs,
-  `STATUS?` debug command, 11/11 tests, S3 firmware binary, Word report.
-- Frozen as `releases/bms-connection-tester-v1.0.zip` and git tag `v1.0`.
+- 0x03-only responder, fixed 2 s link window, green/red discrete LEDs,
+  USB-serial `STATUS?` (`GREEN`/`RED`), 11/11 tests, S3 binary, Word report.
+  Frozen as `releases/bms-connection-tester-v1.0.zip` + tag `v1.0`; responder
+  core untouched by all v2.x work (original tests byte-identical).
