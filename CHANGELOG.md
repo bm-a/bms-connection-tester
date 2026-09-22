@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2.6] — unreleased
+### Added
+- Daily meter-test counting, software-only estimate (no button, no new
+  GPIO): link gap ≥ 3 s closed by GREEN = reseat = new meter; steady GREEN
+  across RESTARTs/retries = same meter; sub-3 s flickers stay; mid-cycle
+  gaps defer their close until IDLE. Meters/attempts/pass/fail in RAM +
+  flat NVS (flushed on close/reset only), manual New-day reset (no RTC,
+  boot persists, backups exclude counters). Console `DAYRESET`.
+- Round link dots (green/red) in the dashboard header beside the LINK pill.
+- One-file flash images per board (`bms-tester-8mb.bin`,
+  `bms-tester-n16r8.bin`): merged bootloader+partitions+app, single
+  `write-flash 0x0` command, structure-verified.
+
 ## [v2.5] — 2026-09-22
 ### Fixed
 - Multipart upload auth: done handler demanded streamed field AND parsed

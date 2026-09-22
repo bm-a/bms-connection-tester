@@ -1,27 +1,30 @@
-# Flashing — all different ways (v2.3)
+# Flashing — all different ways (v2.6)
 
-Pick **one** method. All four install the same v2.3 logic; only the tool differs.
+Pick **one** method. All install the same v2.6 logic; only the tool differs.
 
-## 1. Ready binaries with esptool (any PC, no IDE)
+## 1. Ready binaries with esptool (any PC, no IDE) — ONE file, ONE command
 1. `pip install esptool`
-2. Choose the folder for your board: `firmware/` (8 MB DevKitC-1 / Wokwi)
-   or `firmware-n16r8/` (N16R8: 16 MB flash + OPI PSRAM).
+2. Choose the file for your board: `firmware/bms-tester-8mb.bin`
+   (8 MB DevKitC-1 / Wokwi) or `firmware-n16r8/bms-tester-n16r8.bin`
+   (N16R8: 16 MB flash + OPI PSRAM). Each is the full image
+   (bootloader + partitions + app) — no multi-file juggling.
 3. Plug in the S3, find the port (COMx / /dev/ttyACM0), then:
 
 ```
-esptool.py --chip esp32s3 --port <PORT> --baud 460800 write-flash \
-  0x0 bootloader.bin \
-  0x8000 partitions.bin \
-  0x10000 firmware.bin
+esptool.py --chip esp32s3 --port <PORT> --baud 460800 write-flash 0x0 <FILE>
 ```
 
 Verify with the SHA-256 sums in `firmware/README.md` / `firmware-n16r8/README.md`:
-8 MB `firmware.bin` = `65eb652e…ae35d36a` (955,040 bytes);
-N16R8 `firmware.bin` = `71d39bd7…df36d2` (957,520 bytes).
+8 MB merged = `ba08f166…8727b9` (1,070,800 bytes);
+N16R8 merged = `847f6c94…b82842` (1,073,328 bytes).
 
 ## 2. Browser flasher (no installs)
 Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher/),
-load the same three files at `0x0` / `0x8000` / `0x10000`, flash, done.
+load the ONE merged file at `0x0`, flash, done.
+
+## 3. Separate files (advanced / partial re-flash)
+The folders also carry `bootloader.bin` + `partitions.bin` + `firmware.bin`
+for the classic three-address flash (`0x0` / `0x8000` / `0x10000`).
 
 ## 3. PlatformIO (VS Code)
 Open the repo folder, let PIO install, then upload:

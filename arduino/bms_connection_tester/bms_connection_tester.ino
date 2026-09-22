@@ -1,4 +1,4 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.4.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.6.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
@@ -19,10 +19,11 @@
 //     common GND; default active-LOW, web toggle)
 //   GPIO15 -> button to GND (press = LOW, internal pull-up; web-invertible)
 //   GPIO21 -> spoof trigger to GND (internal pull-up; web-invertible)
+//   GPIO18 -> WiFi kill to GND (ground = AP off; internal pull-up)
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.5\n" / "RED 2.5\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.6\n" / "RED 2.6\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"
@@ -398,6 +399,7 @@ void loop() {
                   (unsigned long)cfg.s2_seconds * 1000UL);
 
   // --- v2.0: sequencer + relay outputs + web server (all non-blocking) ---
+  // (v2.6 meter heuristic is fed inside web_tick(): link gaps = new meter.)
   seq.tick(now);
   apply_relays();
   web_tick(now);
@@ -430,6 +432,8 @@ void loop() {
     lastEvalMs = now;
     apply_leds(tracker.active(now));
   }
+  // (v2.6 meter heuristic is fed inside web_tick() below: link gaps = new
+  // meter. One funnel — main.cpp never touches the batch directly.)
 
   handle_status_command();
 }

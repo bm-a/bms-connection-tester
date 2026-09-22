@@ -53,7 +53,7 @@ def main() -> int:
     # progress endpoint referenced by the /update page. v2.5: portal
     # landing for OS probes / mini-browsers.
     for route in ['"/api/sta"', '"/api/cmd"', '"/api/backup"',
-                  '"/api/restore"', '"/api/uprog"']:
+                   '"/api/restore"', '"/api/uprog"', '"/api/meter"']:
         if route not in src:
             fail(f"missing route {route}")
     for token in ["hotspot-detect.html", "generate_204",
@@ -64,7 +64,8 @@ def main() -> int:
     for rid in ["row_step", "row_seqonly", "row_chaseonly", "row_allonly",
                 "row_dir", "info_fw", "info_mem", "info_net", "cmdout",
                 "sta_test_msg", "restoremsg", "spoofsave", "otaurlmsg",
-                "otainstall", "restorefile", "trigmsg", "sinv"]:
+                "otainstall", "restorefile", "trigmsg", "sinv",
+                "dotG", "dotR", "meters", "metermsg"]:
         if f"id={rid}" not in src:
             fail(f"missing dashboard element id={rid}")
     if "showMode()" not in src:
@@ -143,13 +144,14 @@ def main() -> int:
         "/api/cmd": ["cmd", "pass"],
         "/api/restore": ["pass", "backup", "nrel", "sv", "ap_ssid",
                          "ota_url"],
+        "/api/meter": ["cmd"],
     }
     handlers = {
         "/api/relay": "handle_relay", "/api/seq": "handle_seq",
         "/api/config": "handle_config", "/api/spoof": "handle_spoof",
         "/api/admin": "handle_admin", "/api/ota": "handle_ota",
         "/api/sta": "handle_sta", "/api/cmd": "handle_cmd",
-        "/api/restore": "handle_restore",
+        "/api/restore": "handle_restore", "/api/meter": "handle_meter",
     }
     for ep, keys in posts.items():
         hname = handlers[ep]

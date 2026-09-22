@@ -44,7 +44,10 @@ g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/tes
 echo "=== native: test_spoof (Unity, v2 spoof frame + window) ==="
 g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/test_spoof/test_spoof.cpp .unity/unity.c -o .test_spoof
 ./.test_spoof
-rm -f .test_relay .test_spoof
+echo "=== native: test_meter (Unity, v2.6 daily meter counting) ==="
+g++ -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test/test_meter/test_meter.cpp .unity/unity.c -o .test_meter
+./.test_meter
+rm -f .test_meter .test_relay .test_spoof
 
 echo "=== native: test_ota (Unity, v2.3 OTA decision logic) ==="
 g++ -std=c++17 -I src -I .unity src/ota.cpp test/test_ota/test_ota.cpp .unity/unity.c -o .test_ota

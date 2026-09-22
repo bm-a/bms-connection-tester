@@ -123,7 +123,7 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"rmode\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"ssec\":5"));
   TEST_ASSERT_TRUE(has(r.body, "\"s2sec\":10"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.5\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.6\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
@@ -777,7 +777,7 @@ void test_console_verbs(void) {
   r = WebServer::post("/api/cmd", "{\"cmd\":\"status\"}");
   TEST_ASSERT_TRUE(has(r.body, "LINK RED"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"version\"}");
-  TEST_ASSERT_TRUE(has(r.body, "2.5"));
+  TEST_ASSERT_TRUE(has(r.body, "2.6"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"bogus\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   // Privileged verbs need the password...
@@ -996,6 +996,124 @@ void test_ota_ondemand_join(void) {
   TEST_ASSERT_FALSE(g_wifi_begun);
 }
 
+void test_meter_api_next_reset(void) {
+  // v2.6 heuristic over the REAL web_tick path: link gaps = new meter.
+  fresh_env();
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_att\":0"));
+  // First GREEN sighting opens meter #1, no verdict.
+  link_green = true;
+  web_tick(g_mock_millis);
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":1"));
+  // Full cycle then a 5 s reseat gap: pass verdict, meter #2.
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  seq.tick(g_mock_millis + 3500);
+  seq.tick(g_mock_millis + 3500 + 30000);
+  TEST_ASSERT_EQUAL_UINT(1, seq.cyclesDone());
+  link_green = false;
+  web_tick(g_mock_millis);
+  g_mock_millis += 5000;
+  link_green = true;
+  web_tick(g_mock_millis);
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":2"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_ps\":1"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_att\":1"));
+  // Unknown cmd rejected; only reset is a command now.
+  r = WebServer::post("/api/meter", "{\"cmd\":\"bogus\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  r = WebServer::post("/api/meter", "{\"cmd\":\"next\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  // New-day reset zeroes everything (link RED here: stays 0 until GREEN).
+  link_green = false;
+  web_tick(g_mock_millis);
+  r = WebServer::post("/api/meter", "{\"cmd\":\"reset\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_att\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_ps\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_fl\":0"));
+}
+
+void test_meter_api_busy_mid_cycle(void) {
+  // Reseat mid-cycle defers the close until IDLE — no misattribution.
+  fresh_env();
+  link_green = true;
+  web_tick(g_mock_millis);
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  TEST_ASSERT_TRUE(seq.running());
+  link_green = false;
+  web_tick(g_mock_millis);
+  g_mock_millis += 5000;
+  link_green = true;
+  web_tick(g_mock_millis);  // GREEN back but still RUNNING: deferred
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":1"));  // not closed yet
+  WebServer::post("/api/seq", "{\"cmd\":\"stop\"}");
+  web_tick(g_mock_millis);  // IDLE eval lands the pending close
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":2"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_fl\":1"));  // aborted run: fail verdict
+}
+
+void test_meter_persist_across_reboot(void) {
+  fresh_env();
+  link_green = true;
+  web_tick(g_mock_millis);
+  WebServer::post("/api/seq", "{\"cmd\":\"start\"}");
+  seq.tick(g_mock_millis + 3500);
+  seq.tick(g_mock_millis + 3500 + 30000);
+  link_green = false;
+  web_tick(g_mock_millis);
+  g_mock_millis += 5000;
+  link_green = true;
+  web_tick(g_mock_millis);
+  web_tick(g_mock_millis + 2000);  // flush the coalesced NVS commit
+  // Simulated reboot: RAM wiped, setup reloads NVS (boot never zeroes).
+  seq.begin(&cfg);
+  web_setup(ctx);
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_met\":2"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_att\":1"));
+  TEST_ASSERT_TRUE(has(r.body, "\"m_ps\":1"));
+}
+
+void test_meter_console_verbs(void) {
+  fresh_env();
+  // NEXT is gone (no button anymore): unknown command, refused cleanly.
+  WebServer::Resp r = admin_post("/api/cmd", "{\"cmd\":\"next\"}");
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
+  r = admin_post("/api/cmd", "{\"cmd\":\"status\"}");
+  TEST_ASSERT_TRUE(has(r.body, "met=0"));
+  TEST_ASSERT_TRUE(has(r.body, "att=0"));
+  link_green = true;
+  web_tick(g_mock_millis);
+  r = admin_post("/api/cmd", "{\"cmd\":\"status\"}");
+  TEST_ASSERT_TRUE(has(r.body, "met=1"));
+  r = admin_post("/api/cmd", "{\"cmd\":\"dayreset\"}");
+  TEST_ASSERT_TRUE(has(r.body, "day counters cleared"));
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_TRUE(has(r.body, "\"m_att\":0"));
+  // Priv verbs still need the admin password.
+  r = WebServer::post("/api/cmd", "{\"cmd\":\"dayreset\"}");
+  TEST_ASSERT_TRUE(has(r.body, "admin password required"));
+}
+
+void test_meter_dashboard_surface(void) {
+  // T11: round link LEDs + approx meter card exist in the served page;
+  // no NEXT METER button anywhere.
+  fresh_env();
+  WebServer::Resp r = WebServer::get("/");
+  TEST_ASSERT_TRUE(has(r.body, "id=dotG"));
+  TEST_ASSERT_TRUE(has(r.body, "id=dotR"));
+  TEST_ASSERT_TRUE(has(r.body, "id=meters"));
+  TEST_ASSERT_TRUE(has(r.body, "id=metermsg"));
+  TEST_ASSERT_FALSE(has(r.body, "NEXT METER"));
+}
+
 void run_all() {
   RUN_TEST(test_root_open_dashboard);
   RUN_TEST(test_state_public_no_secrets);
@@ -1041,6 +1159,11 @@ void run_all() {
   RUN_TEST(test_industrial_config);
   RUN_TEST(test_relay_labels);
   RUN_TEST(test_counters_state);
+  RUN_TEST(test_meter_api_next_reset);
+  RUN_TEST(test_meter_api_busy_mid_cycle);
+  RUN_TEST(test_meter_persist_across_reboot);
+  RUN_TEST(test_meter_console_verbs);
+  RUN_TEST(test_meter_dashboard_surface);
 }
 
 int main() {

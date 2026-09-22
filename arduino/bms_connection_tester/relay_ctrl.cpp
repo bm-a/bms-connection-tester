@@ -20,6 +20,7 @@ void RelaySequencer::begin(const Bms2Config *cfg) {
   bbm_until_ = 0;
   cycles_done_ = 0;
   acts_ = 0;
+  meter_.begin();  // v2.6: clean slate; web_ui overlays NVS totals after
   for (uint8_t i = 0; i < RELAY_COUNT; i++) {
     seq_[i] = false;
     forced_[i] = false;
@@ -53,11 +54,18 @@ uint16_t RelaySequencer::stepGap() const {
 }
 
 bool RelaySequencer::start(unsigned long now) {
+  return startImpl(now, true);
+}
+
+bool RelaySequencer::startImpl(unsigned long now, bool count_attempt) {
   if (!cfg_) return false;
   // R12: mandatory all-OFF dead-band after any stop (armatures releasing).
   // Unsigned subtraction: rollover-safe (R13). begin() clears stop_seen_,
   // so boot auto-start is always allowed.
   if (stop_seen_ && (now - stop_at_) < RELAY_STOP_DEADBAND_MS) return false;
+  // v2.6: a REFUSED start opens nothing (R40). Count only accepted starts,
+  // and never loop-restarts (same meter, same run).
+  if (count_attempt) meter_.onStart();
   for (uint8_t i = 0; i < RELAY_COUNT; i++) seq_[i] = false;
   bbm_pending_ = false;
   step_ = 0;
@@ -208,7 +216,8 @@ void RelaySequencer::tick(unsigned long now) {
     // Loop rest window: restart the cycle when the pause elapses.
     // The pause floor (>= 500 ms all-OFF, R6) already satisfies the R12
     // dead-band, and stop_seen_ predates it, so start() is accepted.
-    if ((long)(now - pause_until_) >= 0) start(now);
+    // v2.6: loop restarts don't open attempts (R40).
+    if ((long)(now - pause_until_) >= 0) startImpl(now, false);
   }
 }
 
@@ -216,6 +225,7 @@ void RelaySequencer::tick(unsigned long now) {
 // limit) or stop. Single-shot behavior without loop_enabled is unchanged.
 void RelaySequencer::cycleDone(unsigned long now) {
   cycles_done_++;
+  meter_.onCycle();  // v2.6: full cycle latches pass for the open meter
   if (cfg_ && cfg_->loop_enabled &&
       (cfg_->cycle_limit == 0 || cycles_done_ < cfg_->cycle_limit)) {
     for (uint8_t i = 0; i < RELAY_COUNT; i++) seq_[i] = false;

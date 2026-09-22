@@ -70,7 +70,7 @@ def advance(ms):
 r = get("/")
 check("dashboard serves 200 with app", r.status_code == 200 and "BMS Tester" in r.text, r.text[:80])
 s = state()
-check("state fw 2.5 + defaults", s["fw"] == "2.5" and s["cfg"]["step"] == 250 and s["cfg"]["stag"] == 50, json.dumps(s["cfg"])[:120])
+check("state fw 2.6 + defaults", s["fw"] == "2.6" and s["cfg"]["step"] == 250 and s["cfg"]["stag"] == 50, json.dumps(s["cfg"])[:120])
 for probe in ["/hotspot-detect.html", "/generate_204", "/gen_204", "/connecttest.txt", "/redirect", "/library/test/success.html"]:
     r = get(probe)
     check(f"probe {probe} -> landing", r.status_code == 200 and "Open Dashboard" in r.text, str(r.status_code))
@@ -269,6 +269,36 @@ check("OTA check path", r.json().get("ok") == 1 and f["ota_check"] == 1, r.text[
 # ---------- 7. info card ----------
 s = state()["cfg"]
 check("info fields complete", all(k in s for k in ("variant", "flash_kb", "sketch_free", "heap", "psram", "uptime_s", "boot", "reset", "rssi", "sta_ip", "sta_mac", "ota_url", "ota_int_h")), str(sorted(s.keys())[:8]))
+
+# ---------- 8. v2.6 daily meters (link-gap heuristic) + round LEDs ----------
+r = get("/")
+check("round link dots served", 'id=dotG' in r.text and 'id=dotR' in r.text and 'id=meters' in r.text, r.text[:80])
+check("no NEXT button served", "NEXT METER" not in r.text, r.text[:80])
+ctl("/__bus?up=1")
+advance(500)
+s = state()
+check("first GREEN opens meter #1", s["cfg"]["m_met"] == 1 and s["cfg"]["m_att"] == 0, json.dumps({k: s["cfg"][k] for k in ("m_met", "m_att", "m_ps", "m_fl")}))
+r = post("/api/seq", {"cmd": "start"})
+advance(4000)
+post("/api/seq", {"cmd": "stop"})
+advance(1000)
+ctl("/__bus?up=0")
+advance(5000)
+ctl("/__bus?up=1")
+advance(500)
+s = state()
+check("reseat gap closes meter #2", s["cfg"]["m_met"] == 2, json.dumps(s["cfg"])[:80])
+check("abort-close verdicts fail", s["cfg"]["m_fl"] == 1 and s["cfg"]["m_att"] == 1, json.dumps({k: s["cfg"][k] for k in ("m_met", "m_att", "m_ps", "m_fl")}))
+ctl("/__bus?up=0")
+advance(500)
+ctl("/__bus?up=1")
+advance(500)
+s = state()
+check("sub-3s flicker stays same meter", s["cfg"]["m_met"] == 2, json.dumps(s["cfg"])[:80])
+r = post("/api/cmd", {"cmd": "dayreset", "pass": PASS})
+check("console dayreset clears", r.json().get("ok") == 1, r.text[:60])
+s = state()
+check("reset seats unit as #1", s["cfg"]["m_met"] == 1 and s["cfg"]["m_ps"] == 0 and s["cfg"]["m_fl"] == 0, json.dumps(s["cfg"])[:80])
 
 print(f"\n{passed} passed, {failed} failed")
 with open("emu_results.json", "w") as fp:

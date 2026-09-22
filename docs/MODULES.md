@@ -11,9 +11,10 @@
   which the GPIO matrix can route to any pins — here RX = GPIO16, TX = GPIO17.
 - GPIOs used: **4** (RS485 direction), **10/11** (LEDs), **16/17** (UART2),
   **48** (onboard WS2812 RGB, output-only), **5/6/7/8/9/12/13/14** (relays R1–R8),
-  **15** (button), **21** (spoof trigger).
+  **15** (button), **18** (WiFi kill), **21** (spoof trigger).
   All avoid strapping (0/3/45/46), USB-JTAG (19/20), flash/PSRAM (26–37)
   and the UART0 console (43/44). (Classic-ESP32 GPIO25 does not exist on S3.)
+  v2.6 adds NO new GPIO: the meter counter is pure software (link gaps).
 
 ## 2. MAX485 (RS485 transceiver)
 
@@ -37,6 +38,8 @@
 - Onboard WS2812 RGB (GPIO48, `neopixelWrite`, brightness 32/255) mirrors
   the discretes: green = talking, red = silent. No extra library needed.
   Boot red on both; green ≤ 1 s after first valid frame; red ≤ window after silence.
+- The dashboard header mirrors the same state as two round dots
+  (`#dotG`/`#dotR`, green/red) beside the LINK pill — same signal, no new logic.
 
 ## 4. Relay outputs (v2.0)
 
@@ -57,6 +60,9 @@
 - Spoof trigger → GPIO21 to GND (internal pull-up, web-invertible) or the
   web FIRE button: meter sees 88.8 V / 88.8 A / 88.8 °C / 188 % on `0x03`
   for the configured window (default 10 s), then auto-reverts to golden.
+- Daily meter counting (v2.6) needs NO input: it watches link gaps in
+  software (RED ≥ 3 s then GREEN = reseat = new meter). See
+  `docs/CONFIG-SCHEMA.md` meters.* for the rules.
 
 ## 6. Power
 

@@ -99,6 +99,16 @@ static void cfg_commit() {
   nvs.putUShort("s2c", c.s2_c_tenth);
   nvs.putUChar("s2soc", c.s2_soc);
   nvs.putUShort("s2sec", c.s2_seconds);
+  // v2.6 daily meter batch (R36): flushed on link-gap close/reset only (see
+  // meter_feed/handle_meter), never per actuation or tick. Restored at
+  // boot, never cleared at boot — a power flicker must not eat QC data.
+  if (G->seq) {
+    const MeterBatch &m = G->seq->meter();
+    nvs.putUInt("m_met", m.meters);
+    nvs.putUInt("m_att", m.attempts);
+    nvs.putUInt("m_ps", m.pass);
+    nvs.putUInt("m_fl", m.fail);
+  }
   nvs.putString("ap_ssid", ident.ap_ssid);
   nvs.putString("ap_pass", ident.ap_pass);
   nvs.putUChar("ap_ch", ident.ap_channel);
@@ -206,6 +216,13 @@ static void cfg_load() {
   ident.sta_en = nvs.getBool("sta_en", ident.sta_en);
   s = nvs.getString("ota_url", ident.ota_url);
   s.toCharArray(ident.ota_url, sizeof(ident.ota_url));
+  // v2.6 meter totals: independent of the config schema version (bootn
+  // precedent) — restored whenever present, zero on a fresh box.
+  if (G->seq) {
+    MeterBatch &m = G->seq->meter();
+    m.setTotals(nvs.getUInt("m_met", 0), nvs.getUInt("m_att", 0),
+                nvs.getUInt("m_ps", 0), nvs.getUInt("m_fl", 0));
+  }
   nvs.end();
   if (ident.ap_channel < 1 || ident.ap_channel > 13) ident.ap_channel = 6;
   // Clamp everything a hand-edited NVS (or older UI) could have stored.
@@ -291,6 +308,8 @@ static const char PAGE_DASH[] PROGMEM = R"HTML(
 header h2{margin:0;font-size:22px}.ver{font-size:12px;color:#94a3b8}
 .pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700}
 #link.G{background:#14532d;color:#4ade80}#link.R{background:#450a0a;color:#f87171}#clk{color:#94a3b8;font-size:13px}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#334155;border:1px solid #475569;vertical-align:middle}
+.dot.G{background:#22c55e;box-shadow:0 0 8px #22c55e}.dot.R{background:#ef4444;box-shadow:0 0 8px #ef4444}
 a{color:#60a5fa}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin:12px 0}
 .card h3{margin:0 0 10px;font-size:15px;color:#93c5fd;text-transform:uppercase;letter-spacing:.5px}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
@@ -305,10 +324,14 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 .rly.lim{opacity:.35;cursor:not-allowed}
 .note{font-size:12px;color:#94a3b8}
 </style></head><body><div class=wrap>
-<header><h2>&#9889; BMS Tester</h2><span class=ver id=fwver></span><span id=link class="pill R">?</span><span id=clk></span></header>
+<header><h2>&#9889; BMS Tester</h2><span class=ver id=fwver></span><span id=dotG class=dot></span><span id=dotR class=dot></span><span id=link class="pill R">?</span><span id=clk></span></header>
 <div class=card><h3>Relays</h3>
 <div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
 <div class=grid id=relays></div></div>
+<div class=card><h3>Meters today (approx)</h3>
+<div class=row><span id=meters></span></div>
+<div class=row><button class=warn onclick="if(confirm('Clear today counters?'))meter('reset')">New day (reset)</button><span class=msg id=metermsg></span></div>
+<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter; retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
 <div class=card><h3>Sequence config</h3>
 <div class=row><label>Mode <select id=rmode onchange="showMode()"><option value=0>Sequential 1-N</option><option value=2>Chase wave</option><option value=1>All ON at once</option></select></label>
 <label>Relays <input id=nrel size=3 title="1-8: first N relays take part"></label></div>
@@ -367,7 +390,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=card><h3>Console</h3>
 <div class=row><input id=cmd size=30 placeholder="HELP"><button onclick="cmd()">Run</button></div>
 <div class=row><span class=note id=cmdout></span></div>
-<div class=row><span class=note>START STOP FIRE CANCEL STATUS UPTIME VERSION REBOOT RESET HELP — hardware verbs ask for the admin password.</span></div></div>
+<div class=row><span class=note>START STOP FIRE CANCEL DAYRESET STATUS UPTIME VERSION REBOOT RESET HELP — hardware verbs ask for the admin password.</span></div></div>
 </div>
 <script>
 async function jget(u){let r=await fetch(u);return r.json();}
@@ -380,8 +403,10 @@ document.addEventListener('input',markDirty);
 document.addEventListener('change',markDirty);
 async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return null;}
  document.getElementById('fwver').textContent=s.fw||'';
- let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
- document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
+  let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
+  document.getElementById('dotG').className='dot '+(s.link?'G':'');document.getElementById('dotR').className='dot '+(s.link?'':'R');
+  document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
+  document.getElementById('meters').textContent='meters '+s.cfg.m_met+' · attempts '+s.cfg.m_att+' · pass '+s.cfg.m_ps+' · fail '+s.cfg.m_fl;
  document.getElementById('spoofmsg').textContent=s.spoof?('SPOOF STAGE '+s.stage):'';
  NREL=s.cfg.nrel||8;
  let d=document.getElementById('relays');d.innerHTML='';
@@ -413,13 +438,14 @@ function fillForm(s){if(!s||!s.cfg)return;
 async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
 async function relay(i,on){if(i>=NREL)return;await jpost('/api/relay',{i,on});refresh();}
 async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
+async function meter(c){let r=await jpost('/api/meter',{cmd:c});let m=document.getElementById('metermsg');if(!r.ok){m.textContent='ERR: '+(r.err||'');}else{m.textContent=(c==='reset'?'day cleared':'ok');}refresh();}
 async function saveCfg(){let ks=['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','cpause','clim','stag'];let b={};for(let k of ks){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(ks);clean(['loop']);loadForm();}refresh();}
 async function saveLabels(){let ks=[];for(let i=0;i<8;i++)ks.push('lbl'+i);let b={};for(let k of ks)b[k]=document.getElementById(k).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);loadForm();}refresh();}
 async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','sinv'];let b={cmd:c};if(c==='fire'||c==='save'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);let m=r.ok?(c==='cancel'?'cancelled':(c==='save'?'saved':'ok')):('ERR: '+(r.err||''));document.getElementById('spoofmsg').textContent=m;document.getElementById('spoofsave').textContent=m;if(r.ok&&(c==='fire'||c==='save')){clean(ks);clean(['sena']);loadForm();}refresh();}
 async function saveTrig(){let b={cmd:'trig'};b.sena=document.getElementById('sena').checked?1:0;b.spin=+document.getElementById('spin').value;b.sinv=+document.getElementById('sinv').value;let r=await jpost('/api/spoof',b);document.getElementById('trigmsg').textContent=r.ok?'trigger saved':'ERR: '+(r.err||'');if(r.ok){clean(['sena','spin','sinv']);loadForm();}refresh();}
 async function staTest(){let p=prompt('Admin password:','');if(p===null)return;let b={cmd:'test',pass:p};b.ssid=document.getElementById('sta_ssid').value;b.sta_pass=document.getElementById('sta_pass').value;let r=await jpost('/api/sta',b);document.getElementById('sta_test_msg').textContent=r.ok?'testing… (watch this line)':'ERR: '+(r.err||'');refresh();}
 async function saveOtaUrl(){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/ota',{ota_url:document.getElementById('ota_url').value,ota_int_h:+document.getElementById('ota_int_h').value,pass:p});document.getElementById('otaurlmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(['ota_url','ota_int_h']);loadForm();}refresh();}
-async function cmd(){let c=document.getElementById('cmd').value;let priv=/^(start|stop|fire|cancel|reboot|reset)\b/i.test(c);let b={cmd:c};if(priv){let p=prompt('Admin password:','');if(p===null)return;b.pass=p;}let r=await jpost('/api/cmd',b);document.getElementById('cmdout').textContent=r.ok?(r.out||'ok'):'ERR: '+(r.err||'');refresh();}
+async function cmd(){let c=document.getElementById('cmd').value;let priv=/^(start|stop|fire|cancel|dayreset|reboot|reset)\b/i.test(c);let b={cmd:c};if(priv){let p=prompt('Admin password:','');if(p===null)return;b.pass=p;}let r=await jpost('/api/cmd',b);document.getElementById('cmdout').textContent=r.ok?(r.out||'ok'):'ERR: '+(r.err||'');refresh();}
 async function restore(){let f=document.getElementById('restorefile').files[0];if(!f){document.getElementById('restoremsg').textContent='pick a backup file first';return;}let t=await f.text();let p=prompt('Admin password:','');if(p===null)return;let b;try{b=JSON.parse(t);}catch(e){document.getElementById('restoremsg').textContent='not a JSON backup';return;}b.pass=p;let r=await jpost('/api/restore',b);document.getElementById('restoremsg').textContent=r.ok?('restored — '+(r.note||'')):'ERR: '+(r.err||'');if(r.ok)loadForm();refresh();}
 async function ota(c){let p=prompt('Admin password:','');if(p===null)return;document.getElementById('otamsg').textContent=(c==='install'?'installing — box reboots on success':'checking…');let r=await jpost('/api/ota',{cmd:c,pass:p});document.getElementById('otamsg').textContent=r.ok?(c==='install'?'install started':'started'):'ERR: '+(r.err||'');refresh();}
 async function saveAdmin(){let ks=['ap_ssid','ap_pass','ap_ch','a_pass','sta_ssid','sta_pass'];let b={};for(let k of ks)b[k]=document.getElementById(k).value;b.sta_en=document.getElementById('sta_en').checked?1:0;b.auto=document.getElementById('auto').checked?1:0;let p=prompt('Admin password:','');if(p===null)return;b.pass=p;let bb={pass:p};for(let k of ['ota_auto'])bb[k]=document.getElementById(k).checked?1:0;await jpost('/api/ota',bb);let r=await jpost('/api/admin',b);document.getElementById('admmsg').textContent=r.ok?'saved (reboot to apply AP/STA)':'ERR: '+r.err;if(r.ok){clean(ks);clean(['sta_en','auto','ota_auto']);document.getElementById('ap_pass').value='';document.getElementById('a_pass').value='';document.getElementById('sta_pass').value='';loadForm();}refresh();}
@@ -465,7 +491,14 @@ static void handle_state() {
     if (i) s += ",";
     s += (G->seq->relayOn(i) ? "1" : "0");
   }
-  s += "],\"cfg\":{\"rmode\":" + String(c.relay_mode) +
+  // v2.6 daily meter batch (R38): flat keys in the cfg section (shared
+  // validation-table rule — counters are read-only here; only the day
+  // reset goes through /api/meter, never /api/config or restore).
+  s += "],\"cfg\":{\"m_met\":" + String(G->seq->meter().meters) +
+       ",\"m_att\":" + String(G->seq->meter().attempts) +
+       ",\"m_ps\":" + String(G->seq->meter().pass) +
+       ",\"m_fl\":" + String(G->seq->meter().fail) +
+       ",\"rmode\":" + String(c.relay_mode) +
        ",\"nrel\":" + String(c.relay_count) +
        ",\"step\":" + String(c.step_delay_ms) +
        ",\"hseq\":" + String(c.hold_seq_ms) +
@@ -606,6 +639,42 @@ static void handle_seq() {
     G->seq->stopAll(millis());
   }
   send_json("{\"ok\":1}");
+}
+
+// v2.6 daily meter heuristic (R39-R40): software-only approximate counter,
+// no button, no extra GPIO. web_tick() feeds the live link state every
+// loop: a RED gap >= 3 s closed by GREEN = reseat = new meter; steady GREEN
+// across RESTARTs/retries = same meter. Pure counter op — never touches
+// relays, forces, or the dead-band. A close marks the coalesced NVS flush
+// (1 write per meter, max); attempts ride along in the same batch, so a
+// power cut loses at most the current meter's attempts — stated, not hidden.
+static void meter_feed(unsigned long now) {
+  if (!G || !G->seq || !G->link_green) return;
+  MeterBatch &m = G->seq->meter();
+  uint32_t before = m.meters + m.pass + m.fail;
+  bool run = G->seq->running();
+  m.noteLink(*G->link_green, now, run);
+  m.pollIdle(run);
+  if (m.meters + m.pass + m.fail != before) cfg_save();
+}
+
+// v2.6 manual "new day" (R37): no RTC on the box, so the operator declares
+// the day boundary. Boot persists (power flicker must not eat QC data);
+// factory/reset_keepwifi wipe via the NVS clear + RAM paths below.
+void web_meter_reset() {
+  G->seq->meter().dayReset();
+  cfg_save();
+}
+
+static void handle_meter() {
+  String b = server.arg("plain");
+  String cmd = jstr(b, "cmd");
+  if (cmd == "reset") {
+    web_meter_reset();
+    send_json("{\"ok\":1}");
+    return;
+  }
+  send_json("{\"ok\":0,\"err\":\"cmd reset\"}");
 }
 
 // Shared config application (sequence card + labels). Validates onto a
@@ -764,6 +833,7 @@ static void handle_admin() {
       G->ota->interval_ms = keep_ota_int;
     }
     *G->cfg = Bms2Config();  // compiled defaults back in RAM
+    G->seq->meter().dayReset();  // v2.6: daily batch is bench state, not identity
     if (G->on_config_changed) G->on_config_changed();
     cfg_save();
     send_json("{\"ok\":1}");
@@ -1221,6 +1291,7 @@ static void handle_cmd() {
   String out;
   bool priv = (strcmp(verb, "start") == 0 || strcmp(verb, "stop") == 0 ||
                strcmp(verb, "fire") == 0 || strcmp(verb, "cancel") == 0 ||
+               strcmp(verb, "dayreset") == 0 ||
                strcmp(verb, "reboot") == 0 || strcmp(verb, "reset") == 0);
   if (priv && !admin_ok(jstr(b, "pass"))) {
     send_json("{\"ok\":0,\"err\":\"admin password required\"}");
@@ -1243,13 +1314,19 @@ static void handle_cmd() {
   } else if (strcmp(verb, "cancel") == 0) {
     G->spoof->cancel();
     out = "spoof cancelled";
+  } else if (strcmp(verb, "dayreset") == 0) {
+    web_meter_reset();
+    out = "day counters cleared";
   } else if (strcmp(verb, "status") == 0) {
-    char s[96];
-    snprintf(s, sizeof(s), "%s seq=%s cyc=%lu act=%lu spoof=%u",
+    char s[128];
+    const MeterBatch &m = G->seq->meter();
+    snprintf(s, sizeof(s), "%s seq=%s cyc=%lu act=%lu spoof=%u met=%lu att=%lu ps=%lu fl=%lu",
              *G->link_green ? "LINK GREEN" : "LINK RED",
              G->seq->running() ? "RUNNING" : "IDLE",
              G->seq->cyclesDone(), G->seq->actuations(),
-             G->spoof->stage(millis()));
+             G->spoof->stage(millis()),
+             (unsigned long)m.meters, (unsigned long)m.attempts,
+             (unsigned long)m.pass, (unsigned long)m.fail);
     out = s;
   } else if (strcmp(verb, "uptime") == 0) {
     char s[48];
@@ -1267,7 +1344,7 @@ static void handle_cmd() {
     web_factory_reset();
     return;
   } else if (strcmp(verb, "help") == 0 || verb[0] == '\0') {
-    out = "START STOP FIRE CANCEL STATUS UPTIME VERSION REBOOT RESET HELP";
+    out = "START STOP FIRE CANCEL DAYRESET STATUS UPTIME VERSION REBOOT RESET HELP";
   } else {
     send_json("{\"ok\":0,\"err\":\"unknown command (try HELP)\"}");
     return;
@@ -1512,6 +1589,7 @@ void web_setup(WebCtx &ctx) {
   server.on("/api/ota", HTTP_POST, handle_ota);
   server.on("/api/sta", HTTP_POST, handle_sta);  // v2.4 uplink test
   server.on("/api/cmd", HTTP_POST, handle_cmd);  // v2.4 console
+  server.on("/api/meter", HTTP_POST, handle_meter);  // v2.6 day reset
   server.on("/api/backup", HTTP_GET, handle_backup);  // v2.4 config export
   server.on("/api/restore", HTTP_POST, handle_restore);  // v2.4 import
   server.on("/api/uprog", HTTP_GET, handle_uprog);  // v2.4 upload progress
@@ -1528,6 +1606,7 @@ void web_setup(WebCtx &ctx) {
 
 void web_tick(unsigned long now) {
   cfg_flush(now);  // coalesced NVS commit (see cfg_save)
+  meter_feed(now);  // v2.6 link-gap heuristic (marks save on close)
   sta_tick(now);  // optional STA attempt resolves in the background
   sta_test_tick(now);  // v2.4 one-shot uplink test resolves here
   dns.processNextRequest();  // captive portal DNS (cheap; no-op off-AP)

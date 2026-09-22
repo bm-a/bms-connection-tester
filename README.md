@@ -129,7 +129,7 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.5` / `RED 2.5`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.6` / `RED 2.6`.
 - Joining the AP pops the dashboard automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the
