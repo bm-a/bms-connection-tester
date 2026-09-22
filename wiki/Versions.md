@@ -1,6 +1,6 @@
 # Versions / Changelog (Keep a Changelog)
 
-## [v2.6] — unreleased
+## [v2.6] — 2026-09-22
 ### Added
 - Daily meter-test counting (software-only estimate, no button, no new
   GPIO): `MeterBatch` (meters/attempts/pass/fail in RAM, flat NVS
