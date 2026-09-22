@@ -54,7 +54,7 @@ GPIO18; fixed GitHub tag parse + dashboard Install button.
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 152 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.6`; Releases v1.0 (ZIP) + v1.1 (3 bins + docx) + v1.2/v2.0/v2.1/v2.2/v2.3/v2.3.1/v2.4/v2.5 (7 assets each) + v2.6 (9 assets: 2 merged + 6 separate + docx); wiki live (8 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 152 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.6`; Releases: every release carries Tasmota-style one-file images (`bms-tester-8mb.bin`, + `bms-tester-n16r8.bin` where the tag has N16R8) next to the separate files — v1.0 (ZIP+1), v1.1 (4+1), v1.2–v2.6 (7+2 = 9 each, v2.6 incl. docx); wiki live (8 pages) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
