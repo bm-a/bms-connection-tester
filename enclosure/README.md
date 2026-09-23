@@ -4,9 +4,9 @@ owns is marked `DAD:` — software never guesses amps.
 
 ![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
 
-The device this box tests — Ayca e-rickshaw meter cluster:
+The device this box tests — e-rickshaw meter cluster:
 
-![Ayca meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
 
 ## Power tree (48 V shared with meter)
 ```
@@ -48,5 +48,5 @@ dry-contact vs driven; if driven, add per-channel fuse ≤3 A default).
 
 ## Sim mapping (software side)
 `local-wokwi/` mirrors all of the above: 48 V rail + both bucks + fuse lamp in 3D,
-GX16 sockets with pin numbers, photo-textured Ayca meter, WiFi toggle (GPIO18),
+GX16 sockets with pin numbers, photo-textured meter, WiFi toggle (GPIO18),
 `/esp/` exact firmware page in scrollable row. `/api/gx16` serves the live table.

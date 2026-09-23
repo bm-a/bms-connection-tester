@@ -170,7 +170,7 @@ all three, and OTA always pulls FULL so updating never strands a box.
 
 The device under test:
 
-![Ayca e-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
 
 ![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
 

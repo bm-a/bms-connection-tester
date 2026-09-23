@@ -1,8 +1,8 @@
 # Hardware modules
 
-The device under test — Ayca e-rickshaw meter cluster:
+The device under test — e-rickshaw meter cluster:
 
-![Ayca meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
 
 ![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
 

@@ -68,7 +68,7 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 - Bring-up terminal: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png
 - Suite results: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png
 - Relay tiles: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tiles.png
-- Ayca meter cluster: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg
+- E-rickshaw meter cluster: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg
 - Meter segment layout: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg
 
 ## Code map
