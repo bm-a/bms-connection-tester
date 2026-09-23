@@ -6,3 +6,5 @@ tc.json
 __pycache__/
 releases/
 emu_results.json
+local-wokwi/labels.json
+local-wokwi/server*.log

@@ -10,7 +10,7 @@
 #endif
 #endif
 
-#define FW_VERSION "2.6"
+#define FW_VERSION "2.7"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
 // v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and

@@ -5,6 +5,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.7] — 2026-09-23
+### Added
+- Three dashboard variants, one per build (`WEB_UI_VARIANT` in
+  `platformio.ini`; only the selected page compiles in, no flash bloat):
+  **CLASSIC** (`s3-classic`, variant 0) = v2.6 page byte-verbatim;
+  **FULL** (default envs, variant 1) = classic + live inline SVG bench card
+  (48 V → bucks → ESP → MAX485 with TX/RX dot → A/B flow → meter readout,
+  8 relay blocks glowing green, zero CDN — works on the offline AP) + tile
+  glow transitions; **LITE** (`s3-lite`, variant 2) = relay tiles + names +
+  LINK pill only (~4.9 KB page). Relay names stay NVS-persistent in all
+  three (existing `lbl0..7` + labels card, unchanged wire path).
+- Live meter readout keys in `/api/state` (read-only, never saved/restored):
+  `mv`/`ma`/`msoc` (tenths + %) mirroring the last `0x03` reply — golden
+  52.0 V / 0 A / 100 % or the active spoof stage — feeding the FULL bench
+  SVG. Web-contract checker now validates all three page variants
+  (endpoints ⊆ routes, ids per-page, union of state keys); new `test_web`
+  asserts for `mv:520/ma:0/msoc:100`; all three variants proven compiling
+  on host (`-DWEB_UI_VARIANT=0/1/2`).
+- OTA assets unchanged (`firmware.bin` / `n16r8-firmware.bin` = FULL builds)
+  so on-device updating keeps working on every box; classic/lite are
+  manual-flash alternatives.
+### Verified
+- `pio test -e native` 103/103, `test_web` 49/49, web-contract PASS (3/3
+  variants), 30-day soak PASS, OTA decision unit tests 6/6, GH release
+  assets present under exact OTA names, download URL resolves HTTP 200.
+  ESP-target compile + real OTA pull need hardware (toolchain uninstallable
+  in this container; HIL skipped, no device).
+
 ## [v2.6] — 2026-09-22
 ### Added
 - Daily meter-test counting, software-only estimate (no button, no new

@@ -1,5 +1,16 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.7] — 2026-09-23
+### Added
+- Three dashboard variants, one per build (`WEB_UI_VARIANT`):
+  CLASSIC (`s3-classic`) = v2.6 page verbatim; FULL (default) = classic +
+  live inline SVG bench card + tile glow + meter readout (`mv/ma/msoc`);
+  LITE (`s3-lite`) = relay tiles + names + LINK pill only. Relay names
+  NVS-persistent in all three. OTA assets stay FULL builds.
+- Proven: 103/103 native, 49/49 web, contract 3/3, soak PASS, OTA units 6/6,
+  GH assets present, download URL HTTP 200. ESP compile + real OTA pull
+  need hardware (HIL skipped).
+
 ## [v2.6] — 2026-09-22
 ### Added
 - Daily meter-test counting (software-only estimate, no button, no new

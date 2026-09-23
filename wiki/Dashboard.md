@@ -1,4 +1,10 @@
-# Dashboard field reference (v2.6)
+# Dashboard field reference (v2.7)
+
+> **Three variants, one per build** (`WEB_UI_VARIANT` in `platformio.ini`):
+> CLASSIC (`s3-classic`) = v2.6 page verbatim; **FULL** (default envs) =
+> everything below + live SVG bench card; LITE (`s3-lite`) = Relays card +
+> Relay labels card + LINK pill only. Relay names are NVS-persistent in all
+> three. OTA pulls FULL builds, so updating never strands a classic/lite box.
 
 Open: join AP **`BMS-Tester`** (`bms12345`) → phones get a landing page with
 a big **Open Dashboard** button + Safari/Chrome steps (the mini-browser
@@ -9,6 +15,14 @@ reboot/reset/upload/saves ask the admin password per request
 (default `admin123`). The 1 s tick refreshes **status only**; your edits are
 never clobbered. Every Save commits to NVS ~1.5 s after the click
 (RAM reacts instantly).
+
+## Bench card (v2.7 FULL only)
+
+- Inline SVG, zero CDN: 48V BUS → 12V/5V bucks → ESP32-S3 → MAX485 (amber
+  DE dot = transmitting) → animated A/B flow → meter box with live
+  `52.0V 0.0A 100%` readout (`mv`/`ma`/`msoc` in `/api/state`, read-only).
+- 8 relay blocks glow green with the coils; flow speed follows load.
+  Purely visual — every control lives in the cards below as before.
 
 ## Relays card
 - **START / STOP ALL**: start restarts from R1 (refused 0.5 s after a stop:
