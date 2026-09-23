@@ -28,16 +28,50 @@ def main() -> int:
         routes[(path, method)] = handler
     print(f"routes: {sorted(p for p, _ in routes)}")
 
-    # ---- dashboard JS + HTML ----
-    js = src.split("<script>", 1)[1].split("</script>", 1)[0]
-    html = src.split("PAGE_DASH[] PROGMEM", 1)[1].split("<script>", 1)[0]
+    # ---- dashboard variants (v2.7): three PAGE_DASH blocks (classic/lite/full),
+    # one per WEB_UI_VARIANT branch. Each block's JS must only fetch routed
+    # endpoints and only touch ids present in its own HTML (lite is a strict
+    # subset by construction — the same rules prove it).
+    blocks = []
+    for m in re.finditer(r'PAGE_DASH\[\] PROGMEM = R"HTML\((.*?)\)HTML"',
+                         src, re.S):
+        blocks.append(m.group(1))
+    print(f"dash variants: {len(blocks)}")
+    if len(blocks) != 3:
+        fail(f"expected 3 PAGE_DASH variants (classic/lite/full), found {len(blocks)}")
+        blocks = blocks[:1] if blocks else []
 
-    # 1. endpoints
-    for ep in sorted(set(re.findall(r"fetch\(['\"]([^'\"]+)['\"]", js))):
-        ok = any(p == ep for (p, _) in routes)
-        print(f"endpoint {ep}: {'OK' if ok else 'MISSING ROUTE'}")
-        if not ok:
-            fail(f"JS fetches {ep} with no server.on route")
+    def check_block(page, tag):
+        if "<script>" not in page or "</script>" not in page:
+            fail(f"{tag}: no inline script block")
+            return
+        js = page.split("<script>", 1)[1].split("</script>", 1)[0]
+        html = page.split("<script>", 1)[0]
+        for ep in sorted(set(re.findall(r"fetch\(['\"]([^'\"]+)['\"]", js))):
+            ok = any(p == ep for (p, _) in routes)
+            print(f"[{tag}] endpoint {ep}: {'OK' if ok else 'MISSING ROUTE'}")
+            if not ok:
+                fail(f"[{tag}] JS fetches {ep} with no server.on route")
+        html_ids = set(re.findall(r"id=([A-Za-z_]+)", html))
+        for eid in sorted(set(re.findall(r"getElementById\(['\"]([^'\"]+)['\"]", js))):
+            if eid == "lbl":
+                ok = "labels" in html_ids
+            elif eid == "bench_r":
+                # Dynamic rect ids bench_r0-7 (the id= regex stops at digits,
+                # so search the raw page for the first rect id).
+                ok = "bench_r0" in page
+                print(f"[{tag}] element #bench_rN: {'OK (svg rects)' if ok else 'MISSING'}")
+                if not ok:
+                    fail(f"[{tag}] JS touches #bench_rN with no bench_r0 rect")
+                continue
+            else:
+                ok = eid in html_ids
+            print(f"[{tag}] element #{eid}: {'OK' if ok else 'MISSING id='}")
+            if not ok:
+                fail(f"[{tag}] JS uses #{eid} with no id= in HTML")
+
+    for i, page in enumerate(blocks):
+        check_block(page, ("classic", "lite", "full")[i] if len(blocks) == 3 else f"v{i}")
 
     # Login wall is gone since v2.3.1 (WPA2 is the gate); sensitive actions
     # carry the admin password per request. Manual firmware upload page stays.
@@ -76,41 +110,31 @@ def main() -> int:
     if "UPDATE_SIZE_UNKNOWN" in src:
         fail("UPDATE_SIZE_UNKNOWN banned (explicit budget only)")
 
-    # 2. element ids
-    html_ids = set(re.findall(r"id=([A-Za-z_]+)", html))
-    for eid in sorted(set(re.findall(r"getElementById\(['\"]([^'\"]+)['\"]", js))):
-        if eid == "lbl":
-            # Dynamic tile ids lbl0-7 (built in JS loops, inputs in #labels).
-            ok = "labels" in html_ids
-            print(f"element #lblN: {'OK (dynamic)' if ok else 'MISSING'}")
-            if not ok:
-                fail("JS builds #lblN inputs with no id=labels container")
-            continue
-        ok = eid in html_ids
-        print(f"element #{eid}: {'OK' if ok else 'MISSING id='}")
-        if not ok:
-            fail(f"JS uses #{eid} with no id= in HTML")
+    # 2. element ids (per variant block, checked above in check_block).
 
-    # 3. state keys: JS list literal vs handle_state emission
+    # 3. state keys: union of all variant scripts vs handle_state emission.
     state_fn = src.split("static void handle_state()", 1)[1].split(
         "static void handle_relay()", 1)[0]
     emitted = set(re.findall(r'"\\?"?([a-z_]+)\\?"?:', state_fn))
     # cfg keys are built as \",\"key\": so also catch them
     emitted |= set(re.findall(r'\\\\",\\\\"([a-z_]+)', state_fn))
+    js_all = "\n".join(
+        p.split("<script>", 1)[1].split("</script>", 1)[0]
+        for p in blocks if "<script>" in p)
     js_keys = set()
     # Form fields live in fillForm() (NOT the 1 s status tick anymore).
-    fill_fn = js.split("function fillForm(s)", 1)[1].split(
-        "async function loadForm()", 1)[0]
-    for m in re.finditer(r"for\(let k of \[(.*?)\]\)", fill_fn):
-        js_keys |= set(re.findall(r"'([a-z_]+)'", m.group(1)))
+    for fill_fn in re.findall(r"function fillForm\(s\)(.*?)async function loadForm\(\)",
+                             js_all, re.S):
+        for m in re.finditer(r"for\(let k of \[(.*?)\]\)", fill_fn):
+            js_keys |= set(re.findall(r"'([a-z_]+)'", m.group(1)))
     # top-level flags used directly
     for k in ("link", "running", "spoof", "relays", "cycles", "acts", "stage",
               "fw"):
-        if f"s.{k}" in js or f"s.cfg.{k}" in js:
+        if f"s.{k}" in js_all or f"s.cfg.{k}" in js_all:
             js_keys.add(k)
     # v2.4: refresh() reads info/STA fields straight off s.cfg (not via
     # fillForm), so scrape those uses too.
-    for m in re.finditer(r"s\.cfg\.([a-z_]+)", js):
+    for m in re.finditer(r"s\.cfg\.([a-z_]+)", js_all):
         js_keys.add(m.group(1))
     for k in sorted(js_keys):
         # relays/link/etc are top-level; cfg.* live under cfg:{...}

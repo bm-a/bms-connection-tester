@@ -300,6 +300,18 @@ void web_bootcount_reset() {  // Tasmota Reset-99 equivalent (no reboot)
 }
 
 // ---- pages ----
+// v2.7 dashboard variants (WEB_UI_VARIANT from platformio.ini, default FULL):
+// 0 = CLASSIC (v2.6 page verbatim, NVS-persistent relay names),
+// 1 = FULL (classic + inline SVG bench card + tile sweep animation + live
+//     meter readout, no internet needed — all inline, zero CDN),
+// 2 = LITE (relay tiles + names + LINK pill only, smallest flash).
+// Only the selected variant compiles in (no flash bloat); OTA assets stay
+// FULL so on-device updating keeps working on every box.
+#ifndef WEB_UI_VARIANT
+#define WEB_UI_VARIANT 1
+#endif
+
+#if WEB_UI_VARIANT == 0
 static const char PAGE_DASH[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>BMS Tester</title><style>
@@ -454,6 +466,248 @@ async function saveReboot(){await saveAdmin();if(!confirm('Saved. Reboot now to 
 setInterval(refresh,1000);refresh();loadForm();
 </script></body></html>)HTML";
 
+#elif WEB_UI_VARIANT == 2
+// v2.7 LITE: relay tiles + names + LINK pill only. Fetches a strict subset of
+// the routed API (/api/state, /api/relay, /api/seq, /api/config); every id the
+// JS touches exists below (web-contract holds by construction).
+static const char PAGE_DASH[] PROGMEM = R"HTML(
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>BMS Tester Lite</title><style>
+*{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:12px}
+.wrap{max-width:720px;margin:0 auto}header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+header h2{margin:0;font-size:22px}.ver{font-size:12px;color:#94a3b8}
+.pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700}
+#link.G{background:#14532d;color:#4ade80}#link.R{background:#450a0a;color:#f87171}#clk{color:#94a3b8;font-size:13px}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#334155;border:1px solid #475569;vertical-align:middle}
+.dot.G{background:#22c55e;box-shadow:0 0 8px #22c55e}.dot.R{background:#ef4444;box-shadow:0 0 8px #ef4444}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin:12px 0}
+.card h3{margin:0 0 10px;font-size:15px;color:#93c5fd;text-transform:uppercase;letter-spacing:.5px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+.rly{border:2px solid #475569;background:#0f172a;color:#94a3b8;border-radius:10px;padding:14px 4px;font-size:15px;font-weight:700;cursor:pointer;transition:border-color .3s,box-shadow .3s,background .3s,color .3s}
+.rly small{display:block;font-size:11px;font-weight:400}
+.rly.on{border-color:#22c55e;background:#052e16;color:#4ade80;box-shadow:0 0 12px #22c55e66}
+button{background:#2563eb;border:0;color:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;margin:2px}
+button.danger{background:#b91c1c}button.ok{background:#15803d}
+label{font-size:13px;color:#cbd5e1}input{background:#0f172a;border:1px solid #475569;color:#e2e8f0;border-radius:8px;padding:8px;margin:3px 2px;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.msg{font-size:13px;color:#4ade80;margin-left:8px}
+.note{font-size:12px;color:#94a3b8}
+</style></head><body><div class=wrap>
+<header><h2>&#9889; BMS Tester</h2><span class=ver>lite</span><span class=ver id=fwver></span><span id=dotG class=dot></span><span id=dotR class=dot></span><span id=link class="pill R">?</span><span id=clk class=ver></span></header>
+<div class=card><h3>Relays</h3>
+<div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
+<div class=grid id=relays></div></div>
+<div class=card><h3>Relay labels</h3>
+<div class=row id=labels></div>
+<div class=row><button onclick="saveLabels()">Save labels</button><span class=msg id=lblmsg></span></div></div>
+<div class=row><span class=note>Lite build: relays + names + link only. Reflash FULL for bench SVG, spoof, OTA, console. Tiles tap = force ON/OFF (needs IDLE).</span></div>
+</div>
+<script>
+async function jget(u){let r=await fetch(u);return r.json();}
+async function jpost(u,b){let r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return r.json();}
+async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return null;}
+ document.getElementById('fwver').textContent=s.fw||'';
+ let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
+ document.getElementById('dotG').className='dot '+(s.link?'G':'');document.getElementById('dotR').className='dot '+(s.link?'':'R');
+ document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
+ let d=document.getElementById('relays');d.innerHTML='';
+ s.relays.forEach((on,i)=>{let nm=(s.cfg['lbl'+i]||('R'+(i+1)));d.innerHTML+=`<button class="rly${on?' on':''}" onclick="relay(${i},${on?0:1})">${nm}<small>${on?'ON':'OFF'}</small></button>`;});
+ return s;
+}
+function fillForm(s){if(!s||!s.cfg)return;
+ let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
+ for(let k of ['lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&document.activeElement!==e){e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
+}
+async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
+async function relay(i,on){await jpost('/api/relay',{i,on});refresh();}
+async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
+async function saveLabels(){let b={};for(let i=0;i<8;i++)b['lbl'+i]=document.getElementById('lbl'+i).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok)loadForm();refresh();}
+setInterval(refresh,1000);refresh();loadForm();
+</script></body></html>)HTML";
+
+#else
+// v2.7 FULL (default): the classic page + live SVG bench card + tile glow +
+// chase sweep highlight + meter readout (mv/ma/msoc, tenths). All inline,
+// zero CDN — works on the offline AP.
+static const char PAGE_DASH[] PROGMEM = R"HTML(
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>BMS Tester</title><style>
+*{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:12px}
+.wrap{max-width:720px;margin:0 auto}header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+header h2{margin:0;font-size:22px}.ver{font-size:12px;color:#94a3b8}
+.pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700}
+#link.G{background:#14532d;color:#4ade80}#link.R{background:#450a0a;color:#f87171}#clk{color:#94a3b8;font-size:13px}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#334155;border:1px solid #475569;vertical-align:middle}
+.dot.G{background:#22c55e;box-shadow:0 0 8px #22c55e}.dot.R{background:#ef4444;box-shadow:0 0 8px #ef4444}
+a{color:#60a5fa}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin:12px 0}
+.card h3{margin:0 0 10px;font-size:15px;color:#93c5fd;text-transform:uppercase;letter-spacing:.5px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+.rly{border:2px solid #475569;background:#0f172a;color:#94a3b8;border-radius:10px;padding:14px 4px;font-size:15px;font-weight:700;cursor:pointer;transition:border-color .3s,box-shadow .3s,background .3s,color .3s}
+.rly small{display:block;font-size:11px;font-weight:400}
+.rly.on{border-color:#22c55e;background:#052e16;color:#4ade80;box-shadow:0 0 12px #22c55e66}
+button,.btn{background:#2563eb;border:0;color:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;margin:2px}
+button.danger{background:#b91c1c}button.warn{background:#b45309}button.ok{background:#15803d}
+label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px solid #475569;color:#e2e8f0;border-radius:8px;padding:8px;margin:3px 2px;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.msg{font-size:13px;color:#4ade80;margin-left:8px}
+.spoof-on{color:#fbbf24;font-weight:700}
+.rly.lim{opacity:.35;cursor:not-allowed}
+.note{font-size:12px;color:#94a3b8}
+.flow{stroke-dasharray:6 6;animation:dashmove 1s linear infinite}
+@keyframes dashmove{to{stroke-dashoffset:-24}}
+</style></head><body><div class=wrap>
+<header><h2>&#9889; BMS Tester</h2><span class=ver>full</span><span class=ver id=fwver></span><span id=dotG class=dot></span><span id=dotR class=dot></span><span id=link class="pill R">?</span><span id=clk></span></header>
+<div class=card><h3>Bench (live)</h3>
+<svg id=benchsvg width=100% viewBox="0 0 680 200" style="background:#0f172a;border-radius:8px">
+<rect x=8 y=26 width=76 height=36 rx=6 fill=#1e293b stroke=#475569/><text x=14 y=48 fill=#f87171 font-size=11>48V BUS</text>
+<rect x=100 y=14 width=76 height=28 rx=6 fill=#1e293b stroke=#475569/><text x=106 y=32 fill=#fb923c font-size=10>12V coils</text>
+<rect x=100 y=46 width=76 height=28 rx=6 fill=#1e293b stroke=#475569/><text x=106 y=64 fill=#22d3ee font-size=10>5V logic</text>
+<line x1=84 y1=44 x2=100 y2=28 stroke=#f87171 stroke-width=2 /><line x1=84 y1=44 x2=100 y2=60 stroke=#f87171 stroke-width=2 />
+<rect x=196 y=20 width=90 height=48 rx=6 fill=#1e293b stroke=#475569/><text x=202 y=40 fill=#c6cddc font-size=11>ESP32-S3</text><text x=202 y=56 fill=#64748b font-size=10>TX17 RX16 DE4</text>
+<line x1=176 y1=44 x2=196 y2=44 stroke=#22d3ee stroke-width=2 />
+<rect x=306 y=20 width=90 height=48 rx=6 fill=#1e293b stroke=#475569/><text x=312 y=40 fill=#c6cddc font-size=11>MAX485</text><circle id=bench_de cx=382 cy=32 r=6 fill=#475569 />
+<line x1=286 y1=44 x2=306 y2=44 stroke=#e6b800 stroke-width=2 />
+<line id=flowAB x1=396 y1=44 x2=470 y2=44 stroke=#4ade80 stroke-width=2 class=flow />
+<rect x=470 y=14 width=202 height=84 rx=6 fill=#1e293b stroke=#475569/><text x=478 y=32 fill=#c6cddc font-size=11>E-RICKSHAW METER</text><text id=bench_mv x=478 y=54 fill=#ffffff font-size=16>--</text><text id=bench_link x=478 y=78 fill=#f87171 font-size=12>LINK ?</text><text x=478 y=92 fill=#64748b font-size=10>J1: 48V GND A B R1 · J2: R2-R6</text>
+<rect id=bench_r0 x=8 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r1 x=92 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r2 x=176 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r3 x=260 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r4 x=344 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r5 x=428 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r6 x=512 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 /><rect id=bench_r7 x=596 y=130 width=76 height=34 rx=6 fill=#1e293b stroke=#475569 />
+<text x=14 y=152 fill=#94a3b8 font-size=11>R1</text><text x=98 y=152 fill=#94a3b8 font-size=11>R2</text><text x=182 y=152 fill=#94a3b8 font-size=11>R3</text><text x=266 y=152 fill=#94a3b8 font-size=11>R4</text><text x=350 y=152 fill=#94a3b8 font-size=11>R5</text><text x=434 y=152 fill=#94a3b8 font-size=11>R6</text><text x=518 y=152 fill=#94a3b8 font-size=11>R7</text><text x=602 y=152 fill=#94a3b8 font-size=11>R8</text>
+<text x=8 y=184 fill=#64748b font-size=10>GX16 default map (dad's table replaces it) · coils glow green · A/B flow pulses while linked</text>
+</svg></div>
+<div class=card><h3>Relays</h3>
+<div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
+<div class=grid id=relays></div></div>
+<div class=card><h3>Meters today (approx)</h3>
+<div class=row><span id=meters></span></div>
+<div class=row><button class=warn onclick="if(confirm('Clear today counters?'))meter('reset')">New day (reset)</button><span class=msg id=metermsg></span></div>
+<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter; retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
+<div class=card><h3>Sequence config</h3>
+<div class=row><label>Mode <select id=rmode onchange="showMode()"><option value=0>Sequential 1-N</option><option value=2>Chase wave</option><option value=1>All ON at once</option></select></label>
+<label>Relays <input id=nrel size=3 title="1-8: first N relays take part"></label></div>
+<div class=row id=row_step><label>Step ms <input id=step size=6 title="100-60000, gap between relays"></label></div>
+<div class=row id=row_seqonly><label>Hold sequential ms (0=stay ON) <input id=hseq size=7></label></div>
+<div class=row id=row_chaseonly><label>Chase sweeps (0=forever) <input id=swp size=4 title="auto-hold = sweeps x relays x step"></label></div>
+<div class=row id=row_allonly><label>Hold all-on ms (0=stay ON) <input id=hall size=7></label>
+<label>All-ON stagger ms <input id=stag size=5 title="0 = all at once (contactor slam); 20-1000 ramps the inrush"></label></div>
+<div class=row id=row_dir><label>Direction <select id=dir><option value=0>R1&rarr;Rn</option><option value=1>Rn&rarr;R1</option></select></label></div>
+<div class=row><label>Button <select id=bmode><option value=0>Hold X ms, re-press=OFF</option><option value=1>Run to end, ignore presses</option><option value=2>Re-press restarts</option></select></label>
+<label>Logic <select id=alow><option value=1>Active-LOW (SmartElex)</option><option value=0>Active-HIGH</option></select></label></div>
+<div class=row><label><input type=checkbox id=loop> Loop cycles</label>
+<label>Pause ms <input id=cpause size=7 title="500-60000, coil cooling between cycles"></label>
+<label>Cycle limit (0=&infin;) <input id=clim size=5></label></div>
+<div class=row><button onclick="saveCfg()">Save</button><span class=msg id=cfgmsg></span></div>
+<div class=row><span class=note>Only the active mode's fields are shown. Mode switch needs STOP first; loop needs a finite hold; START is refused for 0.5 s after STOP (relay settle).</span></div></div>
+<div class=card><h3>Relay labels</h3>
+<div class=row id=labels></div>
+<div class=row><button onclick="saveLabels()">Save labels</button><span class=msg id=lblmsg></span></div></div>
+<div class=card><h3>Fault spoof (0x03 test values, stage 1 then 2)</h3>
+<div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><label>Trigger GPIO <input id=spin size=3></label><span id=spoofmsg class=spoof-on></span></div>
+<div class=row><label>Trigger polarity <select id=sinv title="which edge on the trigger pin fires the plan"><option value=0>Pull LOW to fire (pull-up)</option><option value=1>Pull HIGH to fire</option></select></label><button onclick="saveTrig()">Save trigger</button><span class=msg id=trigmsg></span></div>
+<div class=row><span class=note>Safe trigger pins: 1, 2, 21, 38-44, 47 (anything else falls back to 21). Trigger save stores pin + enable + polarity without firing (for physical-switch users).</span></div>
+<div class=row><label>1: V <input id=sv size=5></label><label>A <input id=sa size=5></label><label>&deg;C <input id=sc size=5></label><label>SOC% <input id=ssoc size=4></label><label>Secs <input id=ssec size=4></label></div>
+<div class=row><label>2: V <input id=s2v size=5></label><label>A <input id=s2a size=5></label><label>&deg;C <input id=s2c size=5></label><label>SOC% <input id=s2soc size=4></label><label>Secs <input id=s2sec size=4></label></div>
+<div class=row><button class=warn onclick="spoof('fire')">FIRE now</button><button onclick="spoof('save')">Save only</button><button onclick="spoof('cancel')">Cancel</button><span class=msg id=spoofsave></span></div>
+<div class=row><span class=note>Save only stages values + pin without firing. FIRE saves then fires.</span></div></div>
+<div class=card><h3>Firmware update</h3>
+<div class=row><span id=ota_status class=note></span><span id=ota_latest class=note></span></div>
+<div class=row><label><input type=checkbox id=ota_auto> Auto-check GitHub (needs STA uplink below)</label>
+<label>Every <input id=ota_int_h size=4 title="hours, 0 = manual only"> h</label>
+<button onclick="ota('check')">Check now</button><button id=otainstall style="display:none" class=warn onclick="ota('install')">Install update</button><a href=/update>Firmware upload</a><span class=msg id=otamsg></span></div>
+<div class=row><label>Custom firmware URL <input id=ota_url size=28 placeholder="blank = GitHub releases"></label>
+<button onclick="saveOtaUrl()">Save URL</button><button class=warn onclick="ota('url_upgrade')">Upgrade from URL</button><span class=msg id=otaurlmsg></span></div>
+<div class=row><label><input type=checkbox id=sta_en> STA uplink (hotspot for internet)</label>
+<label>SSID <input id=sta_ssid size=12></label><label>Pass <input id=sta_pass type=password size=12 placeholder="blank = keep"></label>
+<button onclick="staTest()">Test uplink</button><button onclick="saveAdmin()">Save</button><span class=note id=stamsg></span></div>
+<div class=row><span class=note id=sta_test_msg></span></div>
+<div class=row><a href=/api/backup>Backup configuration</a><span class=note> (download JSON — save before upgrading; passwords never included)</span></div>
+<div class=row><label>Restore backup file <input type=file id=restorefile accept=.json></label><button onclick="restore()">Restore</button><span class=msg id=restoremsg></span></div></div>
+<div class=card><h3>Admin &amp; Wi-Fi AP</h3>
+<div class=row><label>SSID <input id=ap_ssid size=14></label><label>Pass (8+, blank = keep) <input id=ap_pass type=password size=14 placeholder="blank = keep"></label><label>Ch <input id=ap_ch size=3></label></div>
+<div class=row><label>New admin pass (4+, blank = keep) <input id=a_pass type=password size=14 placeholder="blank = keep"></label></div>
+<div class=row><span class=note>Reboot, factory reset, update upload and these saves ask for the admin password (default admin123).</span></div>
+<div class=row><label><input type=checkbox id=auto> Auto-start sequence on boot (burn-in)</label></div>
+<div class=row><button onclick="saveAdmin()">Save</button><button class=warn onclick="saveReboot()">Save + reboot</button>
+<button class=warn onclick="if(confirm('Reboot?'))admin('reboot')">Reboot</button>
+<button class=danger onclick="if(confirm('Factory reset?'))admin('reset')">Factory reset</button><span class=msg id=admmsg></span></div>
+<div class=row><button onclick="if(confirm('Reset settings but keep Wi-Fi + passwords?'))admin('reset_keepwifi')">Reset settings (keep Wi-Fi)</button>
+<button onclick="admin('bootcount_reset')">Reset boot counter</button></div></div>
+<div class=card><h3>Information</h3>
+<div class=row><span class=note id=info_fw></span></div>
+<div class=row><span class=note id=info_mem></span></div>
+<div class=row><span class=note id=info_net></span></div>
+<div class=row><span class=note>Relays R1-R8: GPIO 5,6,7,8,9,12,13,14 (active-LOW) · UART2 TX17/RX16 DE4 · Button 15 · Kill 18 · Spoof pin on Fault card · Safe spare GPIO: 1,2,21,38-44,47</span></div></div>
+<div class=card><h3>Console</h3>
+<div class=row><input id=cmd size=30 placeholder="HELP"><button onclick="cmd()">Run</button></div>
+<div class=row><span class=note id=cmdout></span></div>
+<div class=row><span class=note>START STOP FIRE CANCEL DAYRESET STATUS UPTIME VERSION REBOOT RESET HELP — hardware verbs ask for the admin password.</span></div></div>
+</div>
+<script>
+async function jget(u){let r=await fetch(u);return r.json();}
+async function jpost(u,b){let r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return r.json();}
+let NREL=8;
+let dirty={};
+function markDirty(e){if(e&&e.target&&e.target.id)dirty[e.target.id]=1;}
+function clean(keys){for(let k of keys)delete dirty[k];}
+document.addEventListener('input',markDirty);
+document.addEventListener('change',markDirty);
+function bench(s){if(!s||!s.cfg)return;
+ let onN=0;for(let i=0;i<8;i++){if(s.relays[i])onN++;}
+ for(let i=0;i<8;i++){let e=document.getElementById('bench_r'+i);if(e){e.setAttribute('fill',s.relays[i]?'#22c55e':'#1e293b');e.setAttribute('stroke',s.relays[i]?'#4ade80':'#475569');}}
+ let de=document.getElementById('bench_de');if(de)de.setAttribute('fill',s.link?'#eab308':'#475569');
+ let lk=document.getElementById('bench_link');if(lk){lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.setAttribute('fill',s.link?'#4ade80':'#f87171');}
+ let fl=document.getElementById('flowAB');if(fl){fl.style.display=(s.link?'':'none');fl.style.animationDuration=(0.3+((8-onN)*0.12)).toFixed(2)+'s';}
+ let mv=document.getElementById('bench_mv');if(mv)mv.textContent=(s.cfg.mv/10).toFixed(1)+'V '+(s.cfg.ma/10).toFixed(1)+'A '+s.cfg.msoc+'%';
+}
+async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return null;}
+ document.getElementById('fwver').textContent=s.fw||'';
+ let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
+ document.getElementById('dotG').className='dot '+(s.link?'G':'');document.getElementById('dotR').className='dot '+(s.link?'':'R');
+ document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
+ document.getElementById('meters').textContent='meters '+s.cfg.m_met+' · attempts '+s.cfg.m_att+' · pass '+s.cfg.m_ps+' · fail '+s.cfg.m_fl;
+ document.getElementById('spoofmsg').textContent=s.spoof?('SPOOF STAGE '+s.stage):'';
+ NREL=s.cfg.nrel||8;
+ let d=document.getElementById('relays');d.innerHTML='';
+ s.relays.forEach((on,i)=>{let lim=i>=NREL;let nm=(s.cfg['lbl'+i]||('R'+(i+1)));d.innerHTML+=`<button class="rly${on?' on':''}${lim?' lim':''}" ${lim?'disabled':''} onclick="relay(${i},${on?0:1})">${nm}<small>${on?'ON':'OFF'}</small></button>`;});
+ document.getElementById('ota_status').textContent='OTA: '+(s.cfg.ota_status||'');
+ document.getElementById('ota_latest').textContent=s.cfg.ota_pending?('update available: '+s.cfg.ota_latest):('latest: '+(s.cfg.ota_latest||'?'));
+ document.getElementById('otainstall').style.display=s.cfg.ota_pending?'':'none';
+ document.getElementById('stamsg').textContent=s.cfg.sta===2?'STA online':(s.cfg.sta===1?'STA connecting':'STA off');
+ document.getElementById('sta_test_msg').textContent='uplink test: '+(s.cfg.sta_test_msg||'not tested');
+ document.getElementById('info_fw').textContent='fw '+s.fw+' ('+(s.cfg.variant||'?')+') · flash '+(s.cfg.flash_kb||'?')+' KB · free sketch '+(s.cfg.sketch_free||'?')+' B · boot #'+(s.cfg.boot||'?')+' · reset: '+(s.cfg.reset||'?');
+ document.getElementById('info_mem').textContent='heap '+(s.cfg.heap||'?')+' B · psram '+(s.cfg.psram||'0')+' B · up '+(s.cfg.uptime_s||'0')+' s';
+ document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
+ bench(s);
+ return s;
+}
+function showMode(){let m=+document.getElementById('rmode').value;
+ document.getElementById('row_step').style.display=(m===1)?'none':'';
+ document.getElementById('row_seqonly').style.display=(m===0)?'':'none';
+ document.getElementById('row_chaseonly').style.display=(m===2)?'':'none';
+ document.getElementById('row_allonly').style.display=(m===1)?'':'none';
+ document.getElementById('row_dir').style.display=(m===1)?'none':'';
+}
+function fillForm(s){if(!s||!s.cfg)return;
+ let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
+ for(let k of ['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sinv','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','ota_auto','ota_int_h','ota_url','sta_en','sta_ssid','ap_ssid','ap_ch','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&!dirty[k]&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
+ showMode();
+}
+async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
+async function relay(i,on){if(i>=NREL)return;await jpost('/api/relay',{i,on});refresh();}
+async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
+async function meter(c){let r=await jpost('/api/meter',{cmd:c});let m=document.getElementById('metermsg');if(!r.ok){m.textContent='ERR: '+(r.err||'');}else{m.textContent=(c==='reset'?'day cleared':'ok');}refresh();}
+async function saveCfg(){let ks=['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','cpause','clim','stag'];let b={};for(let k of ks){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(ks);clean(['loop']);loadForm();}refresh();}
+async function saveLabels(){let ks=[];for(let i=0;i<8;i++)ks.push('lbl'+i);let b={};for(let k of ks)b[k]=document.getElementById(k).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);loadForm();}refresh();}
+async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','sinv'];let b={cmd:c};if(c==='fire'||c==='save'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);let m=r.ok?(c==='cancel'?'cancelled':(c==='save'?'saved':'ok')):('ERR: '+(r.err||''));document.getElementById('spoofmsg').textContent=m;document.getElementById('spoofsave').textContent=m;if(r.ok&&(c==='fire'||c==='save')){clean(ks);clean(['sena']);loadForm();}refresh();}
+async function saveTrig(){let b={cmd:'trig'};b.sena=document.getElementById('sena').checked?1:0;b.spin=+document.getElementById('spin').value;b.sinv=+document.getElementById('sinv').value;let r=await jpost('/api/spoof',b);document.getElementById('trigmsg').textContent=r.ok?'trigger saved':'ERR: '+(r.err||'');if(r.ok){clean(['sena','spin','sinv']);loadForm();}refresh();}
+async function staTest(){let p=prompt('Admin password:','');if(p===null)return;let b={cmd:'test',pass:p};b.ssid=document.getElementById('sta_ssid').value;b.sta_pass=document.getElementById('sta_pass').value;let r=await jpost('/api/sta',b);document.getElementById('sta_test_msg').textContent=r.ok?'testing… (watch this line)':'ERR: '+(r.err||'');refresh();}
+async function saveOtaUrl(){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/ota',{ota_url:document.getElementById('ota_url').value,ota_int_h:+document.getElementById('ota_int_h').value,pass:p});document.getElementById('otaurlmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(['ota_url','ota_int_h']);loadForm();}refresh();}
+async function cmd(){let c=document.getElementById('cmd').value;let priv=/^(start|stop|fire|cancel|dayreset|reboot|reset)\b/i.test(c);let b={cmd:c};if(priv){let p=prompt('Admin password:','');if(p===null)return;b.pass=p;}let r=await jpost('/api/cmd',b);document.getElementById('cmdout').textContent=r.ok?(r.out||'ok'):'ERR: '+(r.err||'');refresh();}
+async function restore(){let f=document.getElementById('restorefile').files[0];if(!f){document.getElementById('restoremsg').textContent='pick a backup file first';return;}let t=await f.text();let p=prompt('Admin password:','');if(p===null)return;let b;try{b=JSON.parse(t);}catch(e){document.getElementById('restoremsg').textContent='not a JSON backup';return;}b.pass=p;let r=await jpost('/api/restore',b);document.getElementById('restoremsg').textContent=r.ok?('restored — '+(r.note||'')):'ERR: '+(r.err||'');if(r.ok)loadForm();refresh();}
+async function ota(c){let p=prompt('Admin password:','');if(p===null)return;document.getElementById('otamsg').textContent=(c==='install'?'installing — box reboots on success':'checking…');let r=await jpost('/api/ota',{cmd:c,pass:p});document.getElementById('otamsg').textContent=r.ok?(c==='install'?'install started':'started'):'ERR: '+(r.err||'');refresh();}
+async function saveAdmin(){let ks=['ap_ssid','ap_pass','ap_ch','a_pass','sta_ssid','sta_pass'];let b={};for(let k of ks)b[k]=document.getElementById(k).value;b.sta_en=document.getElementById('sta_en').checked?1:0;b.auto=document.getElementById('auto').checked?1:0;let p=prompt('Admin password:','');if(p===null)return;b.pass=p;let bb={pass:p};for(let k of ['ota_auto'])bb[k]=document.getElementById(k).checked?1:0;await jpost('/api/ota',bb);let r=await jpost('/api/admin',b);document.getElementById('admmsg').textContent=r.ok?'saved (reboot to apply AP/STA)':'ERR: '+r.err;if(r.ok){clean(ks);clean(['sta_en','auto','ota_auto']);document.getElementById('ap_pass').value='';document.getElementById('a_pass').value='';document.getElementById('sta_pass').value='';loadForm();}refresh();}
+async function admin(c){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/admin',{cmd:c,pass:p});if(!r.ok)alert('ERR: '+(r.err||''));else if(c==='reset_keepwifi'||c==='bootcount_reset')refresh();}
+async function saveReboot(){await saveAdmin();if(!confirm('Saved. Reboot now to apply AP/STA?'))return;let p=prompt('Admin password (reboot):','');if(p===null)return;await jpost('/api/admin',{cmd:'reboot',pass:p});}
+setInterval(refresh,1000);refresh();loadForm();
+</script></body></html>)HTML";
+#endif
+
 // ---- route helpers ----
 static void send_json(const String &s) {
   server.send(200, "application/json", s);
@@ -525,6 +779,12 @@ static void handle_state() {
        ",\"s2c\":" + String(c.s2_c_tenth) +
        ",\"s2soc\":" + String(c.s2_soc) +
        ",\"s2sec\":" + String(c.s2_seconds) +
+       // v2.7 live meter readout for the FULL bench card (tenths + %): mirrors
+       // the last 0x03 reply — golden 52.0 V / 0 A / 100 % or the active spoof
+       // stage. Read-only; never saved, never restored.
+       ",\"mv\":" + String(stage == 1 ? (int)c.spoof_v_tenth : stage != 0 ? (int)c.s2_v_tenth : 520) +
+       ",\"ma\":" + String(stage == 1 ? (int)c.spoof_a_tenth : stage != 0 ? (int)c.s2_a_tenth : 0) +
+       ",\"msoc\":" + String(stage == 1 ? (int)c.spoof_soc : stage != 0 ? (int)c.s2_soc : 100) +
        ",\"sta\":" + String(web_sta_state()) +
        ",\"sta_en\":" + String(ident.sta_en ? 1 : 0) +
        ",\"sta_ssid\":\"" + String(ident.sta_ssid) + "\"";

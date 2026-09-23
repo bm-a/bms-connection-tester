@@ -70,7 +70,7 @@ def advance(ms):
 r = get("/")
 check("dashboard serves 200 with app", r.status_code == 200 and "BMS Tester" in r.text, r.text[:80])
 s = state()
-check("state fw 2.6 + defaults", s["fw"] == "2.6" and s["cfg"]["step"] == 250 and s["cfg"]["stag"] == 50, json.dumps(s["cfg"])[:120])
+check("state fw 2.7 + defaults", s["fw"] == "2.7" and s["cfg"]["step"] == 250 and s["cfg"]["stag"] == 50, json.dumps(s["cfg"])[:120])
 for probe in ["/hotspot-detect.html", "/generate_204", "/gen_204", "/connecttest.txt", "/redirect", "/library/test/success.html"]:
     r = get(probe)
     check(f"probe {probe} -> landing", r.status_code == 200 and "Open Dashboard" in r.text, str(r.status_code))

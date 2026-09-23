@@ -123,7 +123,11 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"rmode\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"ssec\":5"));
   TEST_ASSERT_TRUE(has(r.body, "\"s2sec\":10"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.6\""));
+  // v2.7 live meter readout (golden 52.0 V / 0 A / 100 % at boot, no spoof).
+  TEST_ASSERT_TRUE(has(r.body, "\"mv\":520"));
+  TEST_ASSERT_TRUE(has(r.body, "\"ma\":0"));
+  TEST_ASSERT_TRUE(has(r.body, "\"msoc\":100"));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.7\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
@@ -777,7 +781,7 @@ void test_console_verbs(void) {
   r = WebServer::post("/api/cmd", "{\"cmd\":\"status\"}");
   TEST_ASSERT_TRUE(has(r.body, "LINK RED"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"version\"}");
-  TEST_ASSERT_TRUE(has(r.body, "2.6"));
+  TEST_ASSERT_TRUE(has(r.body, "2.7"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"bogus\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   // Privileged verbs need the password...

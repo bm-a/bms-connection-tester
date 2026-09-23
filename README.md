@@ -18,10 +18,10 @@ red = bus silent**. No screens needed.
 |---|---|
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.6** current · `v2.5` portal/schema/harness · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **152 passing** (103 via `pio test -e native` + 49 web, via `sh run_tests.sh`) + 30-day soak |
+| Releases | **v2.7** current (3 dashboard variants: FULL default, `s3-classic`, `s3-lite`) · `v2.6` meter estimate · `v2.5` portal/schema/harness · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **152 passing** (103 via `pio test -e native` + 49 web, via `sh run_tests.sh`) + 30-day soak + 3-variant web contract |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
-| Web UI | Always-on AP `BMS-Tester` → professional dashboard (no office Wi-Fi needed) |
+| Web UI | Always-on AP `BMS-Tester` → professional dashboard in 3 variants (FULL default, `s3-classic`, `s3-lite`) — no office Wi-Fi needed |
 
 ## What v2.6 adds (daily meter estimate, round link dots, one-file flash)
 
@@ -189,6 +189,9 @@ Emulator results for v2.6 (Termux + Debian proot):
 
 ## Versions
 
+- **v2.7** — three dashboard variants (FULL default + `s3-classic` +
+  `s3-lite`), live SVG bench + meter readout (`mv/ma/msoc`), persistent
+  relay names in all variants, OTA stays FULL. 152/152 tests, contract 3/3.
 - **v2.6** — software-only daily meter estimate (link gaps ≥ 3 s = new
   meter, no button/GPIO), round link dots, one-file merged flash images,
   `test_meter` + web/emu meter coverage. 152/152 tests (103 pio + 49 web),
