@@ -1,6 +1,6 @@
 # Protocol — JBD UART over RS485 (9600 8N1, half-duplex)
 
-![JBD frame map](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png)
+![JBD frame map](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/protocol.png)
 
 *Request + reply byte roles and the checksum coverage rule — the whole
 protocol on one card.*

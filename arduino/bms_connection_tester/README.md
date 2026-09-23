@@ -1,6 +1,6 @@
 # Flash with Arduino IDE (no PlatformIO needed)
 
-![Power and signal tree — wire this first](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+![Power and signal tree — wire this first](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png)
 
 ## 1. Install support
 1. Install Arduino IDE from arduino.cc.

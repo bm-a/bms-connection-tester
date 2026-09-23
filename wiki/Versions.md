@@ -5,10 +5,10 @@
 
 | FULL (default) | LITE |
 |---|---|
-| ![FULL](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png) | ![LITE](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png) |
+| ![FULL](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png) | ![LITE](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-lite.png) |
 | bench SVG + tiles + meters + all cards | tiles + names + LINK pill only |
 
-![Sequential + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+![Sequential + spoof demo](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/demo.gif)
 
 ### Added
 - Three dashboard variants, one per build (`WEB_UI_VARIANT`):

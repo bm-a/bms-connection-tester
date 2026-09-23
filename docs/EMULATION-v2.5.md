@@ -1,6 +1,6 @@
 # Emulation report v2.5 — every feature, actually executed
 
-![Suite results](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png)
+![Suite results](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/tests.png)
 
 *(Historical v2.5 report — method unchanged in v2.7; current counts above.)*
 

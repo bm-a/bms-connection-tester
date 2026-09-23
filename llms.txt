@@ -60,14 +60,14 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
 
 ## Media (v2.7 release assets + in-repo photos)
 
-- Dashboard FULL: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png
-- Dashboard LITE: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png
-- Sequential run + spoof GIF: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif
-- JBD frame map: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png
-- Power/signal tree: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png
-- Bring-up terminal: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png
-- Suite results: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png
-- Relay tiles: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tiles.png
+- Dashboard FULL: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png
+- Dashboard LITE: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-lite.png
+- Sequential run + spoof GIF: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/demo.gif
+- JBD frame map: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/protocol.png
+- Power/signal tree: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png
+- Bring-up terminal: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/terminal.png
+- Suite results: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/tests.png
+- Relay tiles: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/tiles.png
 - E-rickshaw meter cluster: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg
 - Meter segment layout: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg
 

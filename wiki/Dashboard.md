@@ -1,11 +1,11 @@
 # Dashboard field reference (v2.7)
 
-![FULL dashboard](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+![FULL dashboard](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png)
 
 *FULL variant: bench strip, tiles, meters-today. CLASSIC is pixel-identical
 to v2.6; LITE keeps only tiles + names + LINK:*
 
-![LITE dashboard](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png)
+![LITE dashboard](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-lite.png)
 
 > **Three variants, one per build** (`WEB_UI_VARIANT` in `platformio.ini`):
 > CLASSIC (`s3-classic`) = v2.6 page verbatim; **FULL** (default envs) =

@@ -1,6 +1,6 @@
 # wokwi/ — browser simulation (no hardware needed)
 
-![Relay tiles — the sim drives these](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tiles.png)
+![Relay tiles — the sim drives these](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/tiles.png)
 
 *Prefer offline? Same idea, phone-hosted, with 3D:
 [local-wokwi/](../local-wokwi/) ([bms-tester-sim](https://github.com/bm-a/bms-tester-sim)).*
