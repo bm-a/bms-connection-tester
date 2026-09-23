@@ -8,6 +8,9 @@ partition tables are never mixed across versions.
 
 Naming (uniform, Tasmota-style): bms-tester-8mb.bin (+ bms-tester-n16r8.bin
 where the tag has the s3-n16r8 env). Flash: write-flash 0x0 <file>.
+Plus the OTA-named raw app bins the box actually pulls (src/ota.h):
+firmware.bin (8MB env) + n16r8-firmware.bin (n16r8 env) — without these,
+box Check sees the release but Install 404s (exactly the v2.7 gap).
 
 Runs INSIDE proot-debian (needs pio + esptool on PATH there):
   proot-distro login debian -- sh -c 'export PATH=/root/.local/bin:$PATH;
@@ -30,6 +33,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 MERGED_8MB = "bms-tester-8mb.bin"
 MERGED_N16 = "bms-tester-n16r8.bin"
+OTA_8MB = "firmware.bin"        # must match OTA_ASSET_8MB in src/ota.h
+OTA_N16 = "n16r8-firmware.bin"  # must match OTA_ASSET_N16R8 in src/ota.h
 OFFSETS = [("0x0", "bootloader.bin"), ("0x8000", "partitions.bin"),
            ("0x10000", "firmware.bin")]
 
@@ -80,6 +85,8 @@ def fw_version(workdir):
 
 def merge(esptool, bindir, outfile):
     cmd = [esptool, "--chip", "esp32s3", "merge_bin", "-o", outfile]
+    if esptool.endswith(".py"):  # package script, not on PATH as executable
+        cmd = [sys.executable] + cmd
     for addr, name in OFFSETS:
         cmd += [addr, os.path.join(bindir, name)]
     run(cmd)
@@ -104,7 +111,8 @@ def one_tag(tag, args, esptool):
     run(["git", "-C", REPO, "worktree", "add", wt, tag])
     try:
         envs = envs_of(wt)
-        total_steps += len(envs) + 2 + (1 if args.upload else 0)
+        npairs = 1 + (1 if "s3-n16r8" in envs else 0)
+        total_steps += len(envs) + npairs + (1 if args.upload else 0)
         bar(tag)
         bindirs = {}
         for e in envs:  # [n/N] progress per env build
@@ -115,18 +123,27 @@ def one_tag(tag, args, esptool):
         os.makedirs(outdir, exist_ok=True)
         ver = fw_version(wt)
         merged = []
-        pairs = [("esp32-s3-devkitc-1", MERGED_8MB)]
+        pairs = [("esp32-s3-devkitc-1", MERGED_8MB, OTA_8MB)]
         if "s3-n16r8" in bindirs:
-            pairs.append(("s3-n16r8", MERGED_N16))
-        for e, name in pairs:
+            pairs.append(("s3-n16r8", MERGED_N16, OTA_N16))
+        for e, name, ota_name in pairs:
             step(tag)
             out = os.path.join(outdir, name)
             merge(esptool, bindirs[e], out)
             verify(out, ver)
             merged.append(out)
+            raw_src = os.path.join(bindirs[e], "firmware.bin")
+            raw_dst = os.path.join(outdir, ota_name)
+            shutil.copyfile(raw_src, raw_dst)
+            raw = open(raw_dst, "rb").read()
+            assert raw[0] == 0xE9, "app magic in %s" % ota_name
+            if ver:
+                assert ver.encode() in raw, \
+                    "version %s byte-present in %s" % (ver, ota_name)
         if args.upload:
             step(tag)
-            run(["gh", "release", "upload", tag] + merged)
+            run(["gh", "release", "upload", tag] + merged +
+                [os.path.join(outdir, o) for _, _, o in pairs])
         secs = int(time.time() - t0)
         sys.stdout.write("\n[%s] done in %dm%02ds: %s\n" %
                          (tag, secs // 60, secs % 60,
