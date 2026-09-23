@@ -168,10 +168,6 @@ all three, and OTA always pulls FULL so updating never strands a box.
 
  ## Hardware modules — what it runs on
 
-The device under test:
-
-![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
-
 ![Power and signal tree](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png)
 
 | Module | Role | Key pins / settings |
