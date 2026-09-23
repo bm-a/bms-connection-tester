@@ -1,5 +1,7 @@
 # Ready-to-flash binaries — v2.6 (ESP32-S3 N16R8, 16 MB flash + OPI PSRAM)
 
+![Bring-up terminal](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png)
+
 Built 2026-09-22 from this exact source (`pio run -e s3-n16r8`,
 Xtensa GCC 8.4.0, Arduino 2.0.x). Same firmware logic as `firmware/`,
 only the flash/PSRAM map differs. Use for N16R8 boards (16 MB flash,

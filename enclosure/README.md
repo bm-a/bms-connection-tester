@@ -2,6 +2,12 @@
 v2.6 · software builder + dad (electronics) split. Every electrical value dad
 owns is marked `DAD:` — software never guesses amps.
 
+![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+
+The device this box tests — Ayca e-rickshaw meter cluster:
+
+![Ayca meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+
 ## Power tree (48 V shared with meter)
 ```
 48V IN (shared bus, fused) ─┬─ buck 48→12V (coils only) ── relay JD-VCC

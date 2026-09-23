@@ -1,5 +1,7 @@
 # src/ — tester firmware
 
+![JBD frame map — what the parser speaks](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png)
+
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
   adaptive tracker, canned frames, `FW_VERSION` (`"2.6"`).

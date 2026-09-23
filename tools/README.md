@@ -1,5 +1,7 @@
 # tools/ — test helpers and scripts
 
+![Sequential + spoof demo — what the harnesses prove on the bench](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+
 - `virtual_meter.py` — PC program that pretends to be the meter. Scenario modes for
   bench testing without hardware:
   `python3 tools/virtual_meter.py PORT [--reg 03|04|05] [--period S] [--jitter S]`

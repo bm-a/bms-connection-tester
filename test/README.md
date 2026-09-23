@@ -1,5 +1,7 @@
 # test/ — automated tests (152 passing: 103 via pio + 49 web via g++)
 
+![Suite results](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png)
+
 Each subdirectory is an independent Unity test app (PlatformIO convention),
 also compilable with plain `g++` (see `run_tests.sh` fallback).
 `test_web` is g++-only (needs `-DARDUINO` + host stubs in its own folder).

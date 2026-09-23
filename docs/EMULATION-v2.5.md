@@ -1,5 +1,9 @@
 # Emulation report v2.5 — every feature, actually executed
 
+![Suite results](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png)
+
+*(Historical v2.5 report — method unchanged in v2.7; current counts above.)*
+
 Harness: `tools/fw_emu/` — the REAL `web_ui.cpp` + relay + spoof + OTA
 decision code compiled natively behind a POSIX-socket HTTP shim, driven over
 real HTTP with deterministic virtual time. No test doubles in the request

@@ -4,6 +4,16 @@ ESP32-S3 firmware + hardware that impersonates a **JBD / Xiaoxiang Smart BMS**
 over RS485, so compatible meters, displays, or hosts can be exercised
 **without the real battery pack**.
 
+![FULL dashboard with live bench](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+
+*v2.7 FULL dashboard: LINK pill, live bench strip, glowing relay tiles —
+[open the interactive 3D bench](https://github.com/bm-a/bms-tester-sim) to
+click it yourself.*
+
+![Sequential run + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+
+*R1→R8 sequential run, then a spoof FIRE driving the meter readout off golden.*
+
 - **Green = valid BMS traffic seen, red = bus silent.** Boots red, green ≤ 1 s
   after the first valid frame, red again after silence. No buttons or screens.
 - Answers `0x03` (basic info, byte-exact real capture: 52.0 V, 100 %),
@@ -11,7 +21,7 @@ over RS485, so compatible meters, displays, or hosts can be exercised
   (option A) while still counting them as live traffic.
 - Targets: ESP32-S3 DevKitC-1 (8 MB) and N16R8 (16 MB + OPI PSRAM), MAX485,
   external LEDs (GPIO10/11) plus onboard WS2812 RGB (GPIO48) mirroring both.
-- `STATUS?` over USB serial replies `GREEN 2.4` / `RED 2.4` (automation hook).
+- `STATUS?` over USB serial replies `GREEN 2.7` / `RED 2.7` (automation hook).
 - v2.x: 8-relay sequencer + always-on AP dashboard + fault spoof — see [[Relays]].
 - v2.2: captive portal (dashboard pops on join) + fixed 192.168.4.1.
 - v2.3: relay count + chase, 2-stage spoof, per-mode ms holds, industrial pack
@@ -29,6 +39,8 @@ over RS485, so compatible meters, displays, or hosts can be exercised
   config schema (v1+v2 backups), on-demand STA join, whitespace-tolerant
   JSON, socket emulation harness + 64/64 report — see [[Dashboard]] and
   `docs/EMULATION-v2.5.md`.
+- v2.7: three dashboard variants (FULL default + CLASSIC + LITE), live SVG
+  bench card + meter readout, persistent relay names — see [[Dashboard]].
 
 Start here: [[Flashing]] to load it, [[Hardware]] to wire it,
 [[Protocol]] for the byte format, [[Relays]] for the test bench,

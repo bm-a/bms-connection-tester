@@ -1,4 +1,8 @@
-# Emulators — test everything without the battery (v2.6 results)
+# Emulators — test everything without the battery (v2.7 results)
+
+![Suite results](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png)
+
+*152/152 suites + 3-variant contract + 30-day soak — what Layer 1 proves.*
 
 ## Layer 1 — native tests + soak + contract (Termux, always)
 `sh run_tests.sh` (g++ + local Unity fallback) and `pio test -e native` (103):
@@ -28,6 +32,21 @@ the RS485 LEDs + meter heuristic, `/__update`, `/__flags`, `/__chip`,
 uploads, backup/restore, console, resets, STA/OTA, info, meter gaps + round
 dots) + `drive_soak.py` (48 virtual hours, 10 checks) — **72/72 PASS**.
 `w3m -dump` verifies the rendered pages.
+
+## Layer 4b — offline 3D bench (no internet, phone-hosted)
+
+`local-wokwi/` (also standalone: https://github.com/bm-a/bms-tester-sim):
+one ESP32-S3 + MAX485 + photo-textured meter + 8 relays + GX16 sockets,
+electron-flow viz sized by live rail current, pressable buttons, relay board
+with persistent names, and the verbatim ESP dashboard embedded below:
+
+![FULL dashboard snapshot](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+
+![Sequential + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+
+*Honest limit: no WebGL screenshots can be captured in this container, so the
+3D canvas itself has no stills — the snapshots above are the dashboard and
+relay states it drives. Open the bench to see the 3D live.*
 
 ## Layer 4 — Wokwi browser + headless sim (functional proof)
 `wokwi/diagram.json`: DUT S3 + discretes (10/11) + **NeoPixel on GPIO48**

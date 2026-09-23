@@ -191,7 +191,9 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   dual-buck tree, `DAD:` placeholders for dad's sizing). Real meter photos in
   `Actual Meter Image/` (Ayca cluster + segment close-up, also 3D textures).
   **152/152 total** (103 pio + 49 web); emu 62/62 earlier; release snapshots
-  inspected before upload.
+  inspected before upload. Release media (v2.7 tag): dash-full.png,
+  dash-lite.png, demo.gif, protocol.png, wiring.png, terminal.png, tests.png,
+  tiles.png — every docs/wiki page embeds the relevant ones.
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.

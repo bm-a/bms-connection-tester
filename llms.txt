@@ -31,7 +31,9 @@ schema (v1+v2 backups), on-demand STA join, whitespace-tolerant JSON, socket
 emulation harness (64/64 over real HTTP) + 30-day soak. v2.6 adds a
 software-only daily meter estimate (link gaps ≥ 3 s = new meter, no button,
 no new GPIO), round link dots on the dashboard, and one-file merged flash
-images per board. v1.x responder core frozen.
+images per board. v2.7 adds three dashboard variants (FULL default + CLASSIC +
+LITE via WEB_UI_VARIANT), a live SVG bench card + mv/ma/msoc meter readout,
+and NVS-persistent relay names everywhere. v1.x responder core frozen.
 
 Also known as / search terms: JBD BMS emulator, JBD BMS simulator, Xiaoxiang
 BMS tester, smart BMS responder, RS485 BMS spoof, e-rickshaw meter tester,
@@ -54,7 +56,20 @@ battery emulator for meter testing, MAX485 ESP32 BMS.
   responses cover LEN_HI+LEN_LO+DATA (echoed command byte excluded).
 - Answered: 0x03 basic info (byte-exact real capture), 0x04 cell voltages,
   0x05 device name. Writes/unknown registers: silence, still counted as traffic.
-- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.6` / `RED 2.6`.
+- Link window: adaptive 2–10 s. `STATUS?` on USB serial → `GREEN 2.7` / `RED 2.7`.
+
+## Media (v2.7 release assets + in-repo photos)
+
+- Dashboard FULL: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png
+- Dashboard LITE: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png
+- Sequential run + spoof GIF: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif
+- JBD frame map: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png
+- Power/signal tree: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png
+- Bring-up terminal: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png
+- Suite results: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png
+- Relay tiles: https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tiles.png
+- Ayca meter cluster: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg
+- Meter segment layout: https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg
 
 ## Code map
 

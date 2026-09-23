@@ -1,6 +1,15 @@
 # Versions / Changelog (Keep a Changelog)
 
 ## [v2.7] — 2026-09-23
+### Dashboard variants at a glance
+
+| FULL (default) | LITE |
+|---|---|
+| ![FULL](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png) | ![LITE](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png) |
+| bench SVG + tiles + meters + all cards | tiles + names + LINK pill only |
+
+![Sequential + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+
 ### Added
 - Three dashboard variants, one per build (`WEB_UI_VARIANT`):
   CLASSIC (`s3-classic`) = v2.6 page verbatim; FULL (default) = classic +

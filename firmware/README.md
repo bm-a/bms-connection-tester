@@ -1,5 +1,7 @@
 # Ready-to-flash binaries — v2.6 (ESP32-S3 DevKitC-1, 8 MB flash)
 
+![Bring-up terminal](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png)
+
 Built 2026-09-22 from this exact source (`pio run -e esp32-s3-devkitc-1`,
 Xtensa GCC 8.4.0, Arduino 2.0.x). Use for 8 MB boards and for Wokwi.
 For 16 MB N16R8 boards use `firmware-n16r8/` instead (same logic, 16 MB map).

@@ -1,5 +1,12 @@
 # Relays + sequencer (v2.4)
 
+![Relay tiles](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tiles.png)
+
+*Tiles glow green when ON; tap = force ON/OFF (IDLE only); names persist.
+Watch a full cycle:*
+
+![Sequential run demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+
 ## Wiring the 12 V 8-channel module
 - R1–R8: ESP GPIO **5, 6, 7, 8, 9, 12, 13, 14** → module **IN1–IN8**.
 - Module **DC+ / DC−**: separate **12 V supply** (coils ≈ 30 mA each,

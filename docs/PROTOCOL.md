@@ -1,5 +1,7 @@
 # JBD / Xiaoxiang BMS protocol (as implemented here)
 
+![JBD frame map](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png)
+
 UART **9600 8N1**, half-duplex over RS485.
 
 ## Request (host → BMS, 7 bytes, fixed for a basic-info read)

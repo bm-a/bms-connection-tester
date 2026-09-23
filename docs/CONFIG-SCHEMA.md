@@ -1,5 +1,9 @@
 # Config schema v2 (firmware v2.5+; meters added v2.6)
 
+*Every key below has a field on the dashboard — FULL snapshot for reference:*
+
+![FULL dashboard](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+
 One shared validation table, enforced identically by `/api/config`,
 `/api/spoof`, `/api/restore`, and the emulation drivers. NVS stays flat
 key-value (namespace `bms2`); structure lives in the JSON export layer.
