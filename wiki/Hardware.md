@@ -1,4 +1,18 @@
-# Hardware (v2.0)
+# Hardware (v2.7 pin map — unchanged since v2.0)
+
+The thing under test — a real e-rickshaw meter cluster (Ayca dual-dial):
+
+![Ayca e-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+
+*Speed dial + battery %/V dial + tell-tales. The tester drives exactly this
+over RS485 (readouts) + relay-switched lamp lines.*
+
+## Power + signal tree (standalone 48 V box)
+
+![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+
+*48 V shared bus → 12 V coils + 5 V logic → ESP → MAX485 → A/B → meter;
+relays land on J1/J2/AUX. Full enclosure docs: `enclosure/README.md`.*
 
 ## MCU
 ESP32-S3 DevKitC-1 (8 MB) or N16R8 (16 MB flash + 8 MB octal PSRAM),

@@ -6,6 +6,15 @@ Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
 ## [v2.7] — 2026-09-23
+Release media:
+[FULL](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png) ·
+[LITE](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png) ·
+[demo GIF](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif) ·
+[protocol](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png) ·
+[wiring](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png) ·
+[terminal](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png) ·
+[suites](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png) ·
+[tiles](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tiles.png)
 ### Added
 - Three dashboard variants, one per build (`WEB_UI_VARIANT` in
   `platformio.ini`; only the selected page compiles in, no flash bloat):

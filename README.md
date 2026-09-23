@@ -166,7 +166,13 @@ all three, and OTA always pulls FULL so updating never strands a box.
 - **Web dashboard:** always-broadcasting AP, login (`admin`/`admin123`, change
   on first login), live relay grid + sequence/spoof/admin cards, NVS persistence.
 
-## Hardware modules — what it runs on
+ ## Hardware modules — what it runs on
+
+The device under test:
+
+![Ayca e-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+
+![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
 
 | Module | Role | Key pins / settings |
 |---|---|---|
@@ -188,7 +194,7 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - Validates every incoming frame completely — line noise can never fake a link
   (proven: 10 M-byte fuzz, zero emits). Answers `0x03` (52.0 V, 100 %),
   `0x04` (14-cell), `0x05` (name); silent on writes/unknown, still counted live.
-- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.6` / `RED 2.6`.
+- Link window self-adjusts (2–10 s); `STATUS?` replies `GREEN 2.7` / `RED 2.7`.
 - Joining the AP pops the dashboard automatically (captive portal, fixed 192.168.4.1); turn mobile data off if the phone routes around it.
 - Sequencer runs on `millis()` — no `delay()` anywhere; RS485 keeps priority.
 - AP `BMS-Tester` is up from every boot; connect any phone/laptop, open the

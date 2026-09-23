@@ -1,6 +1,10 @@
-# Flashing — all different ways (v2.6)
+# Flashing — all different ways (v2.7)
 
-Pick **one** method. All install the same v2.6 logic; only the tool differs.
+![Bring-up terminal](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png)
+
+*Sim → sequence → `STATUS?` → flash: the whole bring-up in three commands.*
+
+Pick **one** method. All install the same v2.7 logic; only the tool differs.
 
 ## 1. Ready binaries with esptool (any PC, no IDE) — ONE file, ONE command
 1. `pip install esptool`
@@ -28,9 +32,10 @@ for the classic three-address flash (`0x0` / `0x8000` / `0x10000`).
 
 ## 3. PlatformIO (VS Code)
 Open the repo folder, let PIO install, then upload:
-- `esp32-s3-devkitc-1` for 8 MB boards (and Wokwi artifacts), or
-- `s3-n16r8` for N16R8 (16 MB flash, OPI PSRAM, `default_16MB.csv`).
-Both compile the same `src/` — verified with Xtensa GCC 8.4.0.
+- `esp32-s3-devkitc-1` for 8 MB boards (FULL dashboard), or
+- `s3-n16r8` for N16R8 (16 MB flash, OPI PSRAM, `default_16MB.csv`, FULL), or
+- `s3-classic` / `s3-lite` for the CLASSIC / LITE dashboard on 8 MB boards.
+All compile the same `src/` — only the dashboard page differs.
 
 ## 4. Arduino IDE (no PlatformIO)
 1. Install Arduino IDE, add `https://espressif.github.io/arduino-esp32/package_esp32_index.json`,
@@ -43,8 +48,8 @@ Both compile the same `src/` — verified with Xtensa GCC 8.4.0.
    green follows the first meter poll.
 
 ## After flashing
-Send `STATUS?` on the USB serial (115200): expect `RED 2.3` silent,
-`GREEN 2.3` while a meter polls. Then see [[Hardware]] for wiring checks.
+Send `STATUS?` on the USB serial (115200): expect `RED 2.7` silent,
+`GREEN 2.7` while a meter polls. Then see [[Hardware]] for wiring checks.
 
 ## After that — no more cables for updates
 Join the AP, open the dashboard's **Firmware card**: upload a `.bin` from a

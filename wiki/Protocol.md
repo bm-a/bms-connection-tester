@@ -1,5 +1,10 @@
 # Protocol — JBD UART over RS485 (9600 8N1, half-duplex)
 
+![JBD frame map](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/protocol.png)
+
+*Request + reply byte roles and the checksum coverage rule — the whole
+protocol on one card.*
+
 ## Frames
 - Request: `DD A5 REG LEN DATA CK_HI CK_LO 77` (`A5` = read, `5A` = write).
   Reads are 7 bytes, e.g. `DD A5 03 00 FF FD 77`.
@@ -21,6 +26,13 @@
 | `0x03` | 34 | byte-exact capture: 52.0 V, 0 A, 100/100 Ah, 100 %, 14S, 2×25.0 °C | `FC DA` |
 | `0x04` | 35 | 14 × `0E 82` (3714 mV) = 52.0 V, consistent with `0x03` | `F8 04` |
 | `0x05` | 19 | ASCII `TEST-14S100A` | `FC FD` |
+
+What the meter shows for `0x03` — VOL/CUR/TEMP + status flags + battery bar:
+
+![Meter segment layout](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg)
+
+*STBY/CHG/DISCH/ERROR flags, VOL/CUR/TEMP digits, battery bar. Golden reply
+lights it as 52.0 V, 100 %, full bar; spoof stage 2 drives 88.8/188.*
 
 Writes and unknown registers get silence (option A, user-confirmed) but still
 refresh the green window. Parser: streaming FSM (`JST_*`), validates
