@@ -8,12 +8,15 @@
 > 103/103 + 49/49 + contract 3/3 + soak green; v2.7 tag + release live WITH A
 > GAP: no firmware bins — no ESP toolchain in this container, OTA v2.6→v2.7
 > checks fine but installs 404 until bins are built+uploaded on the bench PC).
-> COMPACTION CHECKPOINT 2026-09-21: user compacting Termux storage. All 3
-> repos verified pushed + clean (main `2b23226` + tag `v2.3` upstream, release
-> live, CI green; handbook `ba3ac6f`; emulator `1fd0b2a`). `releases/` (564 KB,
-> gitignored offline backup) must be copied somewhere compaction won't touch.
-> If `/opt/*` inside Debian is gone post-compaction, rebuild order is
-> pioenv → PIO packages (+Xtensa tarball workaround) → QEMU (sanitized PATH).
+> COMPACTION CHECKPOINT 2026-09-23 (pre-compaction, all pushed): main
+> `6033dd9` == origin/main; tag `v2.7` == `ca3ffe0` (firmware-identical to
+> main — only docs/sim/media after it); wiki backend + `bms-tester-sim` main
+> in sync; v2.7 release carries 8 media assets (no bins yet). Environment
+> reality: **Debian container GONE (only ubuntu), /opt/* gone, `.pio/` 3.6M
+> stubs** — firmware/QEMU builds need full §8 re-provision. `releases/`
+> (564K + v1.0 ZIP + 2 bundles) intact. `tmp/opencode/` scratch (grid/zoom
+> jpgs, bms-wiki + simrepo clones) is push-safe wipe — everything in it is
+> pushed to GH.
 > §12's release checklist REQUIRES updating this file in the same commit as
 > any feature — a body left stale behind an addendum is a bug (2026-09-22).
 > Audience: the next AI agent (or future me) picking this project up cold.
@@ -59,7 +62,7 @@ GPIO18; fixed GitHub tag parse + dashboard Install button.
 | Repo | URL | Contents | State |
 |---|---|---|---|
 | `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 152 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.7`; Releases: every release ≤ v2.6 carries Tasmota-style one-file images next to the separate files — v1.0 (ZIP+1), v1.1 (4+1), v1.2–v2.6 (7+2 = 9 each, v2.6 incl. docx); **v2.7 carries dash-full.png + dash-lite.png + demo.gif ONLY (no bins — see §11.2)**; wiki live (8 pages) |
-| `bms-tester-sim` | https://github.com/bm-a/bms-tester-sim | Offline 3D bench simulator (subtree of `local-wokwi/`): ESP32-S3 + MAX485 + photo meter + 8 relays + GX16, electron-flow viz, pressable buttons, relay board + persistent names, verbatim ESP page embed, `shots.py` snapshots | Pushed (subtree, main) |
+| `bms-tester-sim` | https://github.com/bm-a/bms-tester-sim | Offline 3D bench simulator: ESP32-S3 + MAX485 + photo meter + 8 relays + GX16, electron-flow viz, pressable buttons, relay board + persistent names, verbatim ESP page embed, `shots.py` snapshots | In sync. NOTE 2026-09-23: maintained DIRECTLY now (subtree retired) — another session added LICENSE + CI + verify hardening on top of subtree history; local Ayca-removal sync done via scratch clone (`tmp/opencode/simrepo`, wipe-safe). Merge conflicts: local touches bench3d.html/shots.py, remote touches sim_server.py/verify_sim.py — check both sides before any future subtree op (prefer direct clone + copy). |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -191,7 +194,11 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   dual-buck tree, `DAD:` placeholders for dad's sizing). Real meter photos in
   `Actual Meter Image/` (meter cluster + segment close-up, also 3D textures).
   **152/152 total** (103 pio + 49 web); emu 62/62 earlier; release snapshots
-  inspected before upload. Release media (v2.7 tag): dash-full.png,
+  inspected before upload. Post-release (same day, all in main): media pass —
+  8 assets + Ayca-free redaction (meter photo logos filled, all mentions
+  dropped, wiring.png regenerated), snapshots/GIF embedded on all 27 docs/wiki
+  pages + llms.txt index; sim OTA check now hits live GitHub (asset gate
+  reproduces the v2.6→v2.7 404 path exactly). Release media (v2.7 tag): dash-full.png,
   dash-lite.png, demo.gif, protocol.png, wiring.png, terminal.png, tests.png,
   tiles.png — every docs/wiki page embeds the relevant ones.
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
@@ -453,6 +460,14 @@ back them up separately if they matter:
 - Ubuntu container holds only a QEMU binary copy (`…/ubuntu/rootfs/opt`).
 
 **Termux/Android quirks (all solved, scripts exist):**
+0. **ENV LOST 2026-09-23: Debian container + /opt/* + warm PIO packages are
+   GONE (only `ubuntu` rootfs left, `.pio/` = 3.6M stubs). Nothing firmware or
+   QEMU side runs until re-provisioned: reinstall proot-debian → §8 steps 1–3
+   (PLATFORMIO_SYSTEM_TYPE override, Debian pio core, hand-built esptoolpy) →
+   QEMU source rebuild (~1 h total). `tools/merge_releases.py` (committed
+   this session, py-compiled + `--help` verified, NEVER executed — needs
+   debian+pio) is the new bin pipeline: per-tag worktrees, merge, verify,
+   `--upload`. Native/host tests + sim need nothing (Termux python/g++ intact).
 1. pyserial has no Android port lister → 1-line patch
    (`plat[:5]=='linux' or plat[:7]=='android'` in `list_ports_posix.py`;
    patch file in emulator repo). Without it EVERY `pio` cmd crashes on Termux.
@@ -616,11 +631,13 @@ or deprioritize — host tests + soak already prove the firmware.
    units 6/6, live-GH verified), install phase 404s (`firmware.bin` /
    `n16r8-firmware.bin` absent from the v2.7 release — no toolchain in this
    container) and fails safe (`install http 404`, box keeps running). The sim
-   reproduces this exactly (live GH check + asset gate). To close:
-   `pio run -e esp32-s3-devkitc-1 -e s3-n16r8 -e s3-classic -e s3-lite`
-   (proot-debian per §8) → merge per `firmware/README.md` → 
-   `gh release upload v2.7 <bins>` → re-run a box Check→Install to prove the
-   pull end to end (STA uplink + TLS + flash write are hardware-only).
+   reproduces this exactly (live GH check + asset gate). To close, EITHER run
+   `tools/merge_releases.py v2.7 --upload` in proot-debian (new pipeline, needs
+   §8 re-provision first) OR manually: `pio run` all 4 envs → merge per
+   `firmware/README.md` → `gh release upload v2.7 <bins>` → re-run a box
+   Check→Install to prove the pull end to end (STA uplink + TLS + flash write
+   are hardware-only). v2.7 tag (`ca3ffe0`) is firmware-identical to current
+   main — bins built from main are tag-correct.
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
    firmware headless (button→pins, spoof→`22 B0`); also answers whether
    `WiFi.softAP` boots in the sim (dashboard HTTP itself has no emulator —
@@ -665,7 +682,8 @@ v2.5 adds `tools/fw_emu/` (socket harness + drivers) + `docs/CONFIG-SCHEMA.md`
 `test/test_meter/` + `/__bus` control + merged `bms-tester-*.bin` images;
 v2.7 adds `WEB_UI_VARIANT` pages + `mv/ma/msoc` + `s3-classic`/`s3-lite` envs
 + `local-wokwi/` (sim server, Three.js bench, verbatim ESP embed, `shots.py`)
-+ `enclosure/` (IP65/GX16/dual-buck docs).
++ `enclosure/` (IP65/GX16/dual-buck docs) + `tools/merge_releases.py`
+(per-tag bin pipeline, needs debian+pio).
 Termux home `archive/` — pre-existing clutter, leave alone.
 Emulator work (`/opt/qemu-src` 1.1 GB, `/opt/qemu-s3` 94 MB, `/opt/pioenv`
 76 MB, `/root/.platformio` large) is inside the Debian container — see §8
