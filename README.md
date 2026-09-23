@@ -13,6 +13,10 @@ red = bus silent**. No screens needed.
 > examples, shopping list with search terms, and a step-by-step build guide.
 > (Also known as: JBD BMS emulator, Xiaoxiang BMS simulator/tester, smart BMS
 > responder, RS485 battery emulator, e-rickshaw meter tester.)
+>
+> **No hardware handy?** Run the offline 3D bench simulator:
+> **[bms-tester-sim](https://github.com/bm-a/bms-tester-sim)** — ESP32-S3 +
+> MAX485 + meter + relays in the browser, exact ESP dashboard embedded.
 
 | | |
 |---|---|
@@ -22,6 +26,46 @@ red = bus silent**. No screens needed.
 | Tests | **152 passing** (103 via `pio test -e native` + 49 web, via `sh run_tests.sh`) + 30-day soak + 3-variant web contract |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard in 3 variants (FULL default, `s3-classic`, `s3-lite`) — no office Wi-Fi needed |
+
+## Dashboard (v2.7)
+
+Three builds, one per `WEB_UI_VARIANT` — relay names are NVS-persistent in
+all three, and OTA always pulls FULL so updating never strands a box.
+
+| Variant | Build | What you get |
+|---|---|---|
+| **FULL** (default) | `esp32-s3-devkitc-1`, `s3-n16r8` | Everything: live SVG bench card, relay tiles + names, meters-today, sequence config, spoof, OTA, console |
+| CLASSIC | `s3-classic` | v2.6 page byte-verbatim |
+| LITE | `s3-lite` | Relay tiles + names + LINK pill only (~4.9 KB page) |
+
+![FULL dashboard snapshot](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+
+*FULL variant: LINK pill + cycle counters, live bench strip (48V → ESP → MAX485 → meter readout), glowing relay tiles, meters-today — rendered from live sim state.*
+
+![Sequential run + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+
+*R1→R8 sequential run, then a spoof FIRE driving the meter readout off golden — the same flow the 3D bench shows live.*
+
+![LITE dashboard snapshot](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png)
+
+*LITE variant: relays + names + link, nothing else — smallest flash footprint.*
+
+## What v2.7 adds (three dashboards, live bench SVG, sim relay board)
+
+- **Three dashboard variants, one per build** (`WEB_UI_VARIANT` in
+  `platformio.ini`; only the selected page compiles in): FULL (default —
+  classic + live inline SVG bench + tile glow + meter readout, zero CDN),
+  CLASSIC (`s3-classic`, v2.6 page byte-verbatim), LITE (`s3-lite`, relay
+  tiles + names + LINK pill). Relay names NVS-persistent everywhere; OTA
+  assets stay FULL.
+- **Live meter readout** (`mv`/`ma`/`msoc` in `/api/state`, read-only):
+  mirrors the last `0x03` reply — golden or active spoof stage.
+- **Offline 3D bench** (`local-wokwi/`, also standalone at
+  [bms-tester-sim](https://github.com/bm-a/bms-tester-sim)): one ESP +
+  MAX485 + photo-textured meter + 8 relays + GX16 sockets, electron-flow
+  viz sized by live rail current, pressable buttons (incl. factory-reset
+  hold + OTA check), relay board row with persistent names, verbatim ESP
+  page embedded below.
 
 ## What v2.6 adds (daily meter estimate, round link dots, one-file flash)
 
@@ -227,5 +271,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for full notes.
 `src/` firmware (protocol core + relay ctrl + web UI + OTA logic) · `docs/` module + protocol ·
 `test/` 105 Unity tests · `tools/` meter sim, HIL pytest, QEMU script, soak, report ·
 `arduino/` IDE sketch · `firmware/` 8 MB binaries · `firmware-n16r8/` N16R8 binaries ·
-`wokwi/` browser sim (relays + buttons) · `captures/` Docklight recordings ·
+`wokwi/` browser sim (relays + buttons) · `local-wokwi/` offline 3D bench
+(sim server + Three.js bench + verbatim ESP page + `shots.py` snapshots) ·
+`enclosure/` IP65 standalone box + GX16 meter link docs · `captures/` Docklight recordings ·
 `scripts/` Linux/Termux setup · `wiki/` wiki sources · `.github/workflows/` CI.
