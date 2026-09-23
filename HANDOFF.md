@@ -1,9 +1,13 @@
 # HANDOFF — bms-connection-tester project (full brain dump)
 
 > Written 2026-09-18, before Termux storage compression.
-> Last updated 2026-09-22 for **v2.6** (software-only daily meter estimate,
-> round link dots, one-file merged flash images, `test_meter` in pio native,
-> `/__bus` emu control, 152/152, 62/62 emu, v2.6 docx).
+> Last updated 2026-09-23 for **v2.7** (three dashboard variants FULL/CLASSIC/
+> LITE via `WEB_UI_VARIANT`, live SVG bench + `mv/ma/msoc` readout, persistent
+> relay names everywhere, offline 3D bench `local-wokwi/` + new public repo
+> `bms-tester-sim`, enclosure/GX16 docs, release snapshots + demo GIF;
+> 103/103 + 49/49 + contract 3/3 + soak green; v2.7 tag + release live WITH A
+> GAP: no firmware bins — no ESP toolchain in this container, OTA v2.6→v2.7
+> checks fine but installs 404 until bins are built+uploaded on the bench PC).
 > COMPACTION CHECKPOINT 2026-09-21: user compacting Termux storage. All 3
 > repos verified pushed + clean (main `2b23226` + tag `v2.3` upstream, release
 > live, CI green; handbook `ba3ac6f`; emulator `1fd0b2a`). `releases/` (564 KB,
@@ -40,21 +44,22 @@ GPIO18; fixed GitHub tag parse + dashboard Install button.
   The Word report for dad keeps the e-rickshaw framing on purpose.)
 - **People:** user = Bhavishya Madan (GitHub `bm-a`). Dad = electronics-strong,
   code-weak; gets status via a WhatsApp Word report, not GitHub.
-- **Current release: v2.6** (software-only daily meter estimate from link
-  gaps, round link dots, one-file merged flash images per board; no login
-  wall, sticky saves, UTF-8, chase sweeps, spoof GPIO, GPIO18 kill switch,
-  OTA install).
+- **Current release: v2.7** (three dashboard variants: FULL default with live
+  inline SVG bench card + `mv/ma/msoc` meter readout, CLASSIC = v2.6 page
+  byte-verbatim, LITE = relays+names+link; relay names NVS-persistent in all;
+  OTA assets stay FULL; everything else = v2.6 behavior).
   v1.x responder core FROZEN (parser, option-A, tracker, golden frames, LEDs,
   STATUS?, original 32 tests byte-identical). v1.0 frozen (ZIP + git tag,
   untouched since).
 
 ---
 
-## 2. The three GitHub repos (all public, user `bm-a`)
+## 2. The GitHub repos (all public, user `bm-a`)
 
 | Repo | URL | Contents | State |
 |---|---|---|---|
-| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 152 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.6`; Releases: every release carries Tasmota-style one-file images (`bms-tester-8mb.bin`, + `bms-tester-n16r8.bin` where the tag has N16R8) next to the separate files — v1.0 (ZIP+1), v1.1 (4+1), v1.2–v2.6 (7+2 = 9 each, v2.6 incl. docx); wiki live (8 pages) |
+| `bms-connection-tester` | https://github.com/bm-a/bms-connection-tester | Firmware, 152 tests, docs, binaries, Wokwi, CI, wiki | main pushed; tags `v1.0`–`v2.7`; Releases: every release ≤ v2.6 carries Tasmota-style one-file images next to the separate files — v1.0 (ZIP+1), v1.1 (4+1), v1.2–v2.6 (7+2 = 9 each, v2.6 incl. docx); **v2.7 carries dash-full.png + dash-lite.png + demo.gif ONLY (no bins — see §11.2)**; wiki live (8 pages) |
+| `bms-tester-sim` | https://github.com/bm-a/bms-tester-sim | Offline 3D bench simulator (subtree of `local-wokwi/`): ESP32-S3 + MAX485 + photo meter + 8 relays + GX16, electron-flow viz, pressable buttons, relay board + persistent names, verbatim ESP page embed, `shots.py` snapshots | Pushed (subtree, main) |
 | `jbd-bms-rs485-handbook` | https://github.com/bm-a/jbd-bms-rs485-handbook | Electronics explainer: RS485, MAX485, S3 pins, JBD protocol, build guide, FAQ + `llms.txt` | Pushed (single commit + later edits if any — check `git log`) |
 | `esp32s3-qemu-arm64` | https://github.com/bm-a/esp32s3-qemu-arm64 | Build/run scripts for Espressif QEMU on ARM64, M25P80 flash patches, Termux/proot notes | Pushed (2 commits) |
 
@@ -163,6 +168,30 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   bus LEDs). Harness-caught: dayReset seat-count, begin-vs-dayReset link
   amnesia, STA/bus link conflation. **152/152 total** (103 pio + 49 web);
   emu 62/62 + 10/10 soak; v2.6 docx.
+- **v2.7** (this release): three dashboard variants, one per build
+  (`WEB_UI_VARIANT` in `platformio.ini`, only the selected page compiles in):
+  FULL (default envs) = v2.6 page + live inline SVG bench card (48V→bucks→
+  ESP→MAX485 DE dot→animated A/B flow→meter readout, 8 glowing relay blocks,
+  zero CDN) + tile glow transitions; CLASSIC (`s3-classic`) = v2.6 page
+  byte-verbatim (19,799 B, diff-proven); LITE (`s3-lite`) = relay tiles +
+  names + LINK pill (~4.9 KB page). Relay names NVS-persistent in all three
+  (existing `lbl0..7` path, untouched). Live meter readout keys in
+  `/api/state` (read-only, never saved/restored): `mv/ma/msoc` mirroring the
+  last `0x03` reply (golden 520/0/100 or active spoof stage). Contract checker
+  validates all 3 variants (endpoints ⊆ routes, per-page ids incl. dynamic
+  `bench_rN`, union of state keys); `test_web` asserts `mv:520/ma:0/msoc:100`;
+  all 3 variants proven compiling on host; FULL+LITE JS `node --check` clean.
+  OTA assets unchanged (FULL builds) — but v2.7 bins NOT built here (no ESP
+  toolchain in container): release carries images/GIF only, OTA v2.6→v2.7
+  checks fine and installs 404-safe until §11.2 is done. Sim (`local-wokwi/`,
+  subtree-pushed as `bms-tester-sim`): relay board row + `labels.json`
+  persistence synced into `lbl0..7`, live-GitHub OTA check
+  (`ota_cmp` port + asset-presence gate, reproduces the 404 path), `shots.py`
+  snapshots + demo GIF (cairosvg+ffmpeg). Enclosure/GX16 docs (`enclosure/`,
+  dual-buck tree, `DAD:` placeholders for dad's sizing). Real meter photos in
+  `Actual Meter Image/` (Ayca cluster + segment close-up, also 3D textures).
+  **152/152 total** (103 pio + 49 web); emu 62/62 earlier; release snapshots
+  inspected before upload.
 - **Decision: option A** — writes (`0x5A`) and unknown registers get SILENCE
   (never a wrong-register reply), but still refresh the green window.
   This was an explicit user-confirmed choice. Do not change without asking.
@@ -218,7 +247,7 @@ Core pieces (`bms_protocol.*`):
 - `reply_for(reg, is_write, len)` — 0x03/04/05 read → canned frame; else NULL.
 - `PollTracker` — EMA of poll intervals; threshold = clamp(2×EMA+500, 2 s, 10 s).
 - `matches_request()` + `connection_active()` — v1.0 compat, kept for tests.
-- `FW_VERSION` = `"2.6"`; `STATUS?` replies `GREEN 2.6` / `RED 2.6`
+- `FW_VERSION` = `"2.7"`; `STATUS?` replies `GREEN 2.7` / `RED 2.7`
   (first token stable — HIL test splits on whitespace).
 
 Canned frames (frozen literals, NEVER recomputed at runtime):
@@ -279,7 +308,11 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
   dots (`#dotG/#dotR`) + `/api/meter` (reset-only) + console `DAYRESET` +
   `STATUS` batch + NVS `m_met/m_att/m_ps/m_fl` (close/reset flush, boot
   restore, excluded from backups) + `meter_feed()` in `web_tick()`,
-  WiFi kill switch (`web_wifi_set`, GPIO18, debounced in `main.cpp`).
+  WiFi kill switch (`web_wifi_set`, GPIO18, debounced in `main.cpp`),
+  v2.7 `WEB_UI_VARIANT` (0 CLASSIC / 1 FULL default / 2 LITE — `handle_root`
+  serves the compiled-in page; OTA assets stay FULL) + FULL bench SVG card
+  (`bench_r0..7`, `bench_de`, `flowAB`, `bench_mv/link`) + read-only
+  `mv/ma/msoc` in `handle_state` (golden vs spoof stage).
 - `ota` (`ota.h`, host-tested pure logic; network in `main.cpp`): semver
   compare, per-variant asset pick (`-DFW_IS_N16R8=1` on the n16r8 env —
   quoted `-D` strings do not survive the flag pipeline), safe download URLs,
@@ -347,7 +380,9 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
   cycle/limit/counter proof. Runs in ~0.05 s.
 - `tools/check_web_contract.py` — JS endpoints/ids/state-keys/POST-keys vs
   firmware routes, exit 0 = PASS (CI `web` job + run_tests.sh). Knows dynamic
-  `lblN` keys (builder loops) + `/api/ota` + `/update` form.
+  `lblN` keys (builder loops) + `/api/ota` + `/update` form. v2.7: validates
+  all 3 PAGE_DASH variants (per-page endpoints/ids incl. dynamic `bench_rN`,
+  union of state keys incl. `mv/ma/msoc`).
 - `sh run_tests.sh` → same suites via g++ fallback + **soak sim** + HIL
   (auto-skip without hardware).
 - New-suite highlights: sequential stepping/timing, per-mode ms holds,
@@ -388,8 +423,9 @@ v2.0 pieces (`relay_ctrl.*`, host-tested):
 
 ## 8. Build system & environments
 
-`platformio.ini` envs: `esp32-s3-devkitc-1` (8 MB firmware),
-`s3-n16r8` (16 MB + OPI PSRAM, `default_16MB.csv`, `-DFW_IS_N16R8=1`),
+`platformio.ini` envs: `esp32-s3-devkitc-1` (8 MB firmware, FULL dashboard),
+`s3-n16r8` (16 MB + OPI PSRAM, `default_16MB.csv`, `-DFW_IS_N16R8=1`, FULL),
+`s3-classic` (`-DWEB_UI_VARIANT=0`), `s3-lite` (`-DWEB_UI_VARIANT=2`),
 `native` (host tests,
 `build_src_filter = +<bms_protocol.cpp> +<relay_ctrl.cpp> +<ota.cpp>`,
 `test_filter` = 8 suites), `s3_tests` (on-target ELFs).
@@ -543,7 +579,9 @@ or deprioritize — host tests + soak already prove the firmware.
 - Releases: v1.0 (ZIP), v1.1 (3 bins + docx), v1.2 + v2.0 + v2.1 + v2.2 + v2.3
   (7 assets each: 8 MB triple plain-named + `n16r8-` triple — GitHub forbids
   duplicate asset names, so N16R8 files are uploaded renamed; docx re-uploaded
-  with `--clobber` when only the report changes). Wiki backend provisioned
+  with `--clobber` when only the report changes). v2.7: tag + release live
+  with dash-full.png + dash-lite.png + demo.gif (inspected before upload);
+  firmware bins PENDING bench-PC build (§11.2). Wiki backend provisioned
   (one browser click); push via the `.wiki.git` clone.
 - Re-run `gh release create` only if assets change.
 
@@ -553,21 +591,34 @@ or deprioritize — host tests + soak already prove the firmware.
 
 0. **Post-compaction resume:** say "continue" — todo list is ordered top-down
    (HANDOFF delta → QEMU Stage 0 → A → B → C → D → bench + housekeeping).
-1. **Bench test v2.6 with real meter + SmartElex module** (the one thing
-   that matters now): (a) responder still green ≤ 1 s, ~52 V/100 %; (b) join
+1. **Bench test v2.7 with real meter + SmartElex module** (same list as the
+   v2.6 bench plan, plus): FULL bench SVG live on the phone (relays glow,
+   A/B flow pulses, meter readout follows golden→spoof), LITE/CLASSIC smoke
+   (tiles + names + link), `STATUS?` → `2.7`, relay names survive reboot (NVS).
+   Full list: (a) responder still green ≤ 1 s, ~52 V/100 %; (b) join
    from an iPhone → mini-browser shows the landing page → Open Dashboard in
    Safari works (or manual 192.168.4.1); Android same via Chrome; (c) trigger
    Save stores pin/enable/polarity with no fire; polarity flip changes the
    physical-switch sense; (d) per-mode menu + chase + dead-band + rejects as
    v2.4; (e) one-file flash per board (`write-flash 0x0 bms-tester-*.bin`) →
-   boots → `STATUS?` → `2.6`; (f) STA test → on-demand URL upgrade installs;
+   boots → `STATUS?` → `2.7`; (f) STA test → on-demand URL upgrade installs;
    (g) GPIO18 kill still kills; (h) meter card: first GREEN = #1, reseat gap
    ≥ 3 s opens #2 with pass/fail verdict, retries don't count, New-day
    resets.
-   If the page still won't open: confirm flashed firmware is v2.6
-   (`STATUS?` → `2.6`; v1.x has no WiFi at all), AP visible, exact URL/error.
+   If the page still won't open: confirm flashed firmware is v2.7
+   (`STATUS?` → `2.7`; v1.x has no WiFi at all), AP visible, exact URL/error.
    Needs: 12 V coil supply with common GND; 48 V rail per relay COM, each NO
    to its OWN load (never two outputs on different potentials).
+2. **Build + upload v2.7 bins (bench PC with ESP toolchain — BLOCKS OTA):**
+   OTA v2.6→v2.7 tested 2026-09-23: check phase WORKS (box sees v2.7, decision
+   units 6/6, live-GH verified), install phase 404s (`firmware.bin` /
+   `n16r8-firmware.bin` absent from the v2.7 release — no toolchain in this
+   container) and fails safe (`install http 404`, box keeps running). The sim
+   reproduces this exactly (live GH check + asset gate). To close:
+   `pio run -e esp32-s3-devkitc-1 -e s3-n16r8 -e s3-classic -e s3-lite`
+   (proot-debian per §8) → merge per `firmware/README.md` → 
+   `gh release upload v2.7 <bins>` → re-run a box Check→Install to prove the
+   pull end to end (STA uplink + TLS + flash write are hardware-only).
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
    firmware headless (button→pins, spoof→`22 B0`); also answers whether
    `WiFi.softAP` boots in the sim (dashboard HTTP itself has no emulator —
@@ -595,19 +646,24 @@ or deprioritize — host tests + soak already prove the firmware.
 
 Project: `platformio.ini README.md CHANGELOG.md LICENSE VERSION HANDOFF.md
 RS485-Tester-Report.docx run_tests.sh src/ test/ tools/ arduino/ firmware/
-firmware-n16r8/ wokwi/ captures/ docs/ scripts/ wiki/ releases/ .github/
-.gitignore .unity/ .pio/`
-(`.pio .unity releases/ *.log tc.json .test_*` git-ignored; `releases/` holds
+firmware-n16r8/ wokwi/ local-wokwi/ enclosure/ captures/ docs/ scripts/ wiki/
+releases/ .github/ .gitignore .unity/ .pio/`
+(`.pio .unity releases/ *.log tc.json .test_* local-wokwi/labels.json
+local-wokwi/server*.log local-wokwi/shots/` git-ignored; `releases/` holds
 v1.0 ZIP + 2 git bundles — offline full-history backup, verified by test-clone.
 Back it up before ANY storage compaction: it exists nowhere else.)
 Wiki canonical sources live in `wiki/` (Home, Flashing, Hardware, Protocol,
 Emulators, Versions, Relays, Dashboard) and are pushed to the `.wiki.git` backend.
-`src/ota.*` (OTA decisions) + `test/test_ota/` + `test/test_web/Update.h`
+`Actual Meter Image/` holds the Ayca cluster + segment photos (also 3D textures
+in the sim). `src/ota.*` (OTA decisions) + `test/test_ota/` + `test/test_web/Update.h`
 (upload stub) are v2.3 additions; v2.4 adds `src/fw_upload.h` +
 `test/test_upload/` + stubs `ESPmDNS.h`/`esp_system.h` (info card/mDNS);
 v2.5 adds `tools/fw_emu/` (socket harness + drivers) + `docs/CONFIG-SCHEMA.md`
 + `docs/EMULATION-v2.5.md` + stub `uri()` (portal tests); v2.6 adds
-`test/test_meter/` + `/__bus` control + merged `bms-tester-*.bin` images.
+`test/test_meter/` + `/__bus` control + merged `bms-tester-*.bin` images;
+v2.7 adds `WEB_UI_VARIANT` pages + `mv/ma/msoc` + `s3-classic`/`s3-lite` envs
++ `local-wokwi/` (sim server, Three.js bench, verbatim ESP embed, `shots.py`)
++ `enclosure/` (IP65/GX16/dual-buck docs).
 Termux home `archive/` — pre-existing clutter, leave alone.
 Emulator work (`/opt/qemu-src` 1.1 GB, `/opt/qemu-s3` 94 MB, `/opt/pioenv`
 76 MB, `/root/.platformio` large) is inside the Debian container — see §8
