@@ -1,8 +1,8 @@
 # Hardware (v2.7 pin map — unchanged since v2.0)
 
-The thing under test — a real e-rickshaw meter cluster (Ayca dual-dial):
+The thing under test — a real e-rickshaw meter cluster (dual-dial):
 
-![Ayca e-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
 
 *Speed dial + battery %/V dial + tell-tales. The tester drives exactly this
 over RS485 (readouts) + relay-switched lamp lines.*
