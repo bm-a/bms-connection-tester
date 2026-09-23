@@ -4,7 +4,7 @@ The device under test — e-rickshaw meter cluster:
 
 ![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
 
-![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+![Power and signal tree](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png)
 
 ## 1. ESP32-S3 DevKitC-1 / N16R8 (application MCU)
 

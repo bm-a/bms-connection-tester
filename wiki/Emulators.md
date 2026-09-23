@@ -1,6 +1,6 @@
 # Emulators — test everything without the battery (v2.7 results)
 
-![Suite results](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/tests.png)
+![Suite results](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/tests.png)
 
 *152/152 suites + 3-variant contract + 30-day soak — what Layer 1 proves.*
 
@@ -40,9 +40,9 @@ one ESP32-S3 + MAX485 + photo-textured meter + 8 relays + GX16 sockets,
 electron-flow viz sized by live rail current, pressable buttons, relay board
 with persistent names, and the verbatim ESP dashboard embedded below:
 
-![FULL dashboard snapshot](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+![FULL dashboard snapshot](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png)
 
-![Sequential + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+![Sequential + spoof demo](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/demo.gif)
 
 *Honest limit: no WebGL screenshots can be captured in this container, so the
 3D canvas itself has no stills — the snapshots above are the dashboard and

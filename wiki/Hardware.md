@@ -9,7 +9,7 @@ over RS485 (readouts) + relay-switched lamp lines.*
 
 ## Power + signal tree (standalone 48 V box)
 
-![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+![Power and signal tree](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png)
 
 *48 V shared bus → 12 V coils + 5 V logic → ESP → MAX485 → A/B → meter;
 relays land on J1/J2/AUX. Full enclosure docs: `enclosure/README.md`.*

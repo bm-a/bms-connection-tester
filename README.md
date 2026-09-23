@@ -38,15 +38,15 @@ all three, and OTA always pulls FULL so updating never strands a box.
 | CLASSIC | `s3-classic` | v2.6 page byte-verbatim |
 | LITE | `s3-lite` | Relay tiles + names + LINK pill only (~4.9 KB page) |
 
-![FULL dashboard snapshot](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+![FULL dashboard snapshot](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png)
 
 *FULL variant: LINK pill + cycle counters, live bench strip (48V → ESP → MAX485 → meter readout), glowing relay tiles, meters-today — rendered from live sim state.*
 
-![Sequential run + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+![Sequential run + spoof demo](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/demo.gif)
 
 *R1→R8 sequential run, then a spoof FIRE driving the meter readout off golden — the same flow the 3D bench shows live.*
 
-![LITE dashboard snapshot](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-lite.png)
+![LITE dashboard snapshot](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-lite.png)
 
 *LITE variant: relays + names + link, nothing else — smallest flash footprint.*
 
@@ -172,7 +172,7 @@ The device under test:
 
 ![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
 
-![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+![Power and signal tree](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png)
 
 | Module | Role | Key pins / settings |
 |---|---|---|

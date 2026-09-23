@@ -2,7 +2,7 @@
 
 *Every key below has a field on the dashboard — FULL snapshot for reference:*
 
-![FULL dashboard](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+![FULL dashboard](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png)
 
 One shared validation table, enforced identically by `/api/config`,
 `/api/spoof`, `/api/restore`, and the emulation drivers. NVS stays flat

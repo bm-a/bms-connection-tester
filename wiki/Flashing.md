@@ -1,6 +1,6 @@
 # Flashing — all different ways (v2.7)
 
-![Bring-up terminal](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/terminal.png)
+![Bring-up terminal](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/terminal.png)
 
 *Sim → sequence → `STATUS?` → flash: the whole bring-up in three commands.*
 

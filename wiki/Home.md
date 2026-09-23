@@ -4,13 +4,13 @@ ESP32-S3 firmware + hardware that impersonates a **JBD / Xiaoxiang Smart BMS**
 over RS485, so compatible meters, displays, or hosts can be exercised
 **without the real battery pack**.
 
-![FULL dashboard with live bench](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/dash-full.png)
+![FULL dashboard with live bench](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png)
 
 *v2.7 FULL dashboard: LINK pill, live bench strip, glowing relay tiles —
 [open the interactive 3D bench](https://github.com/bm-a/bms-tester-sim) to
 click it yourself.*
 
-![Sequential run + spoof demo](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/demo.gif)
+![Sequential run + spoof demo](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/demo.gif)
 
 *R1→R8 sequential run, then a spoof FIRE driving the meter readout off golden.*
 

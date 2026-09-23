@@ -2,7 +2,7 @@
 v2.6 · software builder + dad (electronics) split. Every electrical value dad
 owns is marked `DAD:` — software never guesses amps.
 
-![Power and signal tree](https://github.com/bm-a/bms-connection-tester/releases/download/v2.7/wiring.png)
+![Power and signal tree](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/wiring.png)
 
 The device this box tests — e-rickshaw meter cluster:
 
