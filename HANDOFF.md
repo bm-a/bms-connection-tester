@@ -11,12 +11,15 @@
 > COMPACTION CHECKPOINT 2026-09-23 (pre-compaction, all pushed): main
 > `6033dd9` == origin/main; tag `v2.7` == `ca3ffe0` (firmware-identical to
 > main — only docs/sim/media after it); wiki backend + `bms-tester-sim` main
-> in sync; v2.7 release carries 8 media assets (no bins yet). Environment
-> reality: **Debian container GONE (only ubuntu), /opt/* gone, `.pio/` 3.6M
-> stubs** — firmware/QEMU builds need full §8 re-provision. `releases/`
-> (564K + v1.0 ZIP + 2 bundles) intact. `tmp/opencode/` scratch (grid/zoom
-> jpgs, bms-wiki + simrepo clones) is push-safe wipe — everything in it is
-> pushed to GH.
+> BINS SHIPPED 2026-09-23 evening: v2.7 release now carries 4 firmware
+> assets (`bms-tester-8mb.bin`, `bms-tester-n16r8.bin`, `firmware.bin`,
+> `n16r8-firmware.bin` — built ON THIS PHONE in proot-debian, 8m05s, magic +
+> version verified) and ZERO media (8 png/gif moved to `docs/img/`, all 49
+> links rewritten to raw.githubusercontent, main + wiki pushed). Sim live-GH
+> OTA gate PASSES (`firmware.bin` + `n16r8-firmware.bin` present). Debian
+> REINSTALLED with pio 6.2.0 (see quirk 0) — the bench PC is NO LONGER
+> blocking; only remaining OTA proof is a real box Check→Install pull.
+> `releases/` now also holds the 4 v2.7 bins as offline backup.
 > §12's release checklist REQUIRES updating this file in the same commit as
 > any feature — a body left stale behind an addendum is a bug (2026-09-22).
 > Audience: the next AI agent (or future me) picking this project up cold.
@@ -460,14 +463,19 @@ back them up separately if they matter:
 - Ubuntu container holds only a QEMU binary copy (`…/ubuntu/rootfs/opt`).
 
 **Termux/Android quirks (all solved, scripts exist):**
-0. **ENV LOST 2026-09-23: Debian container + /opt/* + warm PIO packages are
-   GONE (only `ubuntu` rootfs left, `.pio/` = 3.6M stubs). Nothing firmware or
-   QEMU side runs until re-provisioned: reinstall proot-debian → §8 steps 1–3
-   (PLATFORMIO_SYSTEM_TYPE override, Debian pio core, hand-built esptoolpy) →
-   QEMU source rebuild (~1 h total). `tools/merge_releases.py` (committed
-   this session, py-compiled + `--help` verified, NEVER executed — needs
-   debian+pio) is the new bin pipeline: per-tag worktrees, merge, verify,
-   `--upload`. Native/host tests + sim need nothing (Termux python/g++ intact).
+0. **ENV REBUILT 2026-09-23 evening (supersedes the morning "ENV LOST"
+   note): both proot containers were gutted shells, so `proot-distro install
+   debian` fresh → apt python3/pip/gcc/git → `pip install platformio`
+   (6.2.0) → v2.7 bins built+verified on-phone (8m05s, see header). Termux-side
+   PIO core 6.2.0 + packages were warm all along (morning note was wrong about
+   them); Termux `pio run` still can't compile (android_aarch64 has no registry
+   toolchain + bionic can't exec glibc binaries) — firmware builds happen
+   INSIDE proot-debian, uploads via Termux `gh`. `/opt/qemu*` still gone:
+   QEMU rebuild (sanitized PATH, ~1 h) only if emulation work resumes.
+   `tools/merge_releases.py` is now PROVEN (built v2.7 --keep, then `--upload`
+   equivalent via Termux gh): per-tag worktrees, merge, magic+version verify,
+   OTA-named raw bins included.** Native/host tests + sim need nothing
+   (Termux python/g++ intact).
 1. pyserial has no Android port lister → 1-line patch
    (`plat[:5]=='linux' or plat[:7]=='android'` in `list_ports_posix.py`;
    patch file in emulator repo). Without it EVERY `pio` cmd crashes on Termux.
@@ -626,18 +634,13 @@ or deprioritize — host tests + soak already prove the firmware.
    (`STATUS?` → `2.7`; v1.x has no WiFi at all), AP visible, exact URL/error.
    Needs: 12 V coil supply with common GND; 48 V rail per relay COM, each NO
    to its OWN load (never two outputs on different potentials).
-2. **Build + upload v2.7 bins (bench PC with ESP toolchain — BLOCKS OTA):**
-   OTA v2.6→v2.7 tested 2026-09-23: check phase WORKS (box sees v2.7, decision
-   units 6/6, live-GH verified), install phase 404s (`firmware.bin` /
-   `n16r8-firmware.bin` absent from the v2.7 release — no toolchain in this
-   container) and fails safe (`install http 404`, box keeps running). The sim
-   reproduces this exactly (live GH check + asset gate). To close, EITHER run
-   `tools/merge_releases.py v2.7 --upload` in proot-debian (new pipeline, needs
-   §8 re-provision first) OR manually: `pio run` all 4 envs → merge per
-   `firmware/README.md` → `gh release upload v2.7 <bins>` → re-run a box
-   Check→Install to prove the pull end to end (STA uplink + TLS + flash write
-   are hardware-only). v2.7 tag (`ca3ffe0`) is firmware-identical to current
-   main — bins built from main are tag-correct.
+2. **DONE 2026-09-23 evening — v2.7 bins built on-phone + uploaded:**
+   rebuilt proot-debian, `tools/merge_releases.py v2.7 --keep` (8m05s, magic +
+   version verified) → Termux `gh release upload` of all 4 bins. Sim live-GH
+   gate PASSES; sim check on live data: latest `v2.7`, assets present.
+   REMAINING: one real box Check→Install to prove the pull end to end (STA
+   uplink + TLS + flash write are hardware-only). v2.7 tag (`ca3ffe0`) is
+   firmware-identical to current main — shipped bins are tag-correct.
 2. **Add `WOKWI_CLI_TOKEN` repo secret** → token-gated CI sim proves the real
    firmware headless (button→pins, spoof→`22 B0`); also answers whether
    `WiFi.softAP` boots in the sim (dashboard HTTP itself has no emulator —
