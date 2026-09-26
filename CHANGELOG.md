@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.8] — 2026-09-27
+Release scope: FULL dashboard builds only — generic ESP32-S3 (8 MB) +
+Waveshare ESP32-S3-ETH-8DI-8RO, one v2.8 tag, variant assets.
+### Added
+- Unified release line: the Waveshare board build ships in the SAME v2.8
+  release as the generic line (no more `-wsN` prereleases). Both report
+  `FW_VERSION "2.8"` and both OTA-check `releases/latest`, downloading
+  their own variant asset (`firmware.bin` / `waveshare-firmware.bin`).
+### Fixed
+- Meter counter fumble guard: a link gap ≥ 3 s now only *arms* a reseat
+  candidate; the new meter commits after GREEN holds 5 s
+  (`LINK_SETTLE_NEW_METER_MS`). A scratchy reseat (seat 4 s, pull, seat
+  properly) no longer double-counts one unit. The closing meter's verdict
+  is snapshotted at arm time, so an eager START during the settle window
+  attributes to the new meter; a mid-cycle yank invalidates the test
+  (previous meter closes as fail). Dashboard note updated.
+### Docs
+- README rewritten in depth; two from-scratch build guides
+  (`docs/BUILD-DIY.md`, `docs/BUILD-WAVESHARE.md`); full wiki overhaul
+  (every card, verb, pin, and API documented).
+### Verified
+- 166/166 native tests (`test_meter` 12/12 incl. new fumble + eager-start
+  cases, `test_web` 49/49), 30-day soak PASS, both firmware profiles
+  compile from scratch (`esp32-s3-devkitc-1`, `s3-waveshare`).
+
 ## [v2.7] — 2026-09-23
 Release media:
 [FULL](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png) ·

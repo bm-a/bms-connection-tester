@@ -1,14 +1,15 @@
-# Ready-to-flash binaries — v2.6 (ESP32-S3 DevKitC-1, 8 MB flash)
+# Ready-to-flash binaries — v2.8 (ESP32-S3 DevKitC-1, 8 MB flash)
 
 ![Bring-up terminal](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/terminal.png)
 
-Built 2026-09-22 from this exact source (`pio run -e esp32-s3-devkitc-1`,
+Built 2026-09-27 from this exact source (`pio run -e esp32-s3-devkitc-1`,
 Xtensa GCC 8.4.0, Arduino 2.0.x). Use for 8 MB boards and for Wokwi.
 For 16 MB N16R8 boards use `firmware-n16r8/` instead (same logic, 16 MB map).
 
-Includes the v2.6 bench (daily meter heuristic, round link dots, trigger
-save, portal landing, structured config, on-demand STA, Tasmota-grade
-update path, per-mode relay menu, console, backup/restore, info card,
+Includes the v2.8 bench (meter counter with 5 s settle fumble guard,
+daily meter heuristic, round link dots, trigger save, portal landing,
+structured config, on-demand STA, Tasmota-grade update path, per-mode
+relay menu, console, backup/restore, info card,
 mDNS) + always-on AP dashboard (`BMS-Tester`, captive portal, no login
 wall) + 2-stage spoof (100 first, then 88.8/188) + manual/auto OTA.
 v1.x responder behavior frozen.
@@ -37,15 +38,15 @@ esptool.py --chip esp32s3 --port <PORT> --baud 460800 write-flash \
 ```
 
 ## Verify
-- `bms-tester-8mb.bin` (1,070,800 bytes)
-  SHA-256: `ba08f166fbdcaa40fbd8391479a3cf7687f3154eefeef8c7fae1bec31d8727b9`
-- `firmware.bin` (1,005,264 bytes)
-  SHA-256: `4dc08487668ff9c37e15cc0bdc0c0bf24d19c8da32e3c1f0dd9516b1d313bbf9`
+- `bms-tester-8mb.bin` (1,075,808 bytes)
+  SHA-256: `28248551fa8d32e061f75d46cb2bcd4559d1c40dd750e2422b412bf5353a98f8`
+- `firmware.bin` (1,010,272 bytes)
+  SHA-256: `27d5e25c86c0a97b383a55b326311cdd32296ec4772bbc243d645a4fe25616a8`
 - `bootloader.bin` (15,104 bytes)
   SHA-256: `1776e4dd896a69d0a5c2e79957b0e2a88aa4129b1381d6478683515a1f6af343`
 - `partitions.bin` (3,072 bytes)
   SHA-256: `1d9cca96de0fe07ad7fc0648b9878ddecd9ce565e38b589ad20fea698ed4c80c`
-- Golden reply bytes (`DD 03 00 1B 14 50 … FC DA 77`), `2.6` version,
+- Golden reply bytes (`DD 03 00 1B 14 50 … FC DA 77`), `2.8` version,
   `BMS-Tester` AP name and dashboard strings verified byte-present inside
   `firmware.bin`; merged image verified (bootloader `E9` @0x0, partition
   magic @0x8000, app `E9` @0x10000).

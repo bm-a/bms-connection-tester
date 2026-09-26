@@ -4,7 +4,7 @@
 
 - `bms_protocol.h` / `bms_protocol.cpp` — hardware-independent core (FROZEN
   since v1.x): JBD checksum, streaming parser, reply dispatcher (option A),
-  adaptive tracker, canned frames, `FW_VERSION` (`"2.6"`).
+  adaptive tracker, canned frames, `FW_VERSION` (`"2.8"`).
 - `relay_ctrl.h` / `relay_ctrl.cpp` — hardware-independent bench add-on:
   8-relay sequencer (sequential/all-ON/chase, relay count, 3 button behaviors,
   per-mode holds/sweeps, loop/pause/limit, stagger, direction, QC counters,

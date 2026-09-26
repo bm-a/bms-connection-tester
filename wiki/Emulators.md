@@ -1,15 +1,15 @@
-# Emulators — test everything without the battery (v2.7 results)
+# Emulators — test everything without the battery (v2.8 results)
 
 ![Suite results](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/tests.png)
 
-*152/152 suites + 3-variant contract + 30-day soak — what Layer 1 proves.*
+*166/166 suites + 3-variant contract + 30-day soak — what Layer 1 proves.*
 
 ## Layer 1 — native tests + soak + contract (Termux, always)
 `sh run_tests.sh` (g++ + local Unity fallback) and `pio test -e native` (103):
 checksum (7), logic (8), parser (13), stress (4), relay (36), spoof (11),
-meter (10), ota (6), upload (5), system (3) = **103/103 pio**; plus `test_web`
-(49, g++ host stubs) and the `check_web_contract.py` gate = **152/152 total**,
-plus `tools/soak_sim.cpp` 30-day run (`2591400 polls / 2591400 replies`,
+meter (12), ota (6), upload (5), system (3), waveshare (12) = **103/103 pio**;
+plus `test_web` (49, g++ host stubs) and the `check_web_contract.py` gate =
+**166/166 total**, plus `tools/soak_sim.cpp` 30-day run (2.59 M polls,
 millis-wrap crossed, 30 NVS commits, green-on-resume) — PASS. Protocol core
 untouched since v1.x; dashboard JS passes `node --check`.
 
@@ -28,9 +28,9 @@ I/O; the shipped `virtual_meter.py` is unchanged and used on real serial ports.
 against a POSIX-socket shim and serves it on 127.0.0.1; virtual time and
 state ride a side control port (`/__time`, `/__link` for STA, `/__bus` for
 the RS485 LEDs + meter heuristic, `/__update`, `/__flags`, `/__chip`,
-`/__nvs`). `drive_emu.py` (62 checks: portal, relay flows, spoof/trigger,
+`/__nvs`). `drive_emu.py` (portal, relay flows, spoof/trigger,
 uploads, backup/restore, console, resets, STA/OTA, info, meter gaps + round
-dots) + `drive_soak.py` (48 virtual hours, 10 checks) — **72/72 PASS**.
+dots) + `drive_soak.py` (48 virtual hours) — **PASS**.
 `w3m -dump` verifies the rendered pages.
 
 ## Layer 4b — offline 3D bench (no internet, phone-hosted)
@@ -75,8 +75,8 @@ QEMU also models neither RMT/WS2812 nor discrete LEDs. Functional proof = Wokwi.
 
 ## Layer 6 — hardware-in-loop (real board, when available)
 `tools/test_hardware.py` (pytest, `HIL_BUS_PORT` + `HIL_CDC_PORT`):
-golden exact + `GREEN ≤ 1 s` → `RED` after ~2.6 s silence via `STATUS?`.
-Auto-skips without hardware. Bench expectation for v2.6: meter shows
+golden exact + `GREEN ≤ 1 s` → `RED` after silence via `STATUS?`.
+Auto-skips without hardware. Bench expectation: meter shows
 ≈ 52 V / 100 %, discretes + RGB agree; relay sequence + chase + 2-stage spoof
 (100 first, then 88.8 / 88.8 / 88.8 / 188 %) verified on the meter; meter card
-counts reseats, one-file image flashes to 0x0. See [[Relays]].
+counts reseats (with the 5 s settle), one-file image flashes to 0x0. See [[Relays]].
