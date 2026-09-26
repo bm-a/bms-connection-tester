@@ -6,6 +6,8 @@ owns is marked `DAD:` — software never guesses amps.
 
 The device this box tests — e-rickshaw meter cluster:
 
+![E-rickshaw meter cluster](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/IMG_0341.jpeg)
+
 ## Power tree (48 V shared with meter)
 ```
 48V IN (shared bus, fused) ─┬─ buck 48→12V (coils only) ── relay JD-VCC
