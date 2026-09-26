@@ -62,11 +62,6 @@ pre{background:#000;color:#7CFC00;padding:10px;height:200px;overflow:auto;border
 
 <div class="card"><b>Serial @115200</b> <small>DUT + meter</small><pre id="ser"></pre></div>
 
-<div class="card"><b>Real meter — photo reference</b> <small>used as 3D cluster texture above</small><br>
-<img class="refimg" src="/assets/meter-cluster.jpg" alt="E-rickshaw meter cluster">
-<img class="refimg" src="/assets/meter-segments.jpg" alt="BMS segment layout close-up">
-</div>
-
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -175,18 +170,25 @@ function gx16(x,z,id){
 const j1=gx16(1.5,12.5,'J1');const j2=gx16(5.0,12.5,'J2');
 const gxTag=labelSprite('J1 BUS: 48V GND A B R1 | J2: R2-R6 | AUX: R7 R8 (DAD table)',2.2);
 gxTag.position.set(3.2,0.12,14.6);gxTag.rotation.x=-Math.PI/2;scene.add(gxTag);
-// ---- meter with REAL photo texture ----
+// ---- meter with procedural face texture (no real photos in repo) ----
 const meterG=new THREE.Group();meterG.position.set(8.6,0,-2.5);scene.add(meterG);
 box(7.0,4.2,4.6,M.dark,0,2.1,0,meterG);
 box(7.1,0.5,4.7,M.black,0,0.25,0,meterG);
-const photoTex=new THREE.TextureLoader().load('/assets/meter-cluster.jpg');
+const faceCanvas=document.createElement('canvas');faceCanvas.width=640;faceCanvas.height=320;
+(function(){const g=faceCanvas.getContext('2d');
+g.fillStyle='#0a0e14';g.fillRect(0,0,640,320);
+for(const cx of [160,480]){g.strokeStyle='#8b9bb4';g.lineWidth=10;g.beginPath();g.arc(cx,160,130,0,7);g.stroke();
+g.fillStyle='#1b2534';g.beginPath();g.arc(cx,160,118,0,7);g.fill();
+g.fillStyle='#7dd3fc';g.font='bold 44px monospace';g.textAlign='center';g.fillText('888',cx,178);}
+g.fillStyle='#5b6b84';g.font='24px monospace';g.fillText('km/h',160,242);g.fillText('%   V',480,242);})();
+const photoTex=new THREE.CanvasTexture(faceCanvas);
 const photo=new THREE.Mesh(new THREE.PlaneGeometry(6.4,3.2),new THREE.MeshBasicMaterial({map:photoTex}));
 photo.position.set(0,2.3,2.32);photo.rotation.x=-0.05;meterG.add(photo);
 const lcdCanvas=document.createElement('canvas');lcdCanvas.width=512;lcdCanvas.height=120;
 const lcdTex=new THREE.CanvasTexture(lcdCanvas);
 const lcd=new THREE.Mesh(new THREE.PlaneGeometry(6.2,1.35),new THREE.MeshBasicMaterial({map:lcdTex,transparent:true}));
 lcd.position.set(0,0.95,2.33);lcd.rotation.x=-0.05;meterG.add(lcd);
-const meterTag=labelSprite('E-RICKSHAW METER (real photo)',1.1);
+const meterTag=labelSprite('E-RICKSHAW METER',1.1);
 meterTag.position.set(8.6,4.8,-2.2);scene.add(meterTag);
 const mPow=tactile(0x111111,11.4,-0.6,scene,'meterpower');
 const mMode=tactile(0x9aa3b5,12.6,-0.6,scene,'meterpoll');
