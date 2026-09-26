@@ -1,5 +1,35 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.8] — 2026-09-27
+### Meter counter: 5 s settle fumble guard
+- A link gap ≥ 3 s now only **arms** a reseat candidate; the new meter
+  **commits** after GREEN holds 5 s (`LINK_SETTLE_NEW_METER_MS`). A scratchy
+  reseat (seat 4 s, pull, seat properly) no longer double-counts one unit.
+- The closing meter's verdict is **snapshotted at arm time**, so an eager
+  START during the settle window attributes to the new meter; a RED before
+  the settle merges the window's activity back (same meter all along).
+- A yank mid-cycle **invalidates the test**: the previous meter closes as
+  fail (an interrupted test was never honestly a pass).
+- Dashboard Meters-today note updated; `test_meter` grows fumble +
+  eager-start cases (12/12).
+
+### Unified release line
+- One v2.8 tag ships **generic FULL** (8 MB ESP32-S3) + **Waveshare**
+  (ESP32-S3-ETH-8DI-8RO) firmware. The Waveshare `-wsN` prerelease line is
+  retired: both boards report `FW_VERSION 2.8` and both OTA-check
+  `/releases/latest`, each downloading its own variant asset
+  (`firmware.bin` / `waveshare-firmware.bin`).
+
+### Docs from scratch
+- In-depth README rewrite; two new from-scratch build guides:
+  `docs/BUILD-DIY.md` (generic board, build it yourself) and
+  `docs/BUILD-WAVESHARE.md` (all-in-one board); this wiki overhauled page
+  by page (new [[Building]] page).
+
+### Verified
+- **166/166** native tests (`test_meter` 12/12, `test_web` 49/49,
+  `test_waveshare` 12/12), 3-variant web contract PASS, 30-day soak PASS.
+
 ## [v2.7] — 2026-09-23
 ### Dashboard variants at a glance
 
@@ -19,6 +49,17 @@
 - Proven: 103/103 native, 49/49 web, contract 3/3, soak PASS, OTA units 6/6,
   GH assets present, download URL HTTP 200. ESP compile + real OTA pull
   need hardware (HIL skipped).
+
+## [v2.7-ws1] — 2026-09-26 (Waveshare board line, retired in v2.8)
+### Added
+- Waveshare ESP32-S3-ETH-8DI-8RO board variant (`s3-waveshare`): relays via
+  TCA9554PWR @ I2C `0x20` (SDA42/SCL41, HIGH bit = ON), isolated RS485
+  TX17/RX18 with hardware auto-direction, BOOT (GPIO0) = START/STOP,
+  DI1 (GPIO4) = spoof trigger, DI2 (GPIO5) = WiFi kill, RGB on GPIO38.
+  Own OTA line (`FW_VERSION 2.7-ws1`, `waveshare-firmware.bin`,
+  `v2.7-wsN` prerelease tags). Proper 1.04 MB merged image
+  (bootloader@0x0 + partitions@0x8000 + app@0x10000).
+- Superseded by the unified v2.8 release (no more `-wsN` tags).
 
 ## [v2.6] — 2026-09-22
 ### Added

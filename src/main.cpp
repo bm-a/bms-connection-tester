@@ -1,4 +1,4 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.7.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.8.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
@@ -36,7 +36,7 @@
 //   DI3..DI8 (GPIO6..11) free. USB-C powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
-//   "STATUS?\n" -> "GREEN 2.6\n" / "RED 2.6\n" (first token stable for HIL).
+//   "STATUS?\n" -> "GREEN 2.8\n" / "RED 2.8\n" (first token stable for HIL).
 
 #include <Arduino.h>
 #include "bms_protocol.h"
@@ -216,17 +216,12 @@ static void ota_check_now() {
   WiFiClientSecure cli;
   cli.setInsecure();  // LAN bench box; a bad flash is fixed over USB
   HTTPClient http;
-#ifdef BOARD_WAVESHARE_8DI8RO
-  // This board runs its own prerelease line (tags v2.7-wsN), which GitHub
-  // never reports as /releases/latest — scan the newest releases instead.
-  const char *releases_url =
-      "https://api.github.com/repos/bm-a/bms-connection-tester/"
-      "releases?per_page=20";
-#else
+  // v2.8: the Waveshare board line ships in the SAME release as the generic
+  // line (one v2.8 tag, variant assets), so every build checks
+  // /releases/latest and downloads its own variant asset.
   const char *releases_url =
       "https://api.github.com/repos/bm-a/bms-connection-tester/"
       "releases/latest";
-#endif
   if (!http.begin(cli, releases_url)) {
     ota_set_status("check failed");
     return;
@@ -242,8 +237,7 @@ static void ota_check_now() {
   String body = http.getString();
   http.end();
   // GitHub pretty-prints ("tag_name": "v2.3"); tolerate any gap after ':'.
-  // The Waveshare build scans every tag_name in the release list (newest
-  // first) for its own v2.7-wsN line; other builds take the first tag.
+  // Take the first tag_name (/releases/latest returns exactly one release).
   String tag;
   int from = 0;
   for (;;) {
@@ -259,25 +253,11 @@ static void ota_check_now() {
     from = q1 + 1;
     if (cand.length() == 0 || cand.length() >= (int)sizeof(ota.latest_tag))
       continue;  // malformed entry: skip it, keep scanning
-#ifdef BOARD_WAVESHARE_8DI8RO
-    // Own prerelease line: keep scanning and keep the HIGHEST valid -wsN
-    // version (GitHub order is by creation date, not version).
-    if (ota_tag_is_waveshare_line(cand.c_str()) &&
-        (tag.length() == 0 ||
-         ota_cmp_version(cand.c_str(), tag.c_str()) > 0)) {
-      tag = cand;
-    }
-#else
     tag = cand;
     break;
-#endif
   }
   if (tag.length() == 0) {
-#ifdef BOARD_WAVESHARE_8DI8RO
-    ota_set_status("no ws release");
-#else
     ota_set_status("bad api reply");
-#endif
     return;
   }
   strncpy(ota.latest_tag, tag.c_str(), sizeof(ota.latest_tag) - 1);

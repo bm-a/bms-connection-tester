@@ -123,11 +123,11 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"rmode\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"ssec\":5"));
   TEST_ASSERT_TRUE(has(r.body, "\"s2sec\":10"));
-  // v2.7 live meter readout (golden 52.0 V / 0 A / 100 % at boot, no spoof).
+  // v2.8 live meter readout (golden 52.0 V / 0 A / 100 % at boot, no spoof).
   TEST_ASSERT_TRUE(has(r.body, "\"mv\":520"));
   TEST_ASSERT_TRUE(has(r.body, "\"ma\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"msoc\":100"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.7\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.8\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
@@ -781,7 +781,7 @@ void test_console_verbs(void) {
   r = WebServer::post("/api/cmd", "{\"cmd\":\"status\"}");
   TEST_ASSERT_TRUE(has(r.body, "LINK RED"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"version\"}");
-  TEST_ASSERT_TRUE(has(r.body, "2.7"));
+  TEST_ASSERT_TRUE(has(r.body, "2.8"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"bogus\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   // Privileged verbs need the password...
@@ -1020,7 +1020,9 @@ void test_meter_api_next_reset(void) {
   web_tick(g_mock_millis);
   g_mock_millis += 5000;
   link_green = true;
-  web_tick(g_mock_millis);
+  web_tick(g_mock_millis);  // rising edge arms the reseat candidate
+  g_mock_millis += LINK_SETTLE_NEW_METER_MS;
+  web_tick(g_mock_millis);  // GREEN held: settle commits meter #2
   r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"m_met\":2"));
   TEST_ASSERT_TRUE(has(r.body, "\"m_ps\":1"));
@@ -1043,7 +1045,8 @@ void test_meter_api_next_reset(void) {
 }
 
 void test_meter_api_busy_mid_cycle(void) {
-  // Reseat mid-cycle defers the close until IDLE — no misattribution.
+  // Reseat mid-cycle: the candidate arms on the rising edge but the close
+  // lands only after the 5 s settle elapses — no misattribution either way.
   fresh_env();
   link_green = true;
   web_tick(g_mock_millis);
@@ -1053,11 +1056,12 @@ void test_meter_api_busy_mid_cycle(void) {
   web_tick(g_mock_millis);
   g_mock_millis += 5000;
   link_green = true;
-  web_tick(g_mock_millis);  // GREEN back but still RUNNING: deferred
+  web_tick(g_mock_millis);  // GREEN back but still RUNNING: candidate only
   WebServer::Resp r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"m_met\":1"));  // not closed yet
   WebServer::post("/api/seq", "{\"cmd\":\"stop\"}");
-  web_tick(g_mock_millis);  // IDLE eval lands the pending close
+  g_mock_millis += LINK_SETTLE_NEW_METER_MS;
+  web_tick(g_mock_millis);  // settle elapsed at IDLE: close lands
   r = WebServer::get("/api/state");
   TEST_ASSERT_TRUE(has(r.body, "\"m_met\":2"));
   TEST_ASSERT_TRUE(has(r.body, "\"m_fl\":1"));  // aborted run: fail verdict
@@ -1074,7 +1078,9 @@ void test_meter_persist_across_reboot(void) {
   web_tick(g_mock_millis);
   g_mock_millis += 5000;
   link_green = true;
-  web_tick(g_mock_millis);
+  web_tick(g_mock_millis);  // rising edge arms the reseat candidate
+  g_mock_millis += LINK_SETTLE_NEW_METER_MS;
+  web_tick(g_mock_millis);  // GREEN held: settle commits meter #2
   web_tick(g_mock_millis + 2000);  // flush the coalesced NVS commit
   // Simulated reboot: RAM wiped, setup reloads NVS (boot never zeroes).
   seq.begin(&cfg);

@@ -4,10 +4,11 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-// v2.6 daily meter-test counting (R32-R40): software-only APPROXIMATE
-// counter, no button. Link gaps >= 3 s = reseat = new meter; steady GREEN
-// across RESTARTs/retries = same meter; flickers stay; mid-cycle gaps
-// defer their close until IDLE.
+// v2.6 daily meter-test counting (R32-R40), v2.8 settle hardening:
+// software-only APPROXIMATE counter, no button. Link gaps >= 3 s arm a
+// reseat candidate; the candidate commits as a new meter only after GREEN
+// holds 5 s (fumble guard). Steady GREEN across RESTARTs/retries = same
+// meter; flickers stay; mid-cycle yanks invalidate the test (fail).
 
 static Bms2Config fast_cfg() {
   Bms2Config c;
@@ -32,11 +33,14 @@ static void run_full_cycle(RelaySequencer &s, unsigned long &t) {
   t += 1200;  // clear the 500 ms R12 dead-band for the next start
 }
 
-// Feed a RED gap of gap_ms then GREEN (like the main loop would see it).
+// Feed a RED gap of gap_ms then GREEN, holding GREEN through the 5 s settle
+// window (like the main loop would see it).
 static void reseat(RelaySequencer &s, unsigned long &t, unsigned long gap_ms) {
   s.meter().noteLink(false, t, s.running());  // falling edge
   t += gap_ms;
-  s.meter().noteLink(true, t, s.running());  // rising edge
+  s.meter().noteLink(true, t, s.running());  // rising edge (arms candidate)
+  t += LINK_SETTLE_NEW_METER_MS;
+  s.meter().noteLink(true, t, s.running());  // GREEN held: settle commits
   s.meter().pollIdle(s.running());
 }
 
@@ -228,9 +232,12 @@ void test_meter_millis_wrap_and_soak(void) {
   TEST_ASSERT_EQUAL_UINT32(0, s.meter().fail);
 }
 
-// T10: reseat mid-cycle defers the close until IDLE — the in-flight cycle's
-// pass verdict is attributed to the correct (previous) meter.
-void test_meter_midcycle_gap_defers_close(void) {
+// T10: yank mid-cycle invalidates the test — the previous meter closes as
+// FAIL (no completed cycle while validly under test), even though the
+// straddling relay cycle physically finishes. The settle window still
+// applies; the completion latches onto the new meter's record and never
+// becomes a phantom pass for either unit.
+void test_meter_midcycle_yank_is_fail(void) {
   Bms2Config c = fast_cfg();
   RelaySequencer s;
   s.begin(&c);
@@ -241,15 +248,83 @@ void test_meter_midcycle_gap_defers_close(void) {
   // Operator yanks the unit mid-cycle (gap elapses while RUNNING).
   s.meter().noteLink(false, t + 100, s.running());
   t += 5100;
-  s.meter().noteLink(true, t, s.running());  // GREEN back, still running
+  s.meter().noteLink(true, t, s.running());  // meter #2: candidate arms
   s.meter().pollIdle(s.running());
-  TEST_ASSERT_EQUAL_UINT32(1, s.meter().meters);  // deferred: not closed yet
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().meters);  // settle pending
   s.tick(t);  // hold (until 80600) long expired -> cycleDone -> stopAll
   TEST_ASSERT_FALSE(s.running());
-  s.meter().pollIdle(s.running());  // IDLE eval lands the pending close
+  t += LINK_SETTLE_NEW_METER_MS;  // run out the settle like the main loop
+  s.meter().noteLink(true, t, s.running());
+  s.meter().pollIdle(s.running());
   TEST_ASSERT_EQUAL_UINT32(2, s.meter().meters);
-  TEST_ASSERT_EQUAL_UINT32(1, s.meter().pass);  // in-flight cycle counted
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().attempts);
+  TEST_ASSERT_EQUAL_UINT32(0, s.meter().pass);  // interrupted test: not a pass
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().fail);
+}
+
+// T11: fumbled reseat — GREEN returns after a qualifying gap but drops
+// before the 5 s settle elapses: no new meter, no verdict lost.
+void test_meter_fumble_no_double_count(void) {
+  Bms2Config c = fast_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  unsigned long t = 90000;
+  s.meter().noteLink(true, t, s.running());  // meter #1
+  run_full_cycle(s, t);                      // pass latched for #1
+  // Yank, fumble: GREEN 4 s (gap qualifies, candidate arms), then RED again.
+  s.meter().noteLink(false, t, s.running());
+  t += 4000;
+  s.meter().noteLink(true, t, s.running());  // arms candidate
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().meters);  // not committed yet
+  t += 2000;
+  s.meter().noteLink(false, t, s.running());  // fumble: dropped pre-settle
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().meters);
+  // Proper seat: GREEN, held through the settle.
+  t += 4000;
+  s.meter().noteLink(true, t, s.running());  // re-arms (verdict re-snapshotted)
+  t += LINK_SETTLE_NEW_METER_MS;
+  s.meter().noteLink(true, t, s.running());  // settle commits
+  s.meter().pollIdle(s.running());
+  TEST_ASSERT_EQUAL_UINT32(2, s.meter().meters);
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().pass);  // #1's verdict survived
   TEST_ASSERT_EQUAL_UINT32(0, s.meter().fail);
+}
+
+// T12: START pressed during the settle window belongs to the NEW meter.
+void test_meter_eager_start_in_settle_window(void) {
+  Bms2Config c = fast_cfg();
+  RelaySequencer s;
+  s.begin(&c);
+  unsigned long t = 100000;
+  s.meter().noteLink(true, t, s.running());   // meter #1 seated, untested
+  s.meter().noteLink(false, t, s.running());  // swap begins
+  t += 4000;
+  s.meter().noteLink(true, t, s.running());  // meter #2 plugged: candidate arms
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().meters);  // not committed yet
+  t += 2000;  // 2 s into the settle window
+  TEST_ASSERT_TRUE(s.start(t));  // eager operator: START is meter #2's
+  s.tick(t + 100);               // HOLD
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().attempts);
+  t += 3000;  // settle window (5 s) elapsed, cycle still running
+  s.meter().noteLink(true, t, s.running());  // commit -> deferred (running)
+  s.meter().pollIdle(s.running());
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().meters);
+  s.tick(t + 600);  // hold (until start+600) long expired -> cycleDone
+  TEST_ASSERT_FALSE(s.running());
+  s.meter().pollIdle(s.running());  // IDLE lands the deferred close
+  TEST_ASSERT_EQUAL_UINT32(2, s.meter().meters);  // #1 closed, #2 open
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().attempts);
+  TEST_ASSERT_EQUAL_UINT32(0, s.meter().pass);  // #1 had no attempt: no verdict
+  TEST_ASSERT_EQUAL_UINT32(0, s.meter().fail);
+  // The completed cycle latched onto meter #2: yanking it records the pass.
+  s.meter().noteLink(false, t, s.running());
+  t += 4000;
+  s.meter().noteLink(true, t, s.running());
+  t += LINK_SETTLE_NEW_METER_MS;
+  s.meter().noteLink(true, t, s.running());
+  s.meter().pollIdle(s.running());
+  TEST_ASSERT_EQUAL_UINT32(3, s.meter().meters);
+  TEST_ASSERT_EQUAL_UINT32(1, s.meter().pass);
 }
 
 static void run_all() {
@@ -262,7 +337,9 @@ static void run_all() {
   RUN_TEST(test_meter_day_reset_and_boot_restore);
   RUN_TEST(test_meter_day_boundary);
   RUN_TEST(test_meter_millis_wrap_and_soak);
-  RUN_TEST(test_meter_midcycle_gap_defers_close);
+  RUN_TEST(test_meter_midcycle_yank_is_fail);
+  RUN_TEST(test_meter_fumble_no_double_count);
+  RUN_TEST(test_meter_eager_start_in_settle_window);
 }
 
 #ifdef ARDUINO

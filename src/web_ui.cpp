@@ -342,7 +342,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=card><h3>Meters today (approx)</h3>
 <div class=row><span id=meters></span></div>
 <div class=row><button class=warn onclick="if(confirm('Clear today counters?'))meter('reset')">New day (reset)</button><span class=msg id=metermsg></span></div>
-<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter; retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
+<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter once the link holds 5 s (fumble guard); retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
 <div class=card><h3>Sequence config</h3>
 <div class=row><label>Mode <select id=rmode onchange="showMode()"><option value=0>Sequential 1-N</option><option value=2>Chase wave</option><option value=1>All ON at once</option></select></label>
 <label>Relays <input id=nrel size=3 title="1-8: first N relays take part"></label></div>
@@ -579,7 +579,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=card><h3>Meters today (approx)</h3>
 <div class=row><span id=meters></span></div>
 <div class=row><button class=warn onclick="if(confirm('Clear today counters?'))meter('reset')">New day (reset)</button><span class=msg id=metermsg></span></div>
-<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter; retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
+<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter once the link holds 5 s (fumble guard); retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
 <div class=card><h3>Sequence config</h3>
 <div class=row><label>Mode <select id=rmode onchange="showMode()"><option value=0>Sequential 1-N</option><option value=2>Chase wave</option><option value=1>All ON at once</option></select></label>
 <label>Relays <input id=nrel size=3 title="1-8: first N relays take part"></label></div>
@@ -917,9 +917,10 @@ static void handle_seq() {
   send_json("{\"ok\":1}");
 }
 
-// v2.6 daily meter heuristic (R39-R40): software-only approximate counter,
-// no button, no extra GPIO. web_tick() feeds the live link state every
-// loop: a RED gap >= 3 s closed by GREEN = reseat = new meter; steady GREEN
+// v2.6 daily meter heuristic (R39-R40), v2.8 settle hardening: software-only
+// approximate counter, no button, no extra GPIO. web_tick() feeds the live
+// link state every loop: a RED gap >= 3 s arms a reseat candidate, committed
+// as a new meter only after GREEN holds 5 s (fumble guard); steady GREEN
 // across RESTARTs/retries = same meter. Pure counter op — never touches
 // relays, forces, or the dead-band. A close marks the coalesced NVS flush
 // (1 write per meter, max); attempts ride along in the same batch, so a

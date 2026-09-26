@@ -138,7 +138,7 @@ inline uint8_t sanitize_spoof_pin(uint8_t p) {
 #define RELAY_STOP_DEADBAND_MS 500u
 #define CHASE_BBM_MS 20u
 
-// ---- v2.6 daily meter-test counting (R32-R40) ----
+// ---- v2.6 daily meter-test counting (R32-R40), v2.8 settle hardening ----
 // The JBD protocol carries no meter ID: the ESP only sees link state and
 // relay actuations, so "retry same meter" vs "next meter" is unknowable on
 // the wire. Decided (no operator button, no extra GPIO): a software-only
@@ -146,19 +146,23 @@ inline uint8_t sanitize_spoof_pin(uint8_t p) {
 // on: a failed/retried test does NOT unplug the meter (link stays GREEN),
 // while a new meter means physical reseat (connector out, unit swapped in)
 // which drops the link to RED for seconds. So: RED->GREEN after a RED gap
-// >= LINK_GAP_NEW_METER_MS closes the previous meter and opens a new one;
-// brief flickers (slow poll, noise) stay on the same meter. Approximate by
+// >= LINK_GAP_NEW_METER_MS arms a reseat candidate; the candidate COMMITS as
+// a new meter only after GREEN holds continuously for LINK_SETTLE_NEW_METER_MS
+// (fumble guard: seat 4 s, pull, seat properly = one unit, not two).
+// Brief flickers (slow poll, noise) stay on the same meter. Approximate by
 // design — stated honestly on the dashboard, not sold as exact.
 // Verdict rule (the only honest one from existing state): every accepted
-// start() opens an attempt; a cycles_done_ edge latches pass; closing a
-// meter records pass if a cycle completed since the last close, else fail.
-// A close with no open attempt just opens meter #1 (no verdict — nothing
-// was tested yet). Closing is deferred while the sequencer runs (a reseat
-// mid-cycle must not misattribute the in-flight verdict); the pending close
-// lands on the next IDLE eval.
+// start() opens an attempt; a cycles_done_ edge latches pass. At arm time the
+// closing meter's verdict is snapshotted and its live flags reset, so an
+// eager START during the settle window attributes to the NEW meter; a fumble
+// (RED before settle) merges the window's activity back (same meter all along).
+// A reseat mid-cycle invalidates the test: the previous meter closes as fail
+// (no completed cycle while validly under test). Closing is deferred while
+// the sequencer runs; the pending close lands on the next IDLE eval.
 // Pure RAM here (host-testable); web_ui persists totals to NVS (flat keys,
 // flushed on close/reset only — never per actuation/tick).
 #define LINK_GAP_NEW_METER_MS 3000u
+#define LINK_SETTLE_NEW_METER_MS 5000u
 struct MeterBatch {
   uint32_t meters = 0;     // link-gap closes (physical units, approximate)
   uint32_t attempts = 0;   // accepted sequence starts (retries included)
@@ -172,6 +176,9 @@ struct MeterBatch {
     meters = attempts = pass = fail = 0;
     attempt_open = pass_latched = false;
     pending_close_ = false;
+    candidate_ = false;
+    candidate_since_ = 0;
+    saved_attempt_ = saved_pass_ = false;
     link_ = false;
     had_green_ = false;
     red_since_ = 0;
@@ -181,6 +188,21 @@ struct MeterBatch {
   void noteLink(bool link, unsigned long now, bool seq_running) {
     if (!link) {
       if (link_) { link_ = false; red_since_ = now; }  // falling edge
+      if (candidate_) {
+        // Fumble: link dropped before the settle elapsed — same meter all
+        // along. Merge the candidate window's activity back, disarm.
+        attempt_open = attempt_open || saved_attempt_;
+        pass_latched = pass_latched || saved_pass_;
+        candidate_ = false;
+      }
+      return;
+    }
+    if (candidate_) {  // settle window: commit once GREEN has held long enough
+      if ((now - candidate_since_) >= LINK_SETTLE_NEW_METER_MS) {
+        candidate_ = false;
+        if (seq_running) pending_close_ = true;  // reseat mid-cycle: close at IDLE
+        else closeMeter();
+      }
       return;
     }
     if (link_) return;  // steady GREEN: same meter, nothing to do
@@ -194,11 +216,14 @@ struct MeterBatch {
       return;
     }
     if ((now - red_since_) < LINK_GAP_NEW_METER_MS) return;  // flicker: same
-    if (seq_running) {  // reseat mid-cycle: defer close until IDLE
-      pending_close_ = true;
-      return;
-    }
-    closeMeter();
+    // Gap qualifies: snapshot the closing meter's verdict NOW and open a
+    // clean record for the incoming unit; commit when the settle elapses.
+    saved_attempt_ = attempt_open;
+    saved_pass_ = pass_latched;
+    attempt_open = false;
+    pass_latched = false;
+    candidate_ = true;
+    candidate_since_ = now;
   }
   // Main loop calls this each IDLE eval so a deferred close lands promptly.
   void pollIdle(bool seq_running) {
@@ -211,6 +236,9 @@ struct MeterBatch {
     meters = attempts = pass = fail = 0;
     attempt_open = pass_latched = false;
     pending_close_ = false;
+    candidate_ = false;
+    candidate_since_ = 0;
+    saved_attempt_ = saved_pass_ = false;
     // A unit seated NOW is today's meter #1 (else the bench would read 0
     // all day until the first reseat). Nothing plugged: 0 until first GREEN.
     if (link_) {
@@ -230,14 +258,21 @@ struct MeterBatch {
   bool link_ = false;          // last fed link state
   bool had_green_ = false;     // ever seen GREEN (first sighting = meter #1)
   bool pending_close_ = false;  // gap elapsed mid-cycle, close at IDLE
+  bool candidate_ = false;     // qualifying gap seen, settle pending
+  unsigned long candidate_since_ = 0;  // arm timestamp (rollover-safe)
+  bool saved_attempt_ = false;  // verdict snapshot taken at arm time
+  bool saved_pass_ = false;
   unsigned long red_since_ = 0;
   void closeMeter() {
     pending_close_ = false;
-    if (attempt_open) {
-      if (pass_latched) pass++;
+    // Verdict comes from the arm-time snapshot. The live flags belong to
+    // the NEW meter (reset at arm, possibly already accumulating) — never
+    // touch them here.
+    if (saved_attempt_) {
+      if (saved_pass_) pass++;
       else fail++;
-      attempt_open = false;
-      pass_latched = false;
+      saved_attempt_ = false;
+      saved_pass_ = false;
     }
     meters++;
   }
