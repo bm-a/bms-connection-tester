@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """local-wokwi sim_server.py — bms-connection-tester v2.6 standalone bench.
 Serves: / = 3D bench, /esp/ = verbatim ESP dashboard (PAGE_DASH from
-../src/web_ui.cpp), /board = legacy 2D, /assets/* = real meter photos,
+../src/web_ui.cpp), /board = legacy 2D,
 /api/* = sim endpoints, /esp/api/* = firmware-schema compat shim.
 Default GX16 pinout below is OURS until dad corrects it (5-min re-map)."""
 import argparse, json, mimetypes, os, re, threading, time
@@ -689,22 +689,6 @@ class H(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             load_demo(q.get("name", ["real"])[0])
             return self._json({"ok": True, "demo": state["demo"]})
-        if p.startswith("/assets/"):
-            name = os.path.basename(p)
-            mapping = {"meter-cluster.jpg": "IMG_0341.jpeg",
-                       "meter-segments.jpg": "1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg"}
-            src = os.path.join(HERE, "..", "Actual Meter Image", mapping.get(name, name))
-            if os.path.exists(src):
-                with open(src, "rb") as f: b = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", mimetypes.guess_type(src)[0] or "image/jpeg")
-                self.send_header("Content-Length", str(len(b)))
-                self.send_header("Cache-Control", "max-age=3600")
-                self.end_headers()
-                self.wfile.write(b)
-                return
-            self.send_error(404)
-            return
         self.send_error(404)
     def do_POST(self):
         u = urlparse(self.path)
