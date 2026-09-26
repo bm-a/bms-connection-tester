@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 // v2.4 Tasmota-grade firmware-update gates — hardware-independent (no Arduino
 // dependency) so they compile on the host for Unity tests, exactly like
@@ -58,6 +59,10 @@ inline const char *fw_asset_for_variant(const char *variant) {
     if ((v[0] == 'n' || v[0] == 'N') && v[1] == '1' && v[2] == '6') {
       static const char a[] = "n16r8-firmware.bin";
       return a;
+    }
+    if (strcmp(v, "waveshare") == 0) {
+      static const char w[] = "waveshare-firmware.bin";
+      return w;
     }
   }
   static const char b[] = "firmware.bin";

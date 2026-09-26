@@ -72,6 +72,11 @@ g++ -O2 -std=c++17 -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp test
 ./.test_system
 rm -f .test_system
 
+echo "=== native: test_waveshare (Unity, Waveshare 8DI8RO board backend) ==="
+g++ -std=c++17 -DBOARD_WAVESHARE_8DI8RO -I src -I .unity src/bms_protocol.cpp src/relay_ctrl.cpp src/ota.cpp test/test_waveshare/test_waveshare.cpp .unity/unity.c -o .test_waveshare
+./.test_waveshare
+rm -f .test_waveshare
+
 echo "=== soak: 30-day continuous-run simulation ==="
 g++ -O2 -std=c++17 -I src src/bms_protocol.cpp src/relay_ctrl.cpp tools/soak_sim.cpp -o .soak_sim
 ./.soak_sim

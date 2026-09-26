@@ -20,10 +20,10 @@ red = bus silent**. No screens needed.
 
 | | |
 |---|---|
-| Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay |
+| Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay · Waveshare ESP32-S3-ETH-8DI-8RO board variant ([docs/waveshare.md](docs/waveshare.md)) |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
-| Releases | **v2.7** current (3 dashboard variants: FULL default, `s3-classic`, `s3-lite`) · `v2.6` meter estimate · `v2.5` portal/schema/harness · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **152 passing** (103 via `pio test -e native` + 49 web, via `sh run_tests.sh`) + 30-day soak + 3-variant web contract |
+| Releases | **v2.7** current (3 dashboard variants: FULL default, `s3-classic`, `s3-lite`) · **v2.7-ws1** Waveshare ESP32-S3-ETH-8DI-8RO ([docs/waveshare.md](docs/waveshare.md)) · `v2.6` meter estimate · `v2.5` portal/schema/harness · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
+| Tests | **164 passing** via `sh run_tests.sh` (103 native + 49 web + 12 Waveshare board-backend) + 30-day soak + 3-variant web contract |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB), SHAs below |
 | Web UI | Always-on AP `BMS-Tester` → professional dashboard in 3 variants (FULL default, `s3-classic`, `s3-lite`) — no office Wi-Fi needed |
 
@@ -201,7 +201,10 @@ Relay/web guide in the [wiki](../../wiki) (mirrored in [`wiki/`](wiki/)).
 - **Ready binaries (esptool, any PC):** `pip install esptool`, then for your board:
   `esptool.py --chip esp32s3 --port PORT --baud 460800 write-flash 0x0 <bootloader.bin> 0x8000 <partitions.bin> 0x10000 <firmware.bin>`
   using `firmware/` (8 MB) or `firmware-n16r8/` (N16R8) — see those READMEs.
-- **PlatformIO:** upload `esp32-s3-devkitc-1` (8 MB / Wokwi) or `s3-n16r8`.
+  For the **Waveshare ESP32-S3-ETH-8DI-8RO**: flash the `bms-tester-waveshare.bin`
+  merged image at `0x0` from the `v2.7-ws1` prerelease ([docs/waveshare.md](docs/waveshare.md)).
+- **PlatformIO:** upload `esp32-s3-devkitc-1` (8 MB / Wokwi), `s3-n16r8`, or
+  `s3-waveshare` (Waveshare ESP32-S3-ETH-8DI-8RO).
 - **Arduino IDE:** open `arduino/bms_connection_tester/bms_connection_tester.ino`
   (all tabs open automatically; ESP32S3 Dev Module, USB CDC On Boot Enabled,
   921600; N16R8 also Flash 16MB + OPI PSRAM).
