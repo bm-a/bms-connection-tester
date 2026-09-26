@@ -1,5 +1,7 @@
 # captures/ — original recordings (ground truth)
 
+![Meter segment layout (what the captures light up)](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg)
+
 ![JBD frame map](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/protocol.png)
 
 - `SOC-DOCKLIGHT.xlsx` — raw Docklight captures from the real battery + real meter:

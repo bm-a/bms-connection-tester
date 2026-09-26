@@ -194,8 +194,8 @@ Topics set for search (main: 15 topics incl. `jbd-bms`, `rs485`, `bms-emulator`,
   persistence synced into `lbl0..7`, live-GitHub OTA check
   (`ota_cmp` port + asset-presence gate, reproduces the 404 path), `shots.py`
   snapshots + demo GIF (cairosvg+ffmpeg). Enclosure/GX16 docs (`enclosure/`,
-  dual-buck tree, `DAD:` placeholders for dad's sizing). Real meter photos were
-  removed from the repo (2026-09-27).
+  dual-buck tree, `DAD:` placeholders for dad's sizing). Real meter photos in
+  `Actual Meter Image/` (meter cluster + segment close-up, also 3D textures).
   **152/152 total** (103 pio + 49 web); emu 62/62 earlier; release snapshots
   inspected before upload. Post-release (same day, all in main): media pass —
   8 assets + Ayca-free redaction (meter photo logos filled, all mentions
@@ -676,8 +676,8 @@ v1.0 ZIP + 2 git bundles — offline full-history backup, verified by test-clone
 Back it up before ANY storage compaction: it exists nowhere else.)
 Wiki canonical sources live in `wiki/` (Home, Flashing, Hardware, Protocol,
 Emulators, Versions, Relays, Dashboard) and are pushed to the `.wiki.git` backend.
-`Actual Meter Image/` (real meter photos) was removed 2026-09-27; the 3D sim
-now uses a procedural meter face texture. `src/ota.*` (OTA decisions) + `test/test_ota/` + `test/test_web/Update.h`
+`Actual Meter Image/` holds the meter cluster + segment photos (also 3D textures
+in the sim). `src/ota.*` (OTA decisions) + `test/test_ota/` + `test/test_web/Update.h`
 (upload stub) are v2.3 additions; v2.4 adds `src/fw_upload.h` +
 `test/test_upload/` + stubs `ESPmDNS.h`/`esp_system.h` (info card/mDNS);
 v2.5 adds `tools/fw_emu/` (socket harness + drivers) + `docs/CONFIG-SCHEMA.md`
