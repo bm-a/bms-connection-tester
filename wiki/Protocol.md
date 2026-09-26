@@ -32,8 +32,6 @@ canned golden values (or the active spoof stage's values on `0x03`).
 
 What the meter shows for `0x03` — VOL/CUR/TEMP + status flags + battery bar:
 
-![Meter segment layout](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/Actual%20Meter%20Image/1411bb7a-d99e-4885-8ea0-12714b984a5c.jpeg)
-
 *STBY/CHG/DISCH/ERROR flags, VOL/CUR/TEMP digits, battery bar. Golden reply
 lights it as 52.0 V, 100 %, full bar; spoof stage 2 drives 88.8/188.*
 
