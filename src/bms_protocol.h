@@ -10,7 +10,14 @@
 #endif
 #endif
 
+// Board-line firmware version. The Waveshare 8DI8RO build runs its own
+// prerelease line (tags v2.7-wsN, never /releases/latest) so its OTA checks
+// never cross with the generic board line — see ota.h / main.cpp.
+#ifdef BOARD_WAVESHARE_8DI8RO
+#define FW_VERSION "2.7-ws1"
+#else
 #define FW_VERSION "2.7"
+#endif
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
 // v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and

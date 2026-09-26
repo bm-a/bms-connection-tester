@@ -60,13 +60,25 @@ struct Bms2Config {
       relay_label[i][2] = '\0';
     }
   }
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // TCA9554 expander stage is fixed HIGH-bit = ON, so polarity is not a
+  // hardware variable on this board: the relay writer ignores this field
+  // (dashboard labels always match the hardware). Default false = truthful.
+  bool active_low = false;
+#else
   bool active_low = true;         // SmartElex class: LOW = relay ON
+#endif
   bool button_invert = false;     // false: press pulls pin LOW (pull-up)
   bool spoof_invert = false;      // false: trigger pulls pin LOW
   bool spoof_enabled = true;
   // v2.3.1 configurable trigger GPIO (was hardwired 21). Only proven-safe
-  // free DIOs are accepted; anything else falls back to 21 (see below).
+  // free DIOs are accepted; anything else falls back to the board default
+  // (see sanitize_spoof_pin).
+#ifdef BOARD_WAVESHARE_8DI8RO
+  uint8_t spoof_pin = 4;          // DI1 terminal on the Waveshare board
+#else
   uint8_t spoof_pin = 21;
+#endif
   // v2.3 two-stage spoof: stage 1 fires first, then stage 2, then revert.
   // Stage 1 defaults = "100" (realistic full pack); stage 2 = 88.8/188
   // over-range pattern. Upgraders: legacy single-stage values migrate to
@@ -95,6 +107,19 @@ inline uint8_t relay_pin_level(bool logical_on, bool active_low) {
 // Everything else (UART, relays, button, LEDs/RGB, USB, strapping, flash,
 // the WiFi kill pin 18) falls back to 21. Tested on host.
 inline uint8_t sanitize_spoof_pin(uint8_t p) {
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Waveshare 8DI8RO: the only user-drivable trigger inputs are the DI
+  // screw terminals (DI1..DI8 = GPIO4..11, active = LOW like the old
+  // button wiring). GPIO0 is the START/STOP button; everything else is
+  // Ethernet / RS485 / I2C / RGB / buzzer. Anything else falls back to
+  // DI1. Tested on host (test_waveshare).
+  switch (p) {
+    case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11:
+      return p;
+    default:
+      return 4;
+  }
+#else
   switch (p) {
     case 1: case 2: case 21: case 38: case 39: case 40: case 41: case 42:
     case 43: case 44: case 47:
@@ -102,6 +127,7 @@ inline uint8_t sanitize_spoof_pin(uint8_t p) {
     default:
       return 21;
   }
+#endif
 }
 
 // v2.4 relay safety constants (R12/R15): fixed, NOT user fields.

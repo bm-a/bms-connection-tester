@@ -1,4 +1,4 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.6.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.7.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
@@ -22,6 +22,19 @@
 //   GPIO18 -> WiFi kill to GND (ground = AP off; internal pull-up)
 //   Common GND. MAX485 VCC = 3.3V. USB powered (never the pack).
 //
+// Wiring (Waveshare ESP32-S3-ETH-8DI-8RO, -DBOARD_WAVESHARE_8DI8RO=1):
+//   Relays R1..R8 -> TCA9554PWR EXIO1..EXIO8 @ I2C 0x20 (SDA42/SCL41),
+//     output-register bit i = relay i+1, HIGH bit = ON (fixed in hardware;
+//     the web "active-low" toggle is a documented no-op on this board)
+//   GPIO17 (TX) -> onboard isolated RS485 (SP3485, hardware auto direction)
+//   GPIO18 (RX) -> onboard isolated RS485 (no DE/RE pin exists)
+//   GPIO0 (BOOT button) -> START/STOP to GND (press = LOW, internal pull-up)
+//   GPIO4 (DI1 terminal) -> spoof trigger to COM (active = LOW, web-changeable)
+//   GPIO5 (DI2 terminal) -> WiFi kill to COM (active = LOW = AP off)
+//   GPIO38 -> onboard WS2812 RGB (mirrors green/red, no wiring needed)
+//   GPIO12..16 = W5500 Ethernet (reserved, untouched) | GPIO46 = buzzer
+//   DI3..DI8 (GPIO6..11) free. USB-C powered (never the pack).
+//
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
 //   "STATUS?\n" -> "GREEN 2.6\n" / "RED 2.6\n" (first token stable for HIL).
 
@@ -31,11 +44,33 @@
 #include "relay_ctrl.h"
 #include "web_ui.h"
 #include "ota.h"
+#ifdef BOARD_WAVESHARE_8DI8RO
+#include "waveshare_pins.h"  // TCA9554 relay map + pure port logic (host-tested)
+#include <Wire.h>
+#endif
+#define RS485_SERIAL Serial2
 // OTA transport (ESP-only; never host-built — main.cpp is the sketch).
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Update.h>
 
+#ifdef BOARD_WAVESHARE_8DI8RO
+// Waveshare ESP32-S3-ETH-8DI-8RO: relays live on the TCA9554PWR I2C expander
+// (see waveshare_pins.h), RS485 is TX17/RX18 with hardware auto direction
+// (no DE pin), BOOT = START/STOP, DI1/DI2 = spoof/WiFi-kill, RGB on GPIO38.
+#define PIN_RS485_TX   WS_PIN_RS485_TX
+#define PIN_RS485_RX   WS_PIN_RS485_RX
+// (no PIN_RS485_DE — the SP3485 switches direction in hardware)
+// (no discrete green/red LEDs — RGB only)
+#define PIN_RGB WS_PIN_RGB  // onboard WS2812; not RGB_BUILTIN (core boards
+                            // vary) — fixed 38 per Waveshare schematic
+#define RGB_BRIGHT 32  // WS2812 is blinding at 255; 16-32 is plenty
+
+#define PIN_BUTTON WS_PIN_BUTTON
+#define PIN_SPOOF  WS_PIN_SPOOF
+#define PIN_WIFI_KILL WS_PIN_WIFI_KILL
+// (no RELAY_PINS — relays are TCA9554 output-register bits)
+#else
 #define PIN_RS485_TX   17
 #define PIN_RS485_RX   16
 #define PIN_RS485_DE    4
@@ -56,6 +91,7 @@
 // no ADC/boot role. Ground to kill the AP, release to bring it back.
 #define PIN_WIFI_KILL 18
 static const uint8_t RELAY_PINS[RELAY_COUNT] = {5, 6, 7, 8, 9, 12, 13, 14};
+#endif
 
 #define EVAL_INTERVAL_MS 250UL  // brisk eval so fast/slow polls both feel live
 #define FACTORY_RESET_HOLD_MS 10000UL  // button held 10 s -> wipe NVS + reboot
@@ -72,12 +108,36 @@ static SpoofPlan spoof;  // v2.3: two-stage (100 first, then 88.8/188)
 static DebouncedInput btn_in;
 static DebouncedInput spoof_in;
 static DebouncedInput wifi_in;  // v2.3.1 AP kill switch (ground = WiFi off)
+#ifdef BOARD_WAVESHARE_8DI8RO
+static uint8_t curSpoofPin = WS_PIN_SPOOF;  // v2.3.1: follows cfg.spoof_pin
+#else
 static uint8_t curSpoofPin = 21;  // v2.3.1: follows cfg.spoof_pin (sanitized)
+#endif
 static uint8_t spoofFrameA[SPOOF_FRAME_LEN];  // stage 1 ("100")
 static uint8_t spoofFrameB[SPOOF_FRAME_LEN];  // stage 2 (88.8/188 pattern)
 static bool spoofFrameReady = false;
 static uint8_t lastRelayLevels[RELAY_COUNT];
 static bool relaysArmed = false;
+#ifdef BOARD_WAVESHARE_8DI8RO
+static uint8_t lastWsRelayBits = 0x00;  // TCA9554 output-register cache
+
+// Minimal TCA9554PWR access: single-register write. Returns false on bus
+// error (caller parks safe / retries; sequencer state is untouched).
+static bool tca_write_reg(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(WS_TCA9554_ADDR);
+  Wire.write(reg);
+  Wire.write(val);
+  return Wire.endTransmission() == 0;
+}
+
+// All pins output, all relays OFF — the expander equivalent of the
+// direct-GPIO "drive OFF level BEFORE pinMode" rule.
+static bool tca_relays_init() {
+  // Safe order: park outputs OFF first, then configure pins as outputs.
+  return tca_write_reg(WS_TCA9554_REG_OUTPUT, 0x00) &&
+         tca_write_reg(WS_TCA9554_REG_CONFIG, 0x00);
+}
+#endif
 static unsigned long btnPressStart = 0;
 static bool btnPressed = false;
 static bool resetDone = false;
@@ -91,8 +151,12 @@ static void rebuild_spoof_frame() {
 
 static void apply_leds(bool on) {
   connected = on;
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // No discrete LEDs on this board — the onboard RGB (GPIO38) is the lamp.
+#else
   digitalWrite(PIN_LED_GREEN, on ? HIGH : LOW);
   digitalWrite(PIN_LED_RED, on ? LOW : HIGH);
+#endif
   // Onboard RGB mirrors the discretes: green = talking, red = silent.
   // RMT-driven, safe to call from the 250 ms eval (never the hot RX loop).
 #if defined(ARDUINO)
@@ -105,6 +169,26 @@ static void apply_relays() {
   // the count are forced OFF so a shrunk count can't leave a coil latched.
   uint8_t n = cfg.relay_count;
   if (n < 1 || n > RELAY_COUNT) n = RELAY_COUNT;
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // TCA9554PWR: one I2C write carries all 8 relays (bit i = relay i+1,
+  // HIGH = ON). cfg.active_low is fixed hardware here and intentionally
+  // ignored — dashboard labels always match the coils. Change detection
+  // via the output-register cache, same as the GPIO path below.
+  bool on[RELAY_COUNT];
+  for (uint8_t i = 0; i < RELAY_COUNT; i++)
+    on[i] = (i < n) ? seq.relayOn(i) : false;
+  uint8_t bits = ws_output_byte(on, n);
+  if (!relaysArmed || bits != lastWsRelayBits) {
+    bool ok = tca_write_reg(WS_TCA9554_REG_OUTPUT, bits);
+    if (ok) {
+      lastWsRelayBits = bits;
+    } else if (bits != 0x00) {
+      tca_write_reg(WS_TCA9554_REG_OUTPUT, 0x00);  // park safe on bus error
+      // lastWsRelayBits untouched -> the intended state retries next eval
+    }
+  }
+  relaysArmed = true;
+#else
   for (uint8_t i = 0; i < RELAY_COUNT; i++) {
     bool on = (i < n) ? seq.relayOn(i) : false;
     uint8_t lvl = relay_pin_level(on, cfg.active_low);
@@ -114,6 +198,7 @@ static void apply_relays() {
     }
   }
   relaysArmed = true;
+#endif
 }
 
 // ---- v2.3 OTA (GitHub releases; needs the optional STA uplink) ----
@@ -131,9 +216,18 @@ static void ota_check_now() {
   WiFiClientSecure cli;
   cli.setInsecure();  // LAN bench box; a bad flash is fixed over USB
   HTTPClient http;
-  if (!http.begin(cli,
-                  "https://api.github.com/repos/bm-a/bms-connection-tester/"
-                  "releases/latest")) {
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // This board runs its own prerelease line (tags v2.7-wsN), which GitHub
+  // never reports as /releases/latest — scan the newest releases instead.
+  const char *releases_url =
+      "https://api.github.com/repos/bm-a/bms-connection-tester/"
+      "releases?per_page=20";
+#else
+  const char *releases_url =
+      "https://api.github.com/repos/bm-a/bms-connection-tester/"
+      "releases/latest";
+#endif
+  if (!http.begin(cli, releases_url)) {
     ota_set_status("check failed");
     return;
   }
@@ -148,26 +242,42 @@ static void ota_check_now() {
   String body = http.getString();
   http.end();
   // GitHub pretty-prints ("tag_name": "v2.3"); tolerate any gap after ':'.
-  int ti = body.indexOf("\"tag_name\"");
-  if (ti < 0) {
-    ota_set_status("bad api reply");
-    return;
+  // The Waveshare build scans every tag_name in the release list (newest
+  // first) for its own v2.7-wsN line; other builds take the first tag.
+  String tag;
+  int from = 0;
+  for (;;) {
+    int ti = body.indexOf("\"tag_name\"", (unsigned)from);
+    if (ti < 0) break;
+    int ci = body.indexOf(':', (unsigned)(ti + 10));
+    if (ci < 0) break;
+    int q1 = body.indexOf('"', (unsigned)(ci + 1));
+    if (q1 < 0) break;
+    String cand = body.substring((unsigned)(q1 + 1));
+    int q = cand.indexOf('"');
+    if (q >= 0) cand = cand.substring(0, (unsigned)q);
+    from = q1 + 1;
+    if (cand.length() == 0 || cand.length() >= (int)sizeof(ota.latest_tag))
+      continue;  // malformed entry: skip it, keep scanning
+#ifdef BOARD_WAVESHARE_8DI8RO
+    // Own prerelease line: keep scanning and keep the HIGHEST valid -wsN
+    // version (GitHub order is by creation date, not version).
+    if (ota_tag_is_waveshare_line(cand.c_str()) &&
+        (tag.length() == 0 ||
+         ota_cmp_version(cand.c_str(), tag.c_str()) > 0)) {
+      tag = cand;
+    }
+#else
+    tag = cand;
+    break;
+#endif
   }
-  int ci = body.indexOf(':', (unsigned)(ti + 10));
-  if (ci < 0) {
+  if (tag.length() == 0) {
+#ifdef BOARD_WAVESHARE_8DI8RO
+    ota_set_status("no ws release");
+#else
     ota_set_status("bad api reply");
-    return;
-  }
-  int q1 = body.indexOf('"', (unsigned)(ci + 1));
-  if (q1 < 0) {
-    ota_set_status("bad api reply");
-    return;
-  }
-  String tag = body.substring((unsigned)(q1 + 1));
-  int q = tag.indexOf('"');
-  if (q >= 0) tag = tag.substring(0, (unsigned)q);
-  if (tag.length() == 0 || tag.length() >= (int)sizeof(ota.latest_tag)) {
-    ota_set_status("bad tag");
+#endif
     return;
   }
   strncpy(ota.latest_tag, tag.c_str(), sizeof(ota.latest_tag) - 1);
@@ -279,12 +389,18 @@ static void ota_auto_tick(unsigned long now) {
 }
 
 static void send_frame(const uint8_t *frame, size_t len) {
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Onboard SP3485 switches direction in hardware — no DE pin to drive.
+#else
   digitalWrite(PIN_RS485_DE, HIGH); // TX mode
-  Serial2.write(frame, len);
-  Serial2.flush(true);              // wait TX complete, keep RX intact
+#endif
+  RS485_SERIAL.write(frame, len);
+  RS485_SERIAL.flush(true);              // wait TX complete, keep RX intact
   delayMicroseconds(1500);          // ~1.5 char guard @9600 before release
+#ifndef BOARD_WAVESHARE_8DI8RO
   digitalWrite(PIN_RS485_DE, LOW);  // back to RX
-  while (Serial2.available()) Serial2.read();  // drop bytes sent while we TX'd
+#endif
+  while (RS485_SERIAL.available()) RS485_SERIAL.read();  // drop bytes sent while we TX'd
   parser.reset();                   // re-arm on the latest complete frame
 }
 
@@ -309,10 +425,15 @@ static void handle_status_command() {
 }
 
 void setup() {
+#ifdef BOARD_WAVESHARE_8DI8RO
+  Wire.begin(WS_I2C_SDA, WS_I2C_SCL);
+  tca_relays_init();  // expander: all outputs, all relays OFF first
+#else
   pinMode(PIN_RS485_DE, OUTPUT);
   digitalWrite(PIN_RS485_DE, LOW); // RX mode first (with 10k pull-down in HW)
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_RED, OUTPUT);
+#endif
   apply_leds(false); // boot red
 
   // ---- v2.0 init (after frozen LED boot state) ----
@@ -336,6 +457,11 @@ void setup() {
   // v2.3 burn-in: auto-start the configured mode (relays already OFF-first).
   // (void): boot start is always outside the post-stop dead-band (R12).
   if (cfg.boot_autostart) (void)seq.start(millis());
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Relays already parked OFF by tca_relays_init() above; seed the cache so
+  // the first apply_relays() only writes on a real state change.
+  lastWsRelayBits = 0x00;
+#else
   // Relays: drive OFF level BEFORE pinMode so nothing clicks at boot.
   for (uint8_t i = 0; i < RELAY_COUNT; i++) {
     uint8_t off = relay_pin_level(false, cfg.active_low);
@@ -343,16 +469,16 @@ void setup() {
     pinMode(RELAY_PINS[i], OUTPUT);
     lastRelayLevels[i] = off;
   }
+#endif
   relaysArmed = true;
-
   Serial.begin(115200);
   // Don't block headless boot waiting for USB console.
   unsigned long t0 = millis();
   while (!Serial && (millis() - t0) < 1500) { delay(10); }
 
-  Serial2.begin(9600, SERIAL_8N1, PIN_RS485_RX, PIN_RS485_TX);
+  RS485_SERIAL.begin(9600, SERIAL_8N1, PIN_RS485_RX, PIN_RS485_TX);
   // Discard any boot garbage on the bus.
-  while (Serial2.available()) Serial2.read();
+  while (RS485_SERIAL.available()) RS485_SERIAL.read();
   lastEvalMs = millis();
 }
 
@@ -407,8 +533,8 @@ void loop() {
 
   // --- FROZEN v1.x RS485 path (untouched logic) ---
   JbdFrame f;
-  while (Serial2.available()) {
-    if (parser.feed((uint8_t)Serial2.read(), f)) {
+  while (RS485_SERIAL.available()) {
+    if (parser.feed((uint8_t)RS485_SERIAL.read(), f)) {
       // Any well-formed meter frame proves wiring: refresh green window.
       tracker.note_poll(now);
       last_bus_ms = now;

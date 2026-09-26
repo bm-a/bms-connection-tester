@@ -1,6 +1,5 @@
 #include "web_ui.h"
 #include "fw_upload.h"  // v2.4 Tasmota-grade update gates (host-tested)
-
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <WiFi.h>
@@ -366,7 +365,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=card><h3>Fault spoof (0x03 test values, stage 1 then 2)</h3>
 <div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><label>Trigger GPIO <input id=spin size=3></label><span id=spoofmsg class=spoof-on></span></div>
 <div class=row><label>Trigger polarity <select id=sinv title="which edge on the trigger pin fires the plan"><option value=0>Pull LOW to fire (pull-up)</option><option value=1>Pull HIGH to fire</option></select></label><button onclick="saveTrig()">Save trigger</button><span class=msg id=trigmsg></span></div>
-<div class=row><span class=note>Safe trigger pins: 1, 2, 21, 38-44, 47 (anything else falls back to 21). Trigger save stores pin + enable + polarity without firing (for physical-switch users).</span></div>
+<div class=row><span class=note id=info_trigpins></span></div>
 <div class=row><label>1: V <input id=sv size=5></label><label>A <input id=sa size=5></label><label>&deg;C <input id=sc size=5></label><label>SOC% <input id=ssoc size=4></label><label>Secs <input id=ssec size=4></label></div>
 <div class=row><label>2: V <input id=s2v size=5></label><label>A <input id=s2a size=5></label><label>&deg;C <input id=s2c size=5></label><label>SOC% <input id=s2soc size=4></label><label>Secs <input id=s2sec size=4></label></div>
 <div class=row><button class=warn onclick="spoof('fire')">FIRE now</button><button onclick="spoof('save')">Save only</button><button onclick="spoof('cancel')">Cancel</button><span class=msg id=spoofsave></span></div>
@@ -398,7 +397,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=row><span class=note id=info_fw></span></div>
 <div class=row><span class=note id=info_mem></span></div>
 <div class=row><span class=note id=info_net></span></div>
-<div class=row><span class=note>Relays R1-R8: GPIO 5,6,7,8,9,12,13,14 (active-LOW) · UART2 TX17/RX16 DE4 · Button 15 · Kill 18 · Spoof pin on Fault card · Safe spare GPIO: 1,2,21,38-44,47</span></div></div>
+<div class=row><span class=note id=info_pins></span></div></div>
 <div class=card><h3>Console</h3>
 <div class=row><input id=cmd size=30 placeholder="HELP"><button onclick="cmd()">Run</button></div>
 <div class=row><span class=note id=cmdout></span></div>
@@ -430,6 +429,9 @@ async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return n
   document.getElementById('sta_test_msg').textContent='uplink test: '+(s.cfg.sta_test_msg||'not tested');
   document.getElementById('info_fw').textContent='fw '+s.fw+' ('+(s.cfg.variant||'?')+') · flash '+(s.cfg.flash_kb||'?')+' KB · free sketch '+(s.cfg.sketch_free||'?')+' B · boot #'+(s.cfg.boot||'?')+' · reset: '+(s.cfg.reset||'?');
   document.getElementById('info_mem').textContent='heap '+(s.cfg.heap||'?')+' B · psram '+(s.cfg.psram||'0')+' B · up '+(s.cfg.uptime_s||'0')+' s';
+  document.getElementById('info_pins').textContent=s.pins||'';
+  document.getElementById('info_trigpins').textContent=s.trigpins||'';
+  if(s.waveshare){var al=document.getElementById('alow');if(al){al.disabled=true;al.title='Fixed Active-HIGH on Waveshare (TCA9554 bit HIGH = relay ON)';}}
   document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
   return s;
 }
@@ -600,7 +602,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=card><h3>Fault spoof (0x03 test values, stage 1 then 2)</h3>
 <div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><label>Trigger GPIO <input id=spin size=3></label><span id=spoofmsg class=spoof-on></span></div>
 <div class=row><label>Trigger polarity <select id=sinv title="which edge on the trigger pin fires the plan"><option value=0>Pull LOW to fire (pull-up)</option><option value=1>Pull HIGH to fire</option></select></label><button onclick="saveTrig()">Save trigger</button><span class=msg id=trigmsg></span></div>
-<div class=row><span class=note>Safe trigger pins: 1, 2, 21, 38-44, 47 (anything else falls back to 21). Trigger save stores pin + enable + polarity without firing (for physical-switch users).</span></div>
+<div class=row><span class=note id=info_trigpins></span></div>
 <div class=row><label>1: V <input id=sv size=5></label><label>A <input id=sa size=5></label><label>&deg;C <input id=sc size=5></label><label>SOC% <input id=ssoc size=4></label><label>Secs <input id=ssec size=4></label></div>
 <div class=row><label>2: V <input id=s2v size=5></label><label>A <input id=s2a size=5></label><label>&deg;C <input id=s2c size=5></label><label>SOC% <input id=s2soc size=4></label><label>Secs <input id=s2sec size=4></label></div>
 <div class=row><button class=warn onclick="spoof('fire')">FIRE now</button><button onclick="spoof('save')">Save only</button><button onclick="spoof('cancel')">Cancel</button><span class=msg id=spoofsave></span></div>
@@ -632,7 +634,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <div class=row><span class=note id=info_fw></span></div>
 <div class=row><span class=note id=info_mem></span></div>
 <div class=row><span class=note id=info_net></span></div>
-<div class=row><span class=note>Relays R1-R8: GPIO 5,6,7,8,9,12,13,14 (active-LOW) · UART2 TX17/RX16 DE4 · Button 15 · Kill 18 · Spoof pin on Fault card · Safe spare GPIO: 1,2,21,38-44,47</span></div></div>
+<div class=row><span class=note id=info_pins></span></div></div>
 <div class=card><h3>Console</h3>
 <div class=row><input id=cmd size=30 placeholder="HELP"><button onclick="cmd()">Run</button></div>
 <div class=row><span class=note id=cmdout></span></div>
@@ -672,7 +674,10 @@ async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return n
  document.getElementById('sta_test_msg').textContent='uplink test: '+(s.cfg.sta_test_msg||'not tested');
  document.getElementById('info_fw').textContent='fw '+s.fw+' ('+(s.cfg.variant||'?')+') · flash '+(s.cfg.flash_kb||'?')+' KB · free sketch '+(s.cfg.sketch_free||'?')+' B · boot #'+(s.cfg.boot||'?')+' · reset: '+(s.cfg.reset||'?');
  document.getElementById('info_mem').textContent='heap '+(s.cfg.heap||'?')+' B · psram '+(s.cfg.psram||'0')+' B · up '+(s.cfg.uptime_s||'0')+' s';
- document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
+ document.getElementById('info_pins').textContent=s.pins||'';
+  document.getElementById('info_trigpins').textContent=s.trigpins||'';
+ if(s.waveshare){var al=document.getElementById('alow');if(al){al.disabled=true;al.title='Fixed Active-HIGH on Waveshare (TCA9554 bit HIGH = relay ON)';}}
+  document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
  bench(s);
  return s;
 }
@@ -728,6 +733,17 @@ static void handle_state() {
   Bms2Config &c = *G->cfg;
   uint8_t stage = G->spoof->stage(millis());
   String s = "{\"fw\":\"" + String(FW_VERSION) + "\"";
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Board pin map for the dashboard Information card. Build-specific text is
+  // emitted here (not baked into the PROGMEM HTML) so the raw-string pages
+  // stay identical across board variants; the JS just renders s.pins.
+  s += ",\"waveshare\":1";
+  s += ",\"pins\":\"Relays R1-R8: TCA9554 EXIO1-8 (I2C SDA42/SCL41, bit HIGH = ON) · UART2 TX17/RX18 auto-direction (no DE pin) · Button: BOOT (GPIO0) · Kill: DI2 (GPIO5) · Spoof trigger: DI1 (GPIO4)\"";
+  s += ",\"trigpins\":\"Safe trigger pins: DI1-DI8 (GPIO4-11, active LOW); anything else falls back to DI1 (GPIO4). Trigger save stores pin + enable + polarity without firing.\"";
+#else
+  s += ",\"pins\":\"Relays R1-R8: GPIO 5,6,7,8,9,12,13,14 (active-LOW) · UART2 TX17/RX16 DE4 · Button 15 · Kill 18 · Spoof pin on Fault card · Safe spare GPIO: 1,2,21,38-44,47\"";
+  s += ",\"trigpins\":\"Safe trigger pins: 1, 2, 21, 38-44, 47 (anything else falls back to 21). Trigger save stores pin + enable + polarity without firing (for physical-switch users).\"";
+#endif
   s += ",\"link\":";
   s += (*G->link_green ? "true" : "false");
   s += ",\"running\":";
