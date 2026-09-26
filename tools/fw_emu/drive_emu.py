@@ -66,11 +66,22 @@ def advance(ms):
     step(clock() + ms)
 
 
+def fw_version():
+    # read FW_VERSION from firmware source — never hardcode, never drift
+    import re, os
+    here = os.path.dirname(os.path.abspath(__file__))
+    src = open(os.path.join(here, "..", "..", "src", "bms_protocol.h")).read()
+    return re.search(r'#define FW_VERSION "([^"]+)"', src).group(1)
+
+
+FW_VER = fw_version()
+
+
 # ---------- 1. basics + portal ----------
 r = get("/")
 check("dashboard serves 200 with app", r.status_code == 200 and "BMS Tester" in r.text, r.text[:80])
 s = state()
-check("state fw 2.8 + defaults", s["fw"] == "2.8" and s["cfg"]["step"] == 250 and s["cfg"]["stag"] == 50, json.dumps(s["cfg"])[:120])
+check(f"state fw {FW_VER} + defaults", s["fw"] == FW_VER and s["cfg"]["step"] == 250 and s["cfg"]["stag"] == 50, json.dumps(s["cfg"])[:120])
 for probe in ["/hotspot-detect.html", "/generate_204", "/gen_204", "/connecttest.txt", "/redirect", "/library/test/success.html"]:
     r = get(probe)
     check(f"probe {probe} -> landing", r.status_code == 200 and "Open Dashboard" in r.text, str(r.status_code))
