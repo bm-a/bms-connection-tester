@@ -136,18 +136,31 @@ relays switch low-voltage test loads — keep it that way.
 
 ## 4. Digital inputs DI1–DI8
 
-Opto-isolated inputs, **active LOW** (pull the DIx terminal to COM/GND to
-trigger). The firmware reads them with internal pull-ups.
+**8× optocoupler-isolated inputs.** DI1→GPIO4 … DI8→GPIO11.
+Bi-directional optocoupler (NPN or PNP, either polarity). Input: 5–36 V.
 
 | Terminal | GPIO | Firmware function (default) |
 |---|---|---|
 | **DI1** | GPIO4 | **Spoof trigger** — two-stage: 100.0 V, then 88.8 V |
-| **DI2** | GPIO5 | **Wi-Fi kill** — ground = AP off, release = AP back |
-| DI3–DI8 | GPIO6–GPIO11 | Free (reserved for future use) |
-| **COM** | — | Common/ground reference for the DI terminals |
+| **DI2** | GPIO5 | **Wi-Fi kill** — active = AP off, release = AP back |
+| **DI3** | GPIO6 | **Relay trigger** — START/STOP the 8-relay program |
+| DI4–DI8 | GPIO7–GPIO11 | Free (reserved for future use) |
+| **DI-COM** | — | Common for the DI terminals (**isolated** — not system GND) |
 
-Wire a dry contact (pushbutton, relay contact) or an open-collector
-signal **between DIx and COM**. Active = contact closed = GPIO reads LOW.
+> ⚠️ **DI power requirement:** the optocouplers run on an isolated supply
+> generated from the **7–36 V screw terminals**. USB-C power alone does **not**
+> power the DI circuit — DIs will not respond on USB-only power.
+
+**Wiring — dry contact (needs 7–36 V board power):**
+1. Power the board via the 7–36 V screw terminals (not just USB-C).
+2. Wire a pushbutton between DIx and **DI-COM** (in the DI terminal block).
+3. Press → GPIO reads LOW → function triggers.
+
+**Wiring — wet contact (works on any board power):**
+1. External 5–36 V DC: (+) to DIx, (−) to DI-COM. Polarity doesn't matter.
+2. Apply voltage → GPIO reads LOW → function triggers.
+
+Do **not** use relay COM or system GND for DI wiring — DI-COM is isolated.
 
 - The spoof input is web-changeable to any of DI1–DI8 (admin tab).
 - `button_invert` / `spoof_invert` toggles flip the sense if your wiring
