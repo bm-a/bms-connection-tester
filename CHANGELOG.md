@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.8.5] — 2026-09-27
+### Fixed
+- Waveshare DI polarity: reverted v2.8.3/v2.8.4's `INPUT_PULLDOWN`/active-HIGH
+  back to `INPUT_PULLUP`/active-LOW. The DI optocouplers are NPN open-collector
+  (can only pull LOW, never drive HIGH); with PULLDOWN the GPIO was stuck LOW
+  forever → no edge → DI1 spoof, DI2 Wi-Fi kill, DI3 relay trigger all dead.
+  Explanatory comments added at the pinMode site to prevent recurrence.
+- Note: DI optocouplers need 7–36 V on the screw terminals; USB-C alone does
+  not power the DI circuit.
+### Verified
+- 166/166 native tests, `pio run -e s3-waveshare` SUCCESS
+
 ## [v2.8] — 2026-09-27
 Release scope: FULL dashboard builds only — generic ESP32-S3 (8 MB) +
 Waveshare ESP32-S3-ETH-8DI-8RO, one v2.8 tag, variant assets.
