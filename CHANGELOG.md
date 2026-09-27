@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
-## [Unreleased]
+## [v2.9.2] — 2026-09-27
 ### Added
 - Waveshare buzzer toggle in the web UI: a **Buzzer** card (checkbox + Save)
   on the dashboard, NVS-persisted (`buzz` key, default **OFF** — the board
@@ -20,7 +20,9 @@ plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
   `tools/check_web_contract.py` now validates the single FULL page. OTA
   assets were already FULL-only; unchanged.
 ### Verified
-- (to be filled on release)
+- 184/184 native Unity tests (0 failures), WEB-CONTRACT PASS, 30-day soak
+  PASS (2,591,400 polls, rollover crossed, no reset), `pio run`
+  -e esp32-s3-devkitc-1 and -e s3-waveshare both SUCCESS.
 
 ## [v2.9.0] — 2026-09-27
 ### Added (Waveshare ESP32-S3-POE-ETH-8DI-8DO — full 8DO support)

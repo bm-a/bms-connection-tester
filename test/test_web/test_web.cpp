@@ -127,7 +127,7 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"mv\":520"));
   TEST_ASSERT_TRUE(has(r.body, "\"ma\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"msoc\":100"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.9.1\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.9.2\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
 }
 
