@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.8.8] — 2026-09-27
+### Fixed (CRITICAL)
+- Waveshare RS485 DE pin: the board DOES have a DE line on **GPIO21**.
+  Our firmware wrongly assumed "hardware auto-direction (no DE pin)" based on
+  the Waveshare wiki — without driving DE, the ESP32 receives nothing on the
+  bus (`rs485rx` stayed empty in v2.8.7). This is why the ESP32 appeared to
+  ignore the meter's polls. `send_frame()` now drives DE HIGH before TX and
+  LOW after (with the existing 1.5-char guard time); `setup()` parks DE LOW
+  (RX mode) at boot. A working reference sketch (`RS485_DE 21`) confirms it.
+### Verified
+- All native tests pass (166 Unity + 105 PIO + soak), `pio run -e s3-waveshare` SUCCESS
+
 ## [v2.8.7] — 2026-09-27
 ### Added
 - RS485 traffic diagnostics: `/api/state` now includes `rs485rx` and `rs485tx`

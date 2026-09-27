@@ -26,8 +26,9 @@
 //   Relays R1..R8 -> TCA9554PWR EXIO1..EXIO8 @ I2C 0x20 (SDA42/SCL41),
 //     output-register bit i = relay i+1, HIGH bit = ON (fixed in hardware;
 //     the web "active-low" toggle is a documented no-op on this board)
-//   GPIO17 (TX) -> onboard isolated RS485 (SP3485, hardware auto direction)
-//   GPIO18 (RX) -> onboard isolated RS485 (no DE/RE pin exists)
+//   GPIO17 (TX) -> onboard isolated RS485 (SP3485)
+//   GPIO18 (RX) -> onboard isolated RS485
+//   GPIO21 (DE) -> RS485 direction: HIGH = TX, LOW = RX (driven by send_frame())
 //   GPIO0 (BOOT button) -> START/STOP to GND (press = LOW, internal pull-up)
 //   GPIO4 (DI1 terminal) -> spoof trigger to COM (active = LOW, web-changeable)
 //   GPIO5 (DI2 terminal) -> WiFi kill to COM (active = LOW = AP off)
@@ -56,11 +57,13 @@
 
 #ifdef BOARD_WAVESHARE_8DI8RO
 // Waveshare ESP32-S3-ETH-8DI-8RO: relays live on the TCA9554PWR I2C expander
-// (see waveshare_pins.h), RS485 is TX17/RX18 with hardware auto direction
-// (no DE pin), BOOT = START/STOP, DI1/DI2 = spoof/WiFi-kill, RGB on GPIO38.
+// (see waveshare_pins.h), RS485 = TX17/RX18 with DE on GPIO21 (driven by
+// send_frame(); the wiki's "hardware auto direction" claim is wrong —
+// without driving DE the ESP32 receives nothing on the bus),
+// BOOT = START/STOP, DI1/DI2 = spoof/WiFi-kill, RGB on GPIO38.
 #define PIN_RS485_TX   WS_PIN_RS485_TX
 #define PIN_RS485_RX   WS_PIN_RS485_RX
-// (no PIN_RS485_DE — the SP3485 switches direction in hardware)
+#define PIN_RS485_DE   WS_PIN_RS485_DE
 // (no discrete green/red LEDs — RGB only)
 #define PIN_RGB WS_PIN_RGB  // onboard WS2812; not RGB_BUILTIN (core boards
                             // vary) — fixed 38 per Waveshare schematic
@@ -386,20 +389,16 @@ static void ota_auto_tick(unsigned long now) {
 }
 
 static void send_frame(const uint8_t *frame, size_t len) {
-#ifdef BOARD_WAVESHARE_8DI8RO
-  // Onboard SP3485 switches direction in hardware — no DE pin to drive.
-#else
+  // Drive DE HIGH for TX (both boards; on Waveshare DE = GPIO21 — the
+  // wiki's "hardware auto direction" claim is wrong, without it we RX nothing).
   digitalWrite(PIN_RS485_DE, HIGH); // TX mode
-#endif
   RS485_SERIAL.write(frame, len);
   RS485_SERIAL.flush(true);              // wait TX complete, keep RX intact
   // v2.8.7: log TX for diagnostics
   diagTxLen = (len > sizeof(diagTxFrame)) ? sizeof(diagTxFrame) : (uint8_t)len;
   for (uint8_t i = 0; i < diagTxLen; i++) diagTxFrame[i] = frame[i];
   delayMicroseconds(1500);          // ~1.5 char guard @9600 before release
-#ifndef BOARD_WAVESHARE_8DI8RO
   digitalWrite(PIN_RS485_DE, LOW);  // back to RX
-#endif
   while (RS485_SERIAL.available()) RS485_SERIAL.read();  // drop bytes sent while we TX'd
   parser.reset();                   // re-arm on the latest complete frame
 }
@@ -432,9 +431,11 @@ void setup() {
 #ifdef BOARD_WAVESHARE_8DI8RO
   Wire.begin(WS_I2C_SDA, WS_I2C_SCL);
   tca_relays_init();  // expander: all outputs, all relays OFF first
-#else
+#endif
+  // RS485 DE: RX mode first (both boards; Waveshare DE = GPIO21).
   pinMode(PIN_RS485_DE, OUTPUT);
-  digitalWrite(PIN_RS485_DE, LOW); // RX mode first (with 10k pull-down in HW)
+  digitalWrite(PIN_RS485_DE, LOW);
+#ifndef BOARD_WAVESHARE_8DI8RO
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_RED, OUTPUT);
 #endif

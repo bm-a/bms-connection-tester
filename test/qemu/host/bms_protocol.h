@@ -15,7 +15,7 @@
 // both report "2.8" and both OTA-check /releases/latest — the old -wsN
 // prerelease line is retired (ota_tag_is_waveshare_line stays as a predicate
 // for the host tests).
-#define FW_VERSION "2.8.7"
+#define FW_VERSION "2.8.8"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
 // v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and

@@ -10,8 +10,10 @@
 //  - the official Waveshare wiki pin tables
 //    (https://www.waveshare.com/wiki/ESP32-S3-ETH-8DI-8RO)
 //  - the Waveshare user manual (ESP32-S3-WROOM-1-N16R8 module: 16 MB flash,
-//    8 MB PSRAM; RS485 = isolated SP3485 with *hardware automatic* data
-//    direction control — there is NO DE/RE pin)
+//    8 MB PSRAM; RS485 = isolated SP3485). The wiki claims *hardware
+//    automatic* direction control, but a working reference sketch drives
+//    DE on GPIO21 — and without driving it, the ESP32 receives nothing
+//    (proven 2026-09-27).
 //  - vendor demo code (szf2020/esp32-s3-eth-8di-8ro-c): TCA9554PWR @ 0x20,
 //    EXIO1..8 = output-register bits 0..7, HIGH bit = relay ON,
 //    TCA9554PWR_Init(0x00) parks all outputs OFF at boot.
@@ -25,9 +27,10 @@
 #define WS_I2C_SDA             42
 #define WS_I2C_SCL             41
 
-// ---- RS485: TX17/RX18, hardware auto direction (no DE/RE pin) ----
+// ---- RS485: TX17/RX18, DE on GPIO21 (driven HIGH for TX, LOW for RX) ----
 #define WS_PIN_RS485_TX  17
 #define WS_PIN_RS485_RX  18
+#define WS_PIN_RS485_DE  21
 
 // ---- Controls: BOOT button = START/STOP; DI terminals for the rest ----
 #define WS_PIN_BUTTON     0   // BOOT, press = LOW (strapping pin: holding it
