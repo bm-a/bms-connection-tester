@@ -118,12 +118,6 @@ static uint8_t curSpoofPin = 21;  // v2.3.1: follows cfg.spoof_pin (sanitized)
 static uint8_t spoofFrameA[SPOOF_FRAME_LEN];  // stage 1 ("100")
 static uint8_t spoofFrameB[SPOOF_FRAME_LEN];  // stage 2 (88.8/188 pattern)
 static bool spoofFrameReady = false;
-// v2.8.7 RS485 diagnostics: last RX/TX frames (hex-dumped to /api/state).
-// Helps identify rogue bus traffic (e.g. unknown 6-byte responses).
-static uint8_t diagRxFrame[16];
-static uint8_t diagRxLen = 0;
-static uint8_t diagTxFrame[40];
-static uint8_t diagTxLen = 0;
 static uint8_t lastRelayLevels[RELAY_COUNT];
 static bool relaysArmed = false;
 #ifdef BOARD_WAVESHARE_8DI8RO
@@ -393,9 +387,6 @@ static void send_frame(const uint8_t *frame, size_t len) {
 #endif
   RS485_SERIAL.write(frame, len);
   RS485_SERIAL.flush(true);              // wait TX complete, keep RX intact
-  // v2.8.7: log TX for diagnostics
-  diagTxLen = (len > sizeof(diagTxFrame)) ? sizeof(diagTxFrame) : (uint8_t)len;
-  for (uint8_t i = 0; i < diagTxLen; i++) diagTxFrame[i] = frame[i];
   delayMicroseconds(1500);          // ~1.5 char guard @9600 before release
 #ifndef BOARD_WAVESHARE_8DI8RO
   digitalWrite(PIN_RS485_DE, LOW);  // back to RX
@@ -477,10 +468,6 @@ void setup() {
   wctx.ota = &ota;
   wctx.on_ota_check = ota_check_now;
   wctx.on_ota_install = ota_install_now;
-  wctx.diag_rx = diagRxFrame;
-  wctx.diag_rx_len = &diagRxLen;
-  wctx.diag_tx = diagTxFrame;
-  wctx.diag_tx_len = &diagTxLen;
   web_setup(wctx);  // loads NVS config, builds spoof frames, starts always-on AP
   // v2.3 burn-in: auto-start the configured mode (relays already OFF-first).
   // (void): boot start is always outside the post-stop dead-band (R12).
@@ -568,19 +555,8 @@ void loop() {
 
   // --- FROZEN v1.x RS485 path (untouched logic) ---
   JbdFrame f;
-  // v2.8.7: raw byte accumulator for RX diagnostics
-  static uint8_t rxAccum[16];
-  static uint8_t rxAccumLen = 0;
   while (RS485_SERIAL.available()) {
-    uint8_t b = (uint8_t)RS485_SERIAL.read();
-    // Accumulate raw bytes (reset on DD which starts a new frame)
-    if (b == 0xDD) rxAccumLen = 0;
-    if (rxAccumLen < sizeof(rxAccum)) rxAccum[rxAccumLen++] = b;
-    if (parser.feed(b, f)) {
-      // v2.8.7: log the accepted RX frame for diagnostics
-      diagRxLen = rxAccumLen;
-      for (uint8_t i = 0; i < diagRxLen; i++) diagRxFrame[i] = rxAccum[i];
-      rxAccumLen = 0;
+    if (parser.feed((uint8_t)RS485_SERIAL.read(), f)) {
       // Any well-formed meter frame proves wiring: refresh green window.
       tracker.note_poll(now);
       last_bus_ms = now;
