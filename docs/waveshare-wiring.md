@@ -138,6 +138,7 @@ relays switch low-voltage test loads — keep it that way.
 
 **8× optocoupler-isolated inputs.** DI1→GPIO4 … DI8→GPIO11.
 Bi-directional optocoupler (NPN or PNP, either polarity). Input: 5–36 V.
+**Firmware sees them as active-HIGH** (opto drives GPIO HIGH; idle LOW with pulldown).
 
 | Terminal | GPIO | Firmware function (default) |
 |---|---|---|
