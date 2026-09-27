@@ -33,6 +33,9 @@ struct WebCtx {
   const char *(*eth_ip)() = nullptr;  // "" when Ethernet is down
   const uint8_t *diag_tx = nullptr;
   const uint8_t *diag_tx_len = nullptr;
+  // v2.9.1: true when the UART owns GPIO21 via RS485 half-duplex mode
+  // (1 = hardware DE active, 0 = manual DE fallback). Null on generic builds.
+  const bool *rs485_hw_de = nullptr;
 };
 
 // AP defaults (overridden by NVS once saved).

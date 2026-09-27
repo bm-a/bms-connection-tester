@@ -835,6 +835,11 @@ static void handle_state() {
     }
     s += "\"";
   }
+  // v2.9.1: did the UART actually take GPIO21 for hardware DE?
+  if (G->rs485_hw_de) {
+    s += ",\"rs485hwde\":\"";
+    s += (*G->rs485_hw_de ? "1" : "0");
+  }
   if (G->ota) {
     s += ",\"ota_auto\":" + String(G->ota->auto_enabled ? 1 : 0) +
          ",\"ota_latest\":\"" + String(G->ota->latest_tag) + "\"" +

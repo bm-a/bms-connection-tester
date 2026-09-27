@@ -503,8 +503,18 @@ void setup() {
 #endif
   // RS485 DE: park RX mode first (both boards; on Waveshare the UART claims
   // GPIO21 for hardware direction later in setup — this covers early boot).
+#ifndef BOARD_WAVESHARE_8DI8RO
   pinMode(PIN_RS485_DE, OUTPUT);
   digitalWrite(PIN_RS485_DE, LOW);
+#else
+  // v2.9.1 Waveshare: do NOT touch GPIO21 as GPIO. Dad's proven-working
+  // firmware (2026-09-27, same board + wiring) goes straight to
+  // begin -> setPins(-1,-1,-1,21) -> setMode(UART_MODE_RS485_HALF_DUPLEX)
+  // with no pinMode/digitalWrite preamble, and the official Waveshare demo
+  // does the same. Our preamble (pinMode OUTPUT + LOW before handing the
+  // pin to the UART) coincided with total RX deafness (single byte "E0"
+  // captured, no 0xDD ever seen) — the UART must own GPIO21 from the start.
+#endif
 #ifndef BOARD_WAVESHARE_8DI8RO
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_RED, OUTPUT);
@@ -557,6 +567,8 @@ void setup() {
   // dashboard (fields stay null on generic builds, so JSON omits them).
   wctx.expander_ok = &tca_fault.ok;
   wctx.eth_ip = ws_eth_ip_str;
+  // v2.9.1: did the UART actually take GPIO21 for hardware DE?
+  wctx.rs485_hw_de = &rs485_hw_de;
 #endif
   web_setup(wctx);  // loads NVS config, builds spoof frames, starts always-on AP
   // v2.3 burn-in: auto-start the configured mode (relays already OFF-first).
