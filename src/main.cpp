@@ -69,6 +69,7 @@
 #define PIN_BUTTON WS_PIN_BUTTON
 #define PIN_SPOOF  WS_PIN_SPOOF
 #define PIN_WIFI_KILL WS_PIN_WIFI_KILL
+#define PIN_RELAY_TRIGGER WS_PIN_RELAY_TRIGGER  // DI3: manual relay sequencer trigger
 // (no RELAY_PINS — relays are TCA9554 output-register bits)
 #else
 #define PIN_RS485_TX   17
@@ -108,6 +109,7 @@ static SpoofPlan spoof;  // v2.3: two-stage (100 first, then 88.8/188)
 static DebouncedInput btn_in;
 static DebouncedInput spoof_in;
 static DebouncedInput wifi_in;  // v2.3.1 AP kill switch (ground = WiFi off)
+static DebouncedInput relay_trig_in;  // DI3: manual relay sequencer trigger
 #ifdef BOARD_WAVESHARE_8DI8RO
 static uint8_t curSpoofPin = WS_PIN_SPOOF;  // v2.3.1: follows cfg.spoof_pin
 #else
@@ -433,9 +435,13 @@ void setup() {
   btn_in.begin(true);
   spoof_in.begin(true);
   wifi_in.begin(true);
+  relay_trig_in.begin(true);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   pinMode(PIN_SPOOF, INPUT_PULLUP);
   pinMode(PIN_WIFI_KILL, INPUT_PULLUP);  // idle HIGH = AP on
+#ifdef BOARD_WAVESHARE_8DI8RO
+  pinMode(PIN_RELAY_TRIGGER, INPUT_PULLUP);  // DI3: idle HIGH
+#endif
   static WebCtx wctx;
   wctx.cfg = &cfg;
   wctx.seq = &seq;
@@ -498,6 +504,13 @@ void loop() {
   wifi_in.update(wifiRaw, now);  // fell = grounded, rose = released
   if (wifi_in.fell()) web_wifi_set(false);
   else if (wifi_in.rose()) web_wifi_set(true);
+
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // --- DI3: manual relay sequencer trigger (ground = START/STOP) ---
+  bool trigRaw = digitalRead(PIN_RELAY_TRIGGER) == HIGH;  // pull-up idle HIGH
+  relay_trig_in.update(trigRaw, now);  // fell = grounded
+  if (relay_trig_in.fell()) handle_button_press(seq, cfg, now);
+#endif
 
   // --- v2.0: spoof trigger input (v2.3: fires the two-stage plan) ---
   // v2.3.1: pin follows cfg.spoof_pin (NVS, sanitized); re-arm on change.

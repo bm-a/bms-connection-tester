@@ -36,6 +36,7 @@
 #define WS_PIN_DI_COUNT   8
 #define WS_PIN_SPOOF      4   // DI1: spoof trigger (default, web-changeable)
 #define WS_PIN_WIFI_KILL  5   // DI2: ground = AP off (default)
+#define WS_PIN_RELAY_TRIGGER 6 // DI3: trigger relay sequencer (START/STOP)
 
 // ---- Indicators ----
 #define WS_PIN_RGB  38  // onboard WS2812 (discrete green/red LEDs don't exist)
