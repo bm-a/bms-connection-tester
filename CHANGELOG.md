@@ -5,6 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.8.10] — 2026-09-27
+### Fixed
+- Waveshare 8DO alignment to the official ESP32-S3-POE-ETH-8DI-8DO demo:
+  RS485 direction now goes through the UART's hardware RTS half-duplex mode
+  (`setMode(UART_MODE_RS485_HALF_DUPLEX)` with GPIO21 as RTS, exactly like the
+  official `WS_RS485.cpp`), replacing our manual DE bit-bang. Manual-DE
+  fallback remains if hardware mode init fails (`rs485_hw_de` flag).
+- Doc corrections: DIs are active-LOW with INPUT_PULLUP (not active-HIGH);
+  8RO → 8DO naming throughout; digital outputs documented as Darlington
+  sink outputs (500 mA) instead of relay NO/COM/NC.
+### Changed
+- Deliberate divergence from the official demo: TCA9554 boot-parks 0x00
+  (all outputs OFF — safe boot state for a test bench) instead of the
+  demo's 0xFF. The register write order (OUTPUT before CONFIG) matches
+  the demo exactly and is now covered by host tests (`ws_tca_init_step()`).
+### Verified
+- 171/171 native Unity tests (+4 new 8DO-alignment tests), 30-day soak
+  (2,591,400 polls/replies), `pio run -e s3-waveshare` and
+  `-e esp32-s3-devkitc-1` both SUCCESS.
+
 ## [v2.8.9] — 2026-09-27
 ### Fixed (CRITICAL)
 - 7-byte meter request format: the real e-rickshaw meter sends
