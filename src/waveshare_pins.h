@@ -2,32 +2,61 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Waveshare ESP32-S3-ETH-8DI-8RO board map + pure relay-port logic.
+// Waveshare ESP32-S3-POE-ETH-8DI-8DO board map + pure port logic.
 // Hardware-independent (no Arduino dependency) so it compiles on the host
 // for Unity tests, exactly like bms_protocol.* / relay_ctrl.h.
 //
-// Map verified 2026-09-26 against:
-//  - the official Waveshare wiki pin tables
-//    (https://www.waveshare.com/wiki/ESP32-S3-ETH-8DI-8RO)
-//  - the Waveshare user manual (ESP32-S3-WROOM-1-N16R8 module: 16 MB flash,
-//    8 MB PSRAM; RS485 = isolated SP3485). The wiki claims *hardware
-//    automatic* direction control, but a working reference sketch drives
-//    DE on GPIO21 — and without driving it, the ESP32 receives nothing
-//    (proven 2026-09-27: rs485rx stayed empty until DE=21 was driven).
-//  - vendor demo code (szf2020/esp32-s3-eth-8di-8ro-c): TCA9554PWR @ 0x20,
-//    EXIO1..8 = output-register bits 0..7, HIGH bit = relay ON,
-//    TCA9554PWR_Init(0x00) parks all outputs OFF at boot.
-// Digital inputs DI1..DI8 = GPIO4..GPIO11, opto-isolated, active = LOW
-// (INPUT_PULLUP), confirmed by the vendor DI example + independent builds.
+// Map verified 2026-09-27 against the OFFICIAL 8DO demo
+// (ESP32-S3-POE-ETH-8DI-8DO-Demo.zip from
+//  https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO):
+//  - WS_GPIO.h: TXD1=17, RXD1=18, TXD1EN=21, GPIO_PIN_RGB=38,
+//    GPIO_PIN_Buzzer=46; WS_DIN.h: DIN_PIN_CH1..8 = GPIO4..GPIO11.
+//  - WS_RS485.cpp RS485_Init(): lidarSerial.begin(9600, SERIAL_8N1, RXD1,
+//    TXD1) then setPins(-1,-1,-1,TXD1EN) + setMode(UART_MODE_RS485_HALF_DUPLEX)
+//    — the ESP32 UART peripheral auto-drives GPIO21 (RTS) for direction.
+//    (The wiki product page's "hardware-flow direction" = this UART mode,
+//    not board hardware: without the UART mode or manual DE the ESP32
+//    receives nothing — proven 2026-09-27.)
+//  - WS_TCA9554PWR.h/.cpp: TCA9554PWR @ 0x20, OUTPUT reg 0x01, CONFIG reg
+//    0x03; Set_EXIO(CHx,true) sets bit (CHx-1) -> EXIOx; Dout_Init() calls
+//    TCA9554PWR_Init(0x00, 0xFF) = write OUTPUT_REG first, then CONFIG_REG.
+//    HIGH bit = channel ON (Darlington sink outputs, 500 mA).
+//  - WS_GPIO.cpp RGB_Light(r,g,b) -> neopixelWrite(pin, g, r, b): the RGB
+//    element expects RGB byte order, so R/G are swapped on the wire.
+//  - WS_DIN.cpp DIN_Init(): pinMode(DIN_PIN_CHx, INPUT_PULLUP) — digital
+//    inputs are opto-isolated, active = LOW.
+// I2C: SDA=42/SCL=41 per demo I2C_Driver.h (shared with RTC @ 0x51).
 
-// ---- TCA9554PWR (relay expander) ----
+// ---- TCA9554PWR (DO expander) ----
 #define WS_TCA9554_ADDR        0x20
 #define WS_TCA9554_REG_OUTPUT  0x01
 #define WS_TCA9554_REG_CONFIG  0x03
 #define WS_I2C_SDA             42
 #define WS_I2C_SCL             41
 
-// ---- RS485: TX17/RX18, DE on GPIO21 (driven HIGH for TX, LOW for RX) ----
+// TCA9554 boot sequence, mirroring the official 8DO demo
+// (WS_Dout.cpp Dout_Init -> TCA9554PWR_Init(PinMode, PinState)):
+// the OUTPUT register is written BEFORE the CONFIG register.
+// The demo passes PinState=0xFF (all 8 channels ON at boot); this firmware
+// deliberately parks WS_TCA9554_BOOT_OUTPUT=0x00 (all OFF) instead — the
+// safe boot state for an automated test bench. The register ORDER is the
+// part that must match the demo; the park value is our application choice.
+#define WS_TCA9554_BOOT_OUTPUT 0x00
+#define WS_TCA9554_BOOT_CONFIG 0x00
+struct WsTcaInitStep { uint8_t reg; uint8_t val; };
+static inline WsTcaInitStep ws_tca_init_step(uint8_t step) {
+  WsTcaInitStep s = {0, 0};
+  if (step == 0)      { s.reg = WS_TCA9554_REG_OUTPUT; s.val = WS_TCA9554_BOOT_OUTPUT; }
+  else if (step == 1) { s.reg = WS_TCA9554_REG_CONFIG; s.val = WS_TCA9554_BOOT_CONFIG; }
+  return s;
+}
+#define WS_TCA9554_INIT_STEPS 2
+
+// ---- RS485: TX17/RX18; direction on GPIO21 (RTS/TXD1EN) ----
+// Official 8DO demo (WS_RS485.cpp): UART_MODE_RS485_HALF_DUPLEX via
+// setPins(-1,-1,-1,TXD1EN) + setMode() — the ESP32 UART peripheral
+// auto-drives GPIO21 (HIGH=TX, LOW=RX). main.cpp uses that mode and keeps
+// manual digitalWrite(DE) only as a fallback if setMode() fails.
 #define WS_PIN_RS485_TX  17
 #define WS_PIN_RS485_RX  18
 #define WS_PIN_RS485_DE  21
@@ -49,12 +78,14 @@
  // GPIO40     = RTC interrupt; GPIO41/42 shared with RTC @ 0x51
  // GPIO46     = buzzer (unused by this firmware)
 
-// Logical relay i (0..7) -> EXIO(i+1) -> output-register bit i.
-// Vendor demo: HIGH bit = relay ON (Relay_Open = Set_EXIO(CH, true)).
+// Logical output i (0..7) -> EXIO(i+1) -> output-register bit i.
+// Official demo: HIGH bit = channel ON (Dout_Open = Set_EXIO(CH, true);
+// ALL_ON writes 0xFF). The 8DO channels are Darlington sink outputs
+// (500 mA), not relay coils, but the EXIO interface is identical.
 static inline uint8_t ws_relay_bit(uint8_t i) { return (uint8_t)(1u << i); }
 
-// Whole-port output byte for logical relay states with relay-count clipping:
-// only the first relay_count relays participate; the rest are forced OFF
+// Whole-port output byte for logical channel states with count clipping:
+// only the first relay_count channels participate; the rest are forced OFF
 // (same rule as the direct-GPIO path in main.cpp). The TCA9554 output stage
 // is fixed HIGH-bit = ON, so cfg.active_low is intentionally NOT applied
 // here — dashboard labels always match the hardware on this board.

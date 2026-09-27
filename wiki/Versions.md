@@ -15,7 +15,7 @@
 
 ### Unified release line
 - One v2.8 tag ships **generic FULL** (8 MB ESP32-S3) + **Waveshare**
-  (ESP32-S3-ETH-8DI-8RO) firmware. The Waveshare `-wsN` prerelease line is
+  (ESP32-S3-POE-ETH-8DI-8DO) firmware. The Waveshare `-wsN` prerelease line is
   retired: both boards report `FW_VERSION 2.8` and both OTA-check
   `/releases/latest`, each downloading its own variant asset
   (`firmware.bin` / `waveshare-firmware.bin`).
@@ -52,7 +52,7 @@
 
 ## [v2.7-ws1] — 2026-09-26 (Waveshare board line, retired in v2.8)
 ### Added
-- Waveshare ESP32-S3-ETH-8DI-8RO board variant (`s3-waveshare`): relays via
+- Waveshare ESP32-S3-POE-ETH-8DI-8DO board variant (`s3-waveshare`): relays via
   TCA9554PWR @ I2C `0x20` (SDA42/SCL41, HIGH bit = ON), isolated RS485
   TX17/RX18 with hardware auto-direction, BOOT (GPIO0) = START/STOP,
   DI1 (GPIO4) = spoof trigger, DI2 (GPIO5) = WiFi kill, RGB on GPIO38.

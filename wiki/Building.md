@@ -19,7 +19,7 @@ from scratch for v2.8. Covers:
 - Flashing the generic FULL image, then the dashboard quick-start
   (join AP → Open Dashboard → run a sequence → read the meter card).
 
-## Option B — Waveshare ESP32-S3-ETH-8DI-8RO (all-in-one)
+## Option B — Waveshare ESP32-S3-POE-ETH-8DI-8DO (all-in-one)
 
 **Guide: [`docs/BUILD-WAVESHARE.md`](../blob/main/docs/BUILD-WAVESHARE.md)**
 — written from scratch for v2.8. Covers:

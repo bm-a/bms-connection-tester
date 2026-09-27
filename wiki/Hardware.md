@@ -51,17 +51,17 @@ state on the RGB (green = talking, red = silent). Boot red. RGB needs no
 library and runs from the 250 ms eval, never the hot RX loop, so 9600-baud
 timing is unaffected.
 
-## Option B — Waveshare ESP32-S3-ETH-8DI-8RO
+## Option B — Waveshare ESP32-S3-POE-ETH-8DI-8DO
 
 All-in-one board (ESP32-S3-WROOM-1-N16R8: 16 MB flash + 8 MB OPI PSRAM):
-8 relay outputs via expander, isolated RS485, 8 digital inputs, onboard
+8 digital outputs via expander, isolated RS485, 8 digital inputs, onboard
 RGB — no external relay module, MAX485, or LEDs needed.
 
 ### Pin map
 | Signal | Connection |
 |---|---|
-| Relays R1–R8 | TCA9554PWR @ I2C `0x20` (SDA GPIO42 / SCL GPIO41); EXIO1–8 = output-register bits 0–7; **HIGH bit = ON**. The dashboard *active-low* toggle is a no-op on this board — labels always match hardware. Relays park OFF at boot (`TCA9554PWR_Init(0x00)`). |
-| RS485 | TX GPIO17 / RX GPIO18, **hardware automatic direction** (no DE/RE pin) |
+| Outputs DO1–DO8 | TCA9554PWR @ I2C `0x20` (SDA GPIO42 / SCL GPIO41); EXIO1–8 = output-register bits 0–7; **HIGH bit = ON** (Darlington sink). The dashboard *active-low* toggle is a no-op on this board — labels always match hardware. Outputs park OFF at boot. |
+| RS485 | TX GPIO17 / RX GPIO18; direction on **GPIO21** via ESP32 UART **RS485 half-duplex mode** (official Waveshare demo pattern) |
 | BOOT button | GPIO0 — START/STOP (holding it at power-on enters download mode; normal) |
 | DI1 (GPIO4) | spoof trigger (default, web-changeable to any DI1–DI8) |
 | DI2 (GPIO5) | WiFi kill (default) — ground = AP off |
@@ -89,8 +89,9 @@ active LOW)**. Anything else falls back to DI1 (GPIO4).
 ## RS485 bus wiring
 - A/B twisted pair from the transceiver to the meter; 120 Ω termination
   across A–B on long runs.
-- The Waveshare board's RS485 is **isolated** (SP3485) with automatic
-  direction control — no DE/RE wiring.
+- The Waveshare board's RS485 is **isolated** (SP3485); direction is driven
+  on GPIO21 by the ESP32 UART's RS485 half-duplex mode — no DE/RE wiring
+  needed on the bus side.
 
 ## Enclosure option
 `enclosure/` documents an IP65 standalone box + GX16 meter-link sockets

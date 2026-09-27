@@ -28,7 +28,8 @@
 //     the web "active-low" toggle is a documented no-op on this board)
 //   GPIO17 (TX) -> onboard isolated RS485 (SP3485)
 //   GPIO18 (RX) -> onboard isolated RS485
-//   GPIO21 (DE) -> RS485 direction: HIGH = TX, LOW = RX (driven by send_frame())
+//   GPIO21 (DE/RTS) -> RS485 direction: UART RS485 half-duplex mode drives
+//   it in hardware (HIGH = TX, LOW = RX); manual drive is the fallback
 //   GPIO0 (BOOT button) -> START/STOP to GND (press = LOW, internal pull-up)
 //   GPIO4 (DI1 terminal) -> spoof trigger to COM (active = LOW, web-changeable)
 //   GPIO5 (DI2 terminal) -> WiFi kill to COM (active = LOW = AP off)
@@ -56,10 +57,11 @@
 #include <Update.h>
 
 #ifdef BOARD_WAVESHARE_8DI8RO
-// Waveshare ESP32-S3-ETH-8DI-8RO: relays live on the TCA9554PWR I2C expander
-// (see waveshare_pins.h), RS485 = TX17/RX18 with DE on GPIO21 (driven by
-// send_frame(); the wiki's "hardware auto direction" claim is wrong —
-// without driving DE the ESP32 receives nothing on the bus),
+// Waveshare ESP32-S3-POE-ETH-8DI-8DO (flag keeps the historic 8DI8RO name):
+// 8 digital outputs live on the TCA9554PWR I2C expander (see
+// waveshare_pins.h), RS485 = TX17/RX18 with direction on GPIO21 driven by
+// the ESP32 UART in RS485 half-duplex mode (official 8DO demo
+// WS_RS485.cpp; manual DE in send_frame() is only a setMode() fallback),
 // BOOT = START/STOP, DI1/DI2 = spoof/WiFi-kill, RGB on GPIO38.
 #define PIN_RS485_TX   WS_PIN_RS485_TX
 #define PIN_RS485_RX   WS_PIN_RS485_RX
@@ -104,6 +106,12 @@ static JbdParser parser;
 static PollTracker tracker;
 static unsigned long lastEvalMs = 0;
 static bool connected = false;
+#ifdef BOARD_WAVESHARE_8DI8RO
+// True when the ESP32 UART RS485 half-duplex mode took over GPIO21 (RTS):
+// the peripheral then drives DE itself and send_frame() must NOT touch the
+// pin. False -> manual digitalWrite(DE) fallback (proven on hardware).
+static bool rs485_hw_de = false;
+#endif
 
 // ---- v2.0 state (base state above untouched) ----
 static Bms2Config cfg;
@@ -141,12 +149,17 @@ static bool tca_write_reg(uint8_t reg, uint8_t val) {
   return Wire.endTransmission() == 0;
 }
 
-// All pins output, all relays OFF — the expander equivalent of the
-// direct-GPIO "drive OFF level BEFORE pinMode" rule.
+// All pins output, all channels OFF — the expander equivalent of the
+// direct-GPIO "drive OFF level BEFORE pinMode" rule. Register order (OUTPUT
+// before CONFIG) mirrors the official 8DO demo (WS_Dout.cpp Dout_Init ->
+// TCA9554PWR_Init); the step table lives in waveshare_pins.h so the host
+// Unity suite tests the exact sequence the firmware ships.
 static bool tca_relays_init() {
-  // Safe order: park outputs OFF first, then configure pins as outputs.
-  return tca_write_reg(WS_TCA9554_REG_OUTPUT, 0x00) &&
-         tca_write_reg(WS_TCA9554_REG_CONFIG, 0x00);
+  for (uint8_t i = 0; i < WS_TCA9554_INIT_STEPS; i++) {
+    WsTcaInitStep s = ws_tca_init_step(i);
+    if (!tca_write_reg(s.reg, s.val)) return false;
+  }
+  return true;
 }
 #endif
 static unsigned long btnPressStart = 0;
@@ -389,16 +402,22 @@ static void ota_auto_tick(unsigned long now) {
 }
 
 static void send_frame(const uint8_t *frame, size_t len) {
-  // Drive DE HIGH for TX (both boards; on Waveshare DE = GPIO21 — the
-  // wiki's "hardware auto direction" claim is wrong, without it we RX nothing).
-  digitalWrite(PIN_RS485_DE, HIGH); // TX mode
+  // Waveshare: the UART RS485 half-duplex mode (setMode in setup, mirroring
+  // the official 8DO demo WS_RS485.cpp) auto-drives GPIO21/RTS in hardware —
+  // no manual pin wiggling. Other boards, or a failed setMode(), use the
+  // manual DE drive (HIGH=TX, LOW=RX).
+  bool manual_de = true;
+#ifdef BOARD_WAVESHARE_8DI8RO
+  manual_de = !rs485_hw_de;
+#endif
+  if (manual_de) digitalWrite(PIN_RS485_DE, HIGH); // TX mode
   RS485_SERIAL.write(frame, len);
   RS485_SERIAL.flush(true);              // wait TX complete, keep RX intact
   // v2.8.7: log TX for diagnostics
   diagTxLen = (len > sizeof(diagTxFrame)) ? sizeof(diagTxFrame) : (uint8_t)len;
   for (uint8_t i = 0; i < diagTxLen; i++) diagTxFrame[i] = frame[i];
   delayMicroseconds(1500);          // ~1.5 char guard @9600 before release
-  digitalWrite(PIN_RS485_DE, LOW);  // back to RX
+  if (manual_de) digitalWrite(PIN_RS485_DE, LOW);  // back to RX
   while (RS485_SERIAL.available()) RS485_SERIAL.read();  // drop bytes sent while we TX'd
   parser.reset();                   // re-arm on the latest complete frame
 }
@@ -432,7 +451,8 @@ void setup() {
   Wire.begin(WS_I2C_SDA, WS_I2C_SCL);
   tca_relays_init();  // expander: all outputs, all relays OFF first
 #endif
-  // RS485 DE: RX mode first (both boards; Waveshare DE = GPIO21).
+  // RS485 DE: park RX mode first (both boards; on Waveshare the UART claims
+  // GPIO21 for hardware direction later in setup — this covers early boot).
   pinMode(PIN_RS485_DE, OUTPUT);
   digitalWrite(PIN_RS485_DE, LOW);
 #ifndef BOARD_WAVESHARE_8DI8RO
@@ -506,6 +526,15 @@ void setup() {
   while (!Serial && (millis() - t0) < 1500) { delay(10); }
 
   RS485_SERIAL.begin(9600, SERIAL_8N1, PIN_RS485_RX, PIN_RS485_TX);
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Official 8DO demo (WS_RS485.cpp RS485_Init): hand GPIO21 (RTS/TXD1EN) to
+  // the UART and let the ESP32 peripheral drive DE in hardware
+  // (UART_MODE_RS485_HALF_DUPLEX). setPins(-1,-1,-1,pin) keeps the RX/TX
+  // mapping and assigns only the RTS pin, exactly like the demo. If either
+  // call fails, rs485_hw_de stays false and send_frame() drives DE manually.
+  rs485_hw_de = RS485_SERIAL.setPins(-1, -1, -1, PIN_RS485_DE) &&
+                RS485_SERIAL.setMode(UART_MODE_RS485_HALF_DUPLEX);
+#endif
   // Discard any boot garbage on the bus.
   while (RS485_SERIAL.available()) RS485_SERIAL.read();
   lastEvalMs = millis();

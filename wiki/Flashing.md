@@ -6,7 +6,7 @@
 
 Pick **one** method. v2.8 ships two firmware lines in one release:
 **generic FULL** (8 MB ESP32-S3, FULL dashboard) and **Waveshare**
-(ESP32-S3-ETH-8DI-8RO, FULL dashboard on the board pin map). Both report
+(ESP32-S3-POE-ETH-8DI-8DO, FULL dashboard on the board pin map). Both report
 `FW_VERSION 2.8` and both OTA-check `/releases/latest` (the old Waveshare
 `-wsN` prerelease line is retired).
 
@@ -15,7 +15,7 @@ Pick **one** method. v2.8 ships two firmware lines in one release:
 2. Choose the file for your board from the **v2.8 release assets**:
    - `bms-tester-8mb.bin` — generic ESP32-S3 DevKitC-1 (8 MB), FULL dashboard.
      Merged image (bootloader + partitions + app).
-   - `bms-tester-waveshare.bin` — Waveshare ESP32-S3-ETH-8DI-8RO. Merged
+   - `bms-tester-waveshare.bin` — Waveshare ESP32-S3-POE-ETH-8DI-8DO. Merged
      image (bootloader@0x0 + partitions@0x8000 + app@0x10000).
    - `waveshare-firmware.bin` — Waveshare app-only image (for the dashboard
      `/update` upload path on a Waveshare box).
@@ -38,7 +38,7 @@ three-address flash (`0x0` / `0x8000` / `0x10000`).
 ## 4. PlatformIO (VS Code)
 Open the repo folder, let PIO install, then upload:
 - `esp32-s3-devkitc-1` — 8 MB generic board, FULL dashboard (default).
-- `s3-waveshare` — Waveshare ESP32-S3-ETH-8DI-8RO (16 MB flash, OPI PSRAM,
+- `s3-waveshare` — Waveshare ESP32-S3-POE-ETH-8DI-8DO (16 MB flash, OPI PSRAM,
   `default_16MB.csv`, TCA9554 relays, FULL dashboard).
 - `s3-n16r8` — generic N16R8 (16 MB flash, OPI PSRAM, FULL).
 - `s3-classic` / `s3-lite` — CLASSIC / LITE dashboard on 8 MB boards.

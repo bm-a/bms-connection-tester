@@ -742,7 +742,7 @@ static void handle_state() {
   // emitted here (not baked into the PROGMEM HTML) so the raw-string pages
   // stay identical across board variants; the JS just renders s.pins.
   s += ",\"waveshare\":1";
-  s += ",\"pins\":\"Relays R1-R8: TCA9554 EXIO1-8 (I2C SDA42/SCL41, bit HIGH = ON) · UART2 TX17/RX18, DE on GPIO21 (HIGH=TX, LOW=RX) · Button: BOOT (GPIO0) · Kill: DI2 (GPIO5) · Spoof trigger: DI1 (GPIO4)\"";
+  s += ",\"pins\":\"DO1-DO8: TCA9554 EXIO1-8 (I2C SDA42/SCL41, bit HIGH = ON, parked OFF at boot) · RS485: UART2 TX17/RX18, GPIO21 RTS auto-direction (UART RS485 half-duplex, manual DE fallback) · Button: BOOT (GPIO0) · Kill: DI2 (GPIO5) · Spoof trigger: DI1 (GPIO4)\"";
   s += ",\"trigpins\":\"Safe trigger pins: DI1-DI8 (GPIO4-11, active LOW); anything else falls back to DI1 (GPIO4). Trigger save stores pin + enable + polarity without firing.\"";
 #else
   s += ",\"pins\":\"Relays R1-R8: GPIO 5,6,7,8,9,12,13,14 (active-LOW) · UART2 TX17/RX16 DE4 · Button 15 · Kill 18 · Spoof pin on Fault card · Safe spare GPIO: 1,2,21,38-44,47\"";

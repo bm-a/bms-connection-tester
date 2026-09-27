@@ -1,9 +1,9 @@
-# Waveshare ESP32-S3-ETH-8DI-8RO — Complete Wiring & Connection Guide
+# Waveshare ESP32-S3-POE-ETH-8DI-8DO — Complete Wiring & Connection Guide
 
 Step-by-step wiring for the BMS connection tester firmware (`s3-waveshare`
 build). Covers every screw terminal, what each LED means, and how to
 troubleshoot the RS485 link. Board reference:
-https://www.waveshare.com/wiki/ESP32-S3-ETH-8DI-8RO
+https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO
 
 ---
 
@@ -101,36 +101,33 @@ drive them via GPIO — they reflect raw electrical activity on the bus.
    isolated RS485 section — inspect the terminal screws and the 120R
    jumper seating.
 
-> Note: the firmware's direction control is **hardware automatic** — the
-> onboard circuit switches the SP3485 between TX and RX by itself. There
-> is no DE/RE GPIO to configure (unlike the generic MAX485 build, which
-> uses GPIO4).
+> Note: the firmware's direction control is the ESP32 UART's **RS485
+> half-duplex mode** driving **GPIO21** in hardware (the official
+> Waveshare 8DO demo pattern) — there is no DE/RE *screw terminal* to wire
+> (unlike the generic MAX485 build, which uses GPIO4).
 
 ---
 
-## 3. Relay outputs R1–R8
+## 3. Digital outputs DO1–DO8
 
-Eight independent changeover relays, driven by the **TCA9554PWR** I²C
-expander (address `0x20`; firmware handles it — no user config).
+Eight isolated digital (Darlington sink) outputs, driven by the
+**TCA9554PWR** I²C expander (address `0x20`; firmware handles it — no user
+config). Each channel sinks up to **500 mA** when ON (HIGH bit = ON).
 
-| Per channel | Terminals |
-|---|---|
-| R1 … R8 | **COM** (common), **NO** (normally open), **NC** (normally closed) |
-
-- Contact rating: **≤ 10 A @ 250 V AC** or **≤ 10 A @ 30 V DC** per channel.
-- The tester firmware sequences them R1→R8 during a test run
+- The tester firmware sequences them DO1→DO8 during a test run
   (firmware bytes `0x01`→`0xFF` on the TCA output register).
-- **Relay polarity is fixed in hardware** (HIGH bit = ON). The web UI's
+- **Output polarity is fixed in hardware** (HIGH bit = ON). The web UI's
   "Logic" dropdown is disabled on this board — what you see is what the
-  coil does.
-- There are **no per-relay status LEDs** on this board — watch the web
-  dashboard's relay indicators, or listen for the clicks.
+  channel does.
+- All channels park **OFF** at boot.
+- There are **no per-channel status LEDs** on this board — watch the web
+  dashboard's output indicators.
 
-**Safety:** relay contacts are isolated from the logic side (optocouplers
-+ power isolation), but the screw terminals expose **mains-capable**
-contacts. Wire and touch them only with power off, fuse the load side,
-and never exceed the 10 A rating. For the meter-tester use case the
-relays switch low-voltage test loads — keep it that way.
+**Safety:** the outputs are isolated from the logic side (optocouplers),
+but each channel sinks up to 500 mA — size the load accordingly, fuse the
+load side, and switch low-voltage test loads only (the meter-tester use
+case). Common the load supply's negative with the output common as the
+board's DO wiring requires.
 
 ---
 
@@ -138,7 +135,9 @@ relays switch low-voltage test loads — keep it that way.
 
 **8× optocoupler-isolated inputs.** DI1→GPIO4 … DI8→GPIO11.
 Bi-directional optocoupler (NPN or PNP, either polarity). Input: 5–36 V.
-**Firmware sees them as active-HIGH** (opto drives GPIO HIGH; idle LOW with pulldown).
+**Firmware sees them as active-LOW** (`INPUT_PULLUP`, idle HIGH — same as
+the official Waveshare demo `WS_DIN.cpp`): pull the DI terminal to COM to
+activate.
 
 | Terminal | GPIO | Firmware function (default) |
 |---|---|---|

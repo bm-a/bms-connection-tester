@@ -156,6 +156,61 @@ void test_ws_variant_assets(void) {
   TEST_ASSERT_FALSE(fw_filename_ok("waveshare-firmware.bin", "n16r8"));
 }
 
+// ---- official ESP32-S3-POE-ETH-8DI-8DO demo alignment ----
+// Values below are taken verbatim from the Waveshare demo
+// (ESP32-S3-POE-ETH-8DI-8DO-Demo.zip):
+//   WS_GPIO.h: TXD1=17, RXD1=18, TXD1EN=21, GPIO_PIN_RGB=38
+//   WS_DIN.h:  DIN_PIN_CH1..8 = 4..11
+//   WS_TCA9554PWR.h/.cpp: addr 0x20, OUTPUT reg 0x01, CONFIG reg 0x03,
+//     Set_EXIO(CHx,1) sets bit (CHx-1); Dout_Init = TCA9554PWR_Init(0x00,0xFF)
+//     i.e. OUTPUT_REG written BEFORE CONFIG_REG.
+//   WS_RS485.cpp RS485_Init: setPins(-1,-1,-1,TXD1EN) +
+//     setMode(UART_MODE_RS485_HALF_DUPLEX) — GPIO21 is the UART RTS pin.
+
+void test_ws_8do_demo_rs485_pins(void) {
+  TEST_ASSERT_EQUAL_UINT8(17, WS_PIN_RS485_TX);  // demo TXD1
+  TEST_ASSERT_EQUAL_UINT8(18, WS_PIN_RS485_RX);  // demo RXD1
+  TEST_ASSERT_EQUAL_UINT8(21, WS_PIN_RS485_DE);  // demo TXD1EN (RTS)
+}
+
+void test_ws_8do_demo_tca_regs(void) {
+  TEST_ASSERT_EQUAL_UINT8(0x20, WS_TCA9554_ADDR);       // demo TCA9554_ADDRESS
+  TEST_ASSERT_EQUAL_UINT8(0x01, WS_TCA9554_REG_OUTPUT); // demo TCA9554_OUTPUT_REG
+  TEST_ASSERT_EQUAL_UINT8(0x03, WS_TCA9554_REG_CONFIG); // demo TCA9554_CONFIG_REG
+  TEST_ASSERT_EQUAL_UINT8(42, WS_I2C_SDA);              // demo I2C_SDA_PIN
+  TEST_ASSERT_EQUAL_UINT8(41, WS_I2C_SCL);              // demo I2C_SCL_PIN
+}
+
+void test_ws_8do_demo_tca_init_sequence(void) {
+  // Demo order: OUTPUT_REG first, then CONFIG_REG (TCA9554PWR_Init body:
+  // Set_EXIOS(PinState) then Mode_EXIOS(PinMode)). The firmware's
+  // tca_relays_init() walks this exact table, so this test covers the
+  // shipped init order.
+  TEST_ASSERT_EQUAL_UINT8(2, WS_TCA9554_INIT_STEPS);
+  WsTcaInitStep s0 = ws_tca_init_step(0);
+  WsTcaInitStep s1 = ws_tca_init_step(1);
+  TEST_ASSERT_EQUAL_UINT8(WS_TCA9554_REG_OUTPUT, s0.reg);
+  TEST_ASSERT_EQUAL_UINT8(WS_TCA9554_REG_CONFIG, s1.reg);
+  // Demo parks PinState=0xFF (all channels ON); we deliberately park OFF
+  // (0x00) — safe boot state for a test bench. CONFIG is all-outputs (0x00)
+  // in both.
+  TEST_ASSERT_EQUAL_UINT8(0x00, WS_TCA9554_BOOT_OUTPUT);
+  TEST_ASSERT_EQUAL_UINT8(0x00, WS_TCA9554_BOOT_CONFIG);
+  TEST_ASSERT_EQUAL_UINT8(WS_TCA9554_BOOT_OUTPUT, s0.val);
+  TEST_ASSERT_EQUAL_UINT8(WS_TCA9554_BOOT_CONFIG, s1.val);
+}
+
+void test_ws_8do_demo_dout_polarity(void) {
+  // Demo Dout_Open(CHx) -> Set_EXIO(CHx, true) sets bit (CHx-1); ALL_ON
+  // writes 0xFF. HIGH bit = channel ON (Darlington sink outputs).
+  for (uint8_t ch = 1; ch <= 8; ch++)
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)(1u << (ch - 1)), ws_relay_bit(ch - 1));
+  const bool all_on[8] = {1, 1, 1, 1, 1, 1, 1, 1};
+  TEST_ASSERT_EQUAL_UINT8(0xFF, ws_output_byte(all_on, 8));  // demo ALL_ON
+  const bool all_off[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  TEST_ASSERT_EQUAL_UINT8(0x00, ws_output_byte(all_off, 8)); // demo ALL_OFF
+}
+
 void run_all() {
   RUN_TEST(test_ws_pin_map);
   RUN_TEST(test_ws_output_byte_all_on_off);
@@ -169,6 +224,10 @@ void run_all() {
   RUN_TEST(test_ws_tag_matcher);
   RUN_TEST(test_ws_download_url);
   RUN_TEST(test_ws_variant_assets);
+  RUN_TEST(test_ws_8do_demo_rs485_pins);
+  RUN_TEST(test_ws_8do_demo_tca_regs);
+  RUN_TEST(test_ws_8do_demo_tca_init_sequence);
+  RUN_TEST(test_ws_8do_demo_dout_polarity);
 }
 
 #ifdef ARDUINO

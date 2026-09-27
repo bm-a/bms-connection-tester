@@ -27,7 +27,7 @@ click it yourself.*
   while still counting them as live traffic — see [[Protocol]].
 - Two hardware options: **DIY** (generic ESP32-S3 + MAX485 + relay module,
   build it yourself — see [[Building]]) or the **Waveshare
-  ESP32-S3-ETH-8DI-8RO** all-in-one board (see [[Hardware]]).
+  ESP32-S3-POE-ETH-8DI-8DO** all-in-one board (see [[Hardware]]).
 - v2.8 is a **unified release**: one tag, variant firmware assets (generic
   FULL + Waveshare). The old Waveshare `-wsN` prerelease line is retired;
   both boards OTA-check `/releases/latest` and pull their own asset.

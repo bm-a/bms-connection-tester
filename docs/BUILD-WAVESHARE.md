@@ -1,4 +1,4 @@
-# Build guide: Waveshare ESP32-S3-ETH-8DI-8RO
+# Build guide: Waveshare ESP32-S3-POE-ETH-8DI-8DO
 
 One board, no soldering of logic parts. This guide takes you from the box
 to a working BMS connection tester: flashing, wiring the meter, first
@@ -6,19 +6,19 @@ sequence, first spoof, and reading the daily counters.
 
 What the finished box does: it impersonates a JBD / Xiaoxiang smart BMS
 over RS485, so an e-rickshaw meter or display can be tested without a
-battery pack. An 8-relay sequencer switches the meter's own functions in
-order, and a web dashboard (always-on Wi-Fi AP `BMS-Tester`) controls
-everything.
+battery pack. An 8-channel output sequencer switches the meter's own
+functions in order, and a web dashboard (always-on Wi-Fi AP `BMS-Tester`)
+controls everything.
 
 ## 1. Shopping list
 
 | # | Part | Notes |
 |---|---|---|
-| 1 | Waveshare **ESP32-S3-ETH-8DI-8RO** | The exact board name. ESP32-S3-WROOM-1-N16R8 module: 16 MB flash, 8 MB OPI PSRAM. Has 8 relay outputs, 8 opto-isolated digital inputs, isolated RS485, and Ethernet hardware on board |
+| 1 | Waveshare **ESP32-S3-POE-ETH-8DI-8DO** | The exact board name. ESP32-S3-WROOM-1-N16R8 module: 16 MB flash, 8 MB OPI PSRAM. Has 8 digital (Darlington sink) outputs, 8 opto-isolated digital inputs, isolated RS485, and Ethernet hardware on board |
 | 2 | USB-C data cable | For flashing and bench power. Must be a data cable, not charge-only |
 | 3 | 5 V USB charger (2 A) or power bank | Bench power for the board |
 | 4 | Twisted-pair wire for RS485 A/B | Short run to the meter; shielded twisted pair if the factory floor is noisy |
-| 5 | Wire for relay outputs | 8 channels, NO/COM/NC per channel, to the meter functions under test |
+| 5 | Wire for digital outputs | 8 channels (Darlington sink outputs, 500 mA each) to the meter functions under test |
 | 6 | Small push buttons / dry contacts (optional) | Only if you want physical spoof-trigger / Wi-Fi-kill switches instead of the web UI |
 
 No separate relay module, no MAX485 module, no LEDs, no pull-down
@@ -30,8 +30,8 @@ board also accepts DC 7–36 V on its VIN terminal (Waveshare spec); USB-C
 
 | Function | Board resource | Firmware mapping |
 |---|---|---|
-| Relays R1–R8 | TCA9554PWR I/O expander @ I2C `0x20` | SDA GPIO42, SCL GPIO41. EXIO1–EXIO8 = R1–R8. Output-register bit HIGH = relay ON (fixed in hardware) |
-| RS485 | Onboard isolated SP3485 | TX GPIO17, RX GPIO18. **Hardware auto-direction** — there is no DE/RE pin |
+| Outputs DO1–DO8 | TCA9554PWR I/O expander @ I2C `0x20` | SDA GPIO42, SCL GPIO41. EXIO1–EXIO8 = DO1–DO8. Output-register bit HIGH = channel ON (Darlington sink, fixed in hardware); parked OFF at boot |
+| RS485 | Onboard isolated SP3485 | TX GPIO17, RX GPIO18. Direction on **GPIO21**, driven by the ESP32 UART in **RS485 half-duplex mode** (official Waveshare demo `WS_RS485.cpp` pattern) |
 | START/STOP | BOOT button | GPIO0. Press = LOW. 10 s hold = factory reset |
 | Spoof trigger | DI1 terminal | GPIO4, active LOW. Web-changeable to DI1–DI8 (GPIO4–11) |
 | Wi-Fi kill | DI2 terminal | GPIO5, active LOW = AP off |
