@@ -5,6 +5,10 @@ Board-variant firmware for the **Waveshare ESP32-S3-ETH-8DI-8RO**
 protocol, same relay-test logic, same web dashboard as the generic build —
 only the hardware abstraction and pin mapping change.
 
+**Wiring:** see [waveshare-wiring.md](waveshare-wiring.md) for the complete
+connection guide — every screw terminal, RS485 A/B + 120R jumper, relay
+NO/COM/NC, DI wiring, what each LED means, and step-by-step bench bring-up.
+
 ## Pin map (verified against the official Waveshare wiki + vendor demo code)
 
 | Function | Waveshare | Notes |
