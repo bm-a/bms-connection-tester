@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [Unreleased]
+### Added
+- Waveshare buzzer toggle in the web UI: a **Buzzer** card (checkbox + Save)
+  on the dashboard, NVS-persisted (`buzz` key, default **OFF** — the board
+  stays silent until explicitly enabled). `buzzer_beep()` now gates on
+  `ws_buzzer_gate(buzzer_ready, cfg.buzzer_enabled)`; `/api/state` reports
+  `"buzzer":"1"/"0"` on Waveshare builds. The card hides itself on generic
+  builds (no buzzer hardware).
+### Removed
+- Classic/lite dashboard variants retired: `[env:s3-classic]` and
+  `[env:s3-lite]` deleted from `platformio.ini`, the `WEB_UI_VARIANT`
+  machinery removed from `src/web_ui.cpp` — FULL is the only dashboard.
+  `tools/check_web_contract.py` now validates the single FULL page. OTA
+  assets were already FULL-only; unchanged.
+### Verified
+- (to be filled on release)
+
 ## [v2.9.0] — 2026-09-27
 ### Added (Waveshare ESP32-S3-POE-ETH-8DI-8DO — full 8DO support)
 - W5500 Ethernet via ESP-IDF `esp_eth` (`src/ws_eth.cpp`): the installed

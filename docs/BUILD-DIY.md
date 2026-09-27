@@ -126,12 +126,11 @@ web-invertible if your wiring is active-HIGH.
 |---|---|---|---|
 | `esp32-s3-devkitc-1` | 8 MB DevKitC-1 | **FULL** (default) | Standard DIY build — this is the v2.8 release image |
 | `s3-n16r8` | 16 MB + OPI PSRAM | FULL | N16R8 boards (correct flash/PSRAM map) |
-| `s3-classic` | 8 MB | CLASSIC | You want the v2.6 page byte-verbatim |
-| `s3-lite` | 8 MB | LITE | Smallest page: relay tiles + names + LINK pill only (~4.9 KB) |
 
 FULL = everything (live SVG bench card, relay tiles + names,
 meters-today, sequence config, spoof, OTA, console). OTA assets always
-stay FULL so updating never strands a box.
+stay FULL so updating never strands a box. (The old CLASSIC/LITE page
+variants are retired — FULL is the only dashboard.)
 
 ## 4. Flashing
 

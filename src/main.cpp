@@ -161,9 +161,10 @@ static void buzzer_init() {
   ledcWrite(WS_BUZZER_LEDC_CH, 0);
   buzzer_ready = true;
 }
-// Queue a beep (no-op before buzzer_init; Waveshare build only).
+// Queue a beep (no-op before buzzer_init, and no-op while the user has the
+// buzzer disabled in the web UI; Waveshare build only).
 static void buzzer_beep(uint16_t total_ms, uint16_t flick_ms) {
-  if (buzzer_ready) ws_buzzer.push(total_ms, flick_ms);
+  if (ws_buzzer_gate(buzzer_ready, cfg.buzzer_enabled)) ws_buzzer.push(total_ms, flick_ms);
 }
 // Advance the pattern engine; touch LEDC only when the level changes.
 static void buzzer_tick(unsigned long now) {

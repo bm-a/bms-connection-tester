@@ -296,10 +296,29 @@ void test_ws_buzzer_fifo_and_full(void) {
   TEST_ASSERT_TRUE(b.out);
 }
 
-void test_ws_buzzer_empty_push_rejected(void) {
-  WsBuzzer b;
+void test_ws_buzzer_empty_push_rejected(void) {  WsBuzzer b;
   TEST_ASSERT_FALSE(b.push(0, 0));
   TEST_ASSERT_TRUE(b.idle());
+}
+
+void test_ws_buzzer_gate_disabled_is_silent(void) {
+  // The firmware's buzzer_beep() gates on ws_buzzer_gate(ready, enabled):
+  // disabled == silent, even when the LEDC channel is up.
+  TEST_ASSERT_FALSE(ws_buzzer_gate(false, false));
+  TEST_ASSERT_FALSE(ws_buzzer_gate(true, false));   // default: silent
+  TEST_ASSERT_FALSE(ws_buzzer_gate(false, true));   // not ready: silent
+  TEST_ASSERT_TRUE(ws_buzzer_gate(true, true));     // enabled: sounds
+  // End-to-end at the queue level: a gated-out beep never reaches WsBuzzer.
+  WsBuzzer b;
+  bool ready = true, enabled = false;  // user toggle OFF
+  if (ws_buzzer_gate(ready, enabled)) b.push(200, 0);
+  TEST_ASSERT_TRUE(b.idle());
+  TEST_ASSERT_FALSE(b.tick(0));
+  enabled = true;  // user enables the toggle
+  if (ws_buzzer_gate(ready, enabled)) b.push(200, 0);
+  TEST_ASSERT_FALSE(b.idle());
+  TEST_ASSERT_TRUE(b.tick(0));
+  TEST_ASSERT_TRUE(b.out);
 }
 
 // ---- TCA9554 fault latch (one-shot alarm edge, self-heal) ----
@@ -343,6 +362,7 @@ void run_all() {
   RUN_TEST(test_ws_buzzer_sub50_flicker_is_solid);
   RUN_TEST(test_ws_buzzer_fifo_and_full);
   RUN_TEST(test_ws_buzzer_empty_push_rejected);
+  RUN_TEST(test_ws_buzzer_gate_disabled_is_silent);
   RUN_TEST(test_ws_tca_fault_edge_and_selfheal);
 }
 

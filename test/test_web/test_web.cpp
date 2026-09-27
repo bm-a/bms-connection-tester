@@ -169,13 +169,33 @@ void test_state_omits_waveshare_fields_on_generic(void) {
 }
 
 void test_dashboard_eth_ip_row(void) {
-  // Information card shows ETH ip next to the STA ip in every dashboard
-  // variant (the JS reads s.cfg.eth_ip with a '-' fallback).
+  // Information card shows ETH ip next to the STA ip (the JS reads
+  // s.cfg.eth_ip with a '-' fallback).
   fresh_env();
   WebServer::Resp r = WebServer::get("/");
   TEST_ASSERT_EQUAL_INT(200, r.code);
   TEST_ASSERT_TRUE(has(r.body, "ETH ip"));
   TEST_ASSERT_TRUE(has(r.body, "s.cfg.eth_ip"));
+}
+
+void test_buzzer_toggle_default_off_persist(void) {
+  // Buzzer toggle: default OFF (silent until explicitly enabled), settable
+  // via /api/config, NVS-persistent across reboot.
+  fresh_env();
+  TEST_ASSERT_FALSE(cfg.buzzer_enabled);
+  WebServer::Resp r = WebServer::post("/api/config", "{\"buzz\":1}");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"ok\":1"));
+  TEST_ASSERT_TRUE(cfg.buzzer_enabled);
+  // Persistence: flush the deferred save, trash the RAM copy, reload.
+  web_tick(g_mock_millis + 2000);
+  cfg.buzzer_enabled = false;
+  web_setup(ctx);
+  TEST_ASSERT_TRUE(cfg.buzzer_enabled);
+  // And back off again.
+  r = WebServer::post("/api/config", "{\"buzz\":0}");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_FALSE(cfg.buzzer_enabled);
 }
 
 void test_relay_override(void) {
@@ -1180,6 +1200,7 @@ void run_all() {
   RUN_TEST(test_state_expander_and_eth_ip);
   RUN_TEST(test_state_omits_waveshare_fields_on_generic);
   RUN_TEST(test_dashboard_eth_ip_row);
+  RUN_TEST(test_buzzer_toggle_default_off_persist);
   RUN_TEST(test_relay_override);
   RUN_TEST(test_seq_start_stop);
   RUN_TEST(test_config_validation_persist);

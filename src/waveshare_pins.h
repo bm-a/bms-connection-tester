@@ -150,6 +150,14 @@ struct WsBuzzer {
   bool idle() const { return !run && qn == 0; }
 };
 
+// Buzzer output gate (mirrors main.cpp buzzer_beep): a beep only reaches the
+// WsBuzzer queue when the LEDC channel is up (ready) AND the user enabled the
+// buzzer in the web UI (default OFF — silent until explicitly enabled).
+// Host-testable: the firmware's buzzer_beep() must call this.
+static inline bool ws_buzzer_gate(bool ready, bool enabled) {
+  return ready && enabled;
+}
+
 // ---- TCA9554 fault latch — pure logic, host-tested ----
 // Live expander status for /api/state ("expander":"ok|fail"), the RGB fault
 // override and the one-shot buzzer alarm. Unlike the demo's DoutFailTask

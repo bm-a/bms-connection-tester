@@ -37,7 +37,7 @@ board also accepts DC 7–36 V on its VIN terminal (Waveshare spec); USB-C
 | Wi-Fi kill | DI2 terminal | GPIO5, active LOW = AP off |
 | Status lamp | Onboard WS2812 RGB | GPIO38. Green = link up, red = bus silent; flashes red while the TCA9554 output expander is unreachable |
 | Ethernet (W5500) | SPI SCK15/MISO14/MOSI13, CS16/IRQ12/RST39 | DHCP client, hostname `bms-tester`; dashboard also answers on the Ethernet IP (`eth_ip` in /api/state). Best-effort: failure never blocks boot or Wi-Fi |
-| Buzzer | GPIO46, LEDC 1 kHz/8-bit/duty 200 | Beeps on link up/down, sequencer start/stop, output-driver failure alarm |
+| Buzzer | GPIO46, LEDC 1 kHz/8-bit/duty 200 | Beeps on link up/down, sequencer start/stop, output-driver failure alarm. Dashboard **Buzzer** card toggle; default **OFF** — silent until enabled |
 | Reserved, untouched | GPIO40 (RTC int) | — |
 
 DI1–DI8 are opto-isolated: wire a trigger as a dry contact (or driven

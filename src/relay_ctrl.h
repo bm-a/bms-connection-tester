@@ -93,6 +93,10 @@ struct Bms2Config {
   uint16_t s2_c_tenth = 888;      // stage 2: 88.8 C display units (x0.1)
   uint8_t s2_soc = 188;           // stage 2: deliberately out-of-range pattern
   uint16_t s2_seconds = 10;       // stage 2 duration, 1..120
+  // Buzzer enable (Waveshare GPIO46 only; no buzzer hardware on generic
+  // builds). Default OFF: the board stays silent until the user enables it
+  // in the web UI. Gated in main.cpp buzzer_beep() via ws_buzzer_gate().
+  bool buzzer_enabled = false;
 };
 
 // Physical pin level for a logical relay state under the polarity setting.

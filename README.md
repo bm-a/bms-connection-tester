@@ -24,33 +24,28 @@ a button or the built-in web dashboard. Status LEDs report link state live:
 | Targets | ESP32-S3 DevKitC-1 (8 MB) + ESP32-S3 N16R8 (16 MB + OPI PSRAM) + MAX485 + 8ch relay · Waveshare ESP32-S3-ETH-8DI-8RO board variant ([docs/waveshare.md](docs/waveshare.md)) |
 | Protocol | JBD UART over RS485, 9600 8N1 (registers `0x03`/`0x04`/`0x05`) |
 | Releases | **v2.8** current — FULL dashboard + Waveshare in one release · `v2.7` 3 dashboard variants · `v2.6` meter estimate · `v2.5` portal/schema/harness · `v2.4` Tasmota update · `v2.3.1` bench patch · `v2.3` relay bench · `v2.2` captive portal · `v2.1` web reliability · `v2.0` relay bench · `v1.2` RGB+N16R8 · `v1.0` frozen (ZIP + tag) |
-| Tests | **166 passing** via `sh run_tests.sh` (native Unity + web + Waveshare board-backend) + 30-day soak + 3-variant web contract |
+| Tests | **184 passing** via `sh run_tests.sh` (native Unity + web + Waveshare board-backend) + 30-day soak + web contract |
 | Firmware | `firmware/` (8 MB) + `firmware-n16r8/` (16 MB) one-file images, SHAs in their READMEs |
-| Web UI | Always-on AP `BMS-Tester` → dashboard in 3 variants (FULL default, `s3-classic`, `s3-lite`) — no office Wi-Fi needed |
+| Web UI | Always-on AP `BMS-Tester` → FULL dashboard (live SVG bench, relay tiles, spoof, OTA, console) — no office Wi-Fi needed |
 | Build guides | [DIY build-it-yourself](docs/BUILD-DIY.md) · [Waveshare build](docs/BUILD-WAVESHARE.md) |
 
 ## Dashboard (v2.8)
 
-Three builds, one per `WEB_UI_VARIANT` — relay names are NVS-persistent in
-all three, and OTA always pulls FULL so updating never strands a box.
+One FULL dashboard on every build — relay names are NVS-persistent, and OTA
+always pulls FULL so updating never strands a box. (The old CLASSIC/LITE
+page variants are retired.)
 
-| Variant | Build | What you get |
-|---|---|---|
-| **FULL** (default) | `esp32-s3-devkitc-1`, `s3-n16r8`, `s3-waveshare` | Everything: live SVG bench card, relay tiles + names, meters-today, sequence config, spoof, OTA, console |
-| CLASSIC | `s3-classic` | v2.6 page byte-verbatim |
-| LITE | `s3-lite` | Relay tiles + names + LINK pill only (~4.9 KB page). Tiles tap = force ON/OFF (needs IDLE) |
+| What you get |
+|---|
+| Everything: live SVG bench card, relay tiles + names, meters-today, sequence config, spoof, OTA, console |
 
 ![FULL dashboard snapshot](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-full.png)
 
-*FULL variant: LINK pill + cycle counters, live bench strip (48V → ESP → MAX485 → meter readout), glowing relay tiles, meters-today — rendered from live sim state.*
+*LINK pill + cycle counters, live bench strip (48V → ESP → MAX485 → meter readout), glowing relay tiles, meters-today — rendered from live sim state.*
 
 ![Sequential run + spoof demo](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/demo.gif)
 
 *R1→R8 sequential run, then a spoof FIRE driving the meter readout off golden — the same flow the 3D bench shows live.*
-
-![LITE dashboard snapshot](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/dash-lite.png)
-
-*LITE variant: relays + names + link, nothing else — smallest flash footprint.*
 
 ### Dashboard cards (FULL)
 
@@ -244,15 +239,12 @@ Details in [`docs/waveshare.md`](docs/waveshare.md).
 
 ## Build environments
 
-`platformio.ini` (only the selected `WEB_UI_VARIANT` page compiles in —
-no flash bloat):
+`platformio.ini` — one FULL dashboard on every build (classic/lite retired):
 
 | Env | Board | What |
 |---|---|---|
 | `esp32-s3-devkitc-1` | ESP32-S3 8 MB | FULL dashboard (default) |
 | `s3-n16r8` | 16 MB + OPI PSRAM | FULL dashboard, N16R8 flash/PSRAM map |
-| `s3-classic` | 8 MB | CLASSIC dashboard (v2.6 page) |
-| `s3-lite` | 8 MB | LITE dashboard |
 | `s3-waveshare` | Waveshare ESP32-S3-ETH-8DI-8RO | FULL dashboard, TCA9554 relays, isolated RS485 |
 | `s3_tests` / `native` | host | on-target / host unit tests |
 

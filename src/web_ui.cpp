@@ -90,6 +90,7 @@ static void cfg_commit() {
   nvs.putBool("binv", c.button_invert);
   nvs.putBool("sinv", c.spoof_invert);
   nvs.putBool("sena", c.spoof_enabled);
+  nvs.putBool("buzz", c.buzzer_enabled);  // Waveshare buzzer toggle (default OFF)
   nvs.putUChar("spin", sanitize_spoof_pin(c.spoof_pin));  // v2.3.1 trigger GPIO
   nvs.putUShort("sv", c.spoof_v_tenth);
   nvs.putUShort("sa", c.spoof_a_tenth);
@@ -155,6 +156,7 @@ static void cfg_load() {
   c.button_invert = nvs.getBool("binv", c.button_invert);
   c.spoof_invert = nvs.getBool("sinv", c.spoof_invert);
   c.spoof_enabled = nvs.getBool("sena", c.spoof_enabled);
+  c.buzzer_enabled = nvs.getBool("buzz", c.buzzer_enabled);  // default OFF
   c.spoof_pin = sanitize_spoof_pin(nvs.getUChar("spin", c.spoof_pin));
   if (v == 2) {
     // ---- migrate a v2 box ----
@@ -302,238 +304,11 @@ void web_bootcount_reset() {  // Tasmota Reset-99 equivalent (no reboot)
 }
 
 // ---- pages ----
-// v2.7 dashboard variants (WEB_UI_VARIANT from platformio.ini, default FULL):
-// 0 = CLASSIC (v2.6 page verbatim, NVS-persistent relay names),
-// 1 = FULL (classic + inline SVG bench card + tile sweep animation + live
-//     meter readout, no internet needed — all inline, zero CDN),
-// 2 = LITE (relay tiles + names + LINK pill only, smallest flash).
-// Only the selected variant compiles in (no flash bloat); OTA assets stay
-// FULL so on-device updating keeps working on every box.
-#ifndef WEB_UI_VARIANT
-#define WEB_UI_VARIANT 1
-#endif
-
-#if WEB_UI_VARIANT == 0
-static const char PAGE_DASH[] PROGMEM = R"HTML(
-<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>BMS Tester</title><style>
-*{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:12px}
-.wrap{max-width:720px;margin:0 auto}header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
-header h2{margin:0;font-size:22px}.ver{font-size:12px;color:#94a3b8}
-.pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700}
-#link.G{background:#14532d;color:#4ade80}#link.R{background:#450a0a;color:#f87171}#clk{color:#94a3b8;font-size:13px}
-.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#334155;border:1px solid #475569;vertical-align:middle}
-.dot.G{background:#22c55e;box-shadow:0 0 8px #22c55e}.dot.R{background:#ef4444;box-shadow:0 0 8px #ef4444}
-a{color:#60a5fa}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin:12px 0}
-.card h3{margin:0 0 10px;font-size:15px;color:#93c5fd;text-transform:uppercase;letter-spacing:.5px}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
-.rly{border:2px solid #475569;background:#0f172a;color:#94a3b8;border-radius:10px;padding:14px 4px;font-size:15px;font-weight:700;cursor:pointer}
-.rly small{display:block;font-size:11px;font-weight:400}
-.rly.on{border-color:#22c55e;background:#052e16;color:#4ade80;box-shadow:0 0 12px #22c55e66}
-button,.btn{background:#2563eb;border:0;color:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;margin:2px}
-button.danger{background:#b91c1c}button.warn{background:#b45309}button.ok{background:#15803d}
-label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px solid #475569;color:#e2e8f0;border-radius:8px;padding:8px;margin:3px 2px;font-size:14px}
-.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.msg{font-size:13px;color:#4ade80;margin-left:8px}
-.spoof-on{color:#fbbf24;font-weight:700}
-.rly.lim{opacity:.35;cursor:not-allowed}
-.note{font-size:12px;color:#94a3b8}
-</style></head><body><div class=wrap>
-<header><h2>&#9889; BMS Tester</h2><span class=ver id=fwver></span><span id=dotG class=dot></span><span id=dotR class=dot></span><span id=link class="pill R">?</span><span id=clk></span></header>
-<div class=card><h3>Relays</h3>
-<div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
-<div class=grid id=relays></div><div class=row><span id=dis style="font-size:12px;color:#888"></span></div></div>
-<div class=card><h3>Meters today (approx)</h3>
-<div class=row><span id=meters></span></div>
-<div class=row><button class=warn onclick="if(confirm('Clear today counters?'))meter('reset')">New day (reset)</button><span class=msg id=metermsg></span></div>
-<div class=row><span class=note>Software estimate, no button needed: a link gap &ge; 3 s (reseat) counts a new meter once the link holds 5 s (fumble guard); retries with the meter plugged in don't. Pass = a full cycle completed before the swap. Brief flickers stay on the same meter.</span></div></div>
-<div class=card><h3>Sequence config</h3>
-<div class=row><label>Mode <select id=rmode onchange="showMode()"><option value=0>Sequential 1-N</option><option value=2>Chase wave</option><option value=1>All ON at once</option></select></label>
-<label>Relays <input id=nrel size=3 title="1-8: first N relays take part"></label></div>
-<div class=row id=row_step><label>Step ms <input id=step size=6 title="100-60000, gap between relays"></label></div>
-<div class=row id=row_seqonly><label>Hold sequential ms (0=stay ON) <input id=hseq size=7></label></div>
-<div class=row id=row_chaseonly><label>Chase sweeps (0=forever) <input id=swp size=4 title="auto-hold = sweeps x relays x step"></label></div>
-<div class=row id=row_allonly><label>Hold all-on ms (0=stay ON) <input id=hall size=7></label>
-<label>All-ON stagger ms <input id=stag size=5 title="0 = all at once (contactor slam); 20-1000 ramps the inrush"></label></div>
-<div class=row id=row_dir><label>Direction <select id=dir><option value=0>R1&rarr;Rn</option><option value=1>Rn&rarr;R1</option></select></label></div>
-<div class=row><label>Button <select id=bmode><option value=0>Hold X ms, re-press=OFF</option><option value=1>Run to end, ignore presses</option><option value=2>Re-press restarts</option></select></label>
-<label>Logic <select id=alow><option value=1>Active-LOW (SmartElex)</option><option value=0>Active-HIGH</option></select></label></div>
-<div class=row><label><input type=checkbox id=loop> Loop cycles</label>
-<label>Pause ms <input id=cpause size=7 title="500-60000, coil cooling between cycles"></label>
-<label>Cycle limit (0=&infin;) <input id=clim size=5></label></div>
-<div class=row><button onclick="saveCfg()">Save</button><span class=msg id=cfgmsg></span></div>
-<div class=row><span class=note>Only the active mode's fields are shown. Mode switch needs STOP first; loop needs a finite hold; START is refused for 0.5 s after STOP (relay settle).</span></div></div>
-<div class=card><h3>Relay labels</h3>
-<div class=row id=labels></div>
-<div class=row><button onclick="saveLabels()">Save labels</button><span class=msg id=lblmsg></span></div></div>
-<div class=card><h3>Fault spoof (0x03 test values, stage 1 then 2)</h3>
-<div class=row><label><input type=checkbox id=sena> pin-trigger enabled</label><label>Trigger GPIO <input id=spin size=3></label><span id=spoofmsg class=spoof-on></span></div>
-<div class=row><label>Trigger polarity <select id=sinv title="which edge on the trigger pin fires the plan"><option value=0>Pull LOW to fire (pull-up)</option><option value=1>Pull HIGH to fire</option></select></label><button onclick="saveTrig()">Save trigger</button><span class=msg id=trigmsg></span></div>
-<div class=row><span class=note id=info_trigpins></span></div>
-<div class=row><label>1: V <input id=sv size=5></label><label>A <input id=sa size=5></label><label>&deg;C <input id=sc size=5></label><label>SOC% <input id=ssoc size=4></label><label>Secs <input id=ssec size=4></label></div>
-<div class=row><label>2: V <input id=s2v size=5></label><label>A <input id=s2a size=5></label><label>&deg;C <input id=s2c size=5></label><label>SOC% <input id=s2soc size=4></label><label>Secs <input id=s2sec size=4></label></div>
-<div class=row><button class=warn onclick="spoof('fire')">FIRE now</button><button onclick="spoof('save')">Save only</button><button onclick="spoof('cancel')">Cancel</button><span class=msg id=spoofsave></span></div>
-<div class=row><span class=note>Save only stages values + pin without firing. FIRE saves then fires.</span></div></div>
-<div class=card><h3>Firmware update</h3>
-<div class=row><span id=ota_status class=note></span><span id=ota_latest class=note></span></div>
-<div class=row><label><input type=checkbox id=ota_auto> Auto-check GitHub (needs STA uplink below)</label>
-<label>Every <input id=ota_int_h size=4 title="hours, 0 = manual only"> h</label>
-<button onclick="ota('check')">Check now</button><button id=otainstall style="display:none" class=warn onclick="ota('install')">Install update</button><a href=/update>Firmware upload</a><span class=msg id=otamsg></span></div>
-<div class=row><label>Custom firmware URL <input id=ota_url size=28 placeholder="blank = GitHub releases"></label>
-<button onclick="saveOtaUrl()">Save URL</button><button class=warn onclick="ota('url_upgrade')">Upgrade from URL</button><span class=msg id=otaurlmsg></span></div>
-<div class=row><label><input type=checkbox id=sta_en> STA uplink (hotspot for internet)</label>
-<label>SSID <input id=sta_ssid size=12></label><label>Pass <input id=sta_pass type=password size=12 placeholder="blank = keep"></label>
-<button onclick="staTest()">Test uplink</button><button onclick="saveAdmin()">Save</button><span class=note id=stamsg></span></div>
-<div class=row><span class=note id=sta_test_msg></span></div>
-<div class=row><a href=/api/backup>Backup configuration</a><span class=note> (download JSON — save before upgrading; passwords never included)</span></div>
-<div class=row><label>Restore backup file <input type=file id=restorefile accept=.json></label><button onclick="restore()">Restore</button><span class=msg id=restoremsg></span></div></div>
-<div class=card><h3>Admin &amp; Wi-Fi AP</h3>
-<div class=row><label>SSID <input id=ap_ssid size=14></label><label>Pass (8+, blank = keep) <input id=ap_pass type=password size=14 placeholder="blank = keep"></label><label>Ch <input id=ap_ch size=3></label></div>
-<div class=row><label>New admin pass (4+, blank = keep) <input id=a_pass type=password size=14 placeholder="blank = keep"></label></div>
-<div class=row><span class=note>Reboot, factory reset, update upload and these saves ask for the admin password (default admin123).</span></div>
-<div class=row><label><input type=checkbox id=auto> Auto-start sequence on boot (burn-in)</label></div>
-<div class=row><button onclick="saveAdmin()">Save</button><button class=warn onclick="saveReboot()">Save + reboot</button>
-<button class=warn onclick="if(confirm('Reboot?'))admin('reboot')">Reboot</button>
-<button class=danger onclick="if(confirm('Factory reset?'))admin('reset')">Factory reset</button><span class=msg id=admmsg></span></div>
-<div class=row><button onclick="if(confirm('Reset settings but keep Wi-Fi + passwords?'))admin('reset_keepwifi')">Reset settings (keep Wi-Fi)</button>
-<button onclick="admin('bootcount_reset')">Reset boot counter</button></div></div>
-<div class=card><h3>Information</h3>
-<div class=row><span class=note id=info_fw></span></div>
-<div class=row><span class=note id=info_mem></span></div>
-<div class=row><span class=note id=info_net></span></div>
-<div class=row><span class=note id=info_pins></span></div></div>
-<div class=card><h3>Console</h3>
-<div class=row><input id=cmd size=30 placeholder="HELP"><button onclick="cmd()">Run</button></div>
-<div class=row><span class=note id=cmdout></span></div>
-<div class=row><span class=note>START STOP FIRE CANCEL DAYRESET STATUS UPTIME VERSION REBOOT RESET HELP — hardware verbs ask for the admin password.</span></div></div>
-</div>
-<script>
-async function jget(u){let r=await fetch(u);return r.json();}
-async function jpost(u,b){let r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return r.json();}
-let NREL=8;
-let dirty={};  // fields the user edited since last save: fillForm must not
-function markDirty(e){if(e&&e.target&&e.target.id)dirty[e.target.id]=1;}
-function clean(keys){for(let k of keys)delete dirty[k];}
-document.addEventListener('input',markDirty);
-document.addEventListener('change',markDirty);
-async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return null;}
- document.getElementById('fwver').textContent=s.fw||'';
-  let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
-  document.getElementById('dotG').className='dot '+(s.link?'G':'');document.getElementById('dotR').className='dot '+(s.link?'':'R');
-  document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
-  document.getElementById('meters').textContent='meters '+s.cfg.m_met+' · attempts '+s.cfg.m_att+' · pass '+s.cfg.m_ps+' · fail '+s.cfg.m_fl;
- document.getElementById('spoofmsg').textContent=s.spoof?('SPOOF STAGE '+s.stage):'';
- NREL=s.cfg.nrel||8;
- let d=document.getElementById('relays');d.innerHTML='';
- s.relays.forEach((on,i)=>{let lim=i>=NREL;let nm=(s.cfg['lbl'+i]||('R'+(i+1)));d.innerHTML+=`<button class="rly${on?' on':''}${lim?' lim':''}" ${lim?'disabled':''} onclick="relay(${i},${on?0:1})">${nm}<small>${on?'ON':'OFF'}</small></button>`;});
- if(s.dis){var dd=document.getElementById('dis');if(dd){dd.textContent='DI: '+s.dis.map(function(v,i){return 'DI'+(i+1)+'='+(v?'HI':'LO')}).join(' ');}}
- document.getElementById('ota_status').textContent='OTA: '+(s.cfg.ota_status||'');
- document.getElementById('ota_latest').textContent=s.cfg.ota_pending?('update available: '+s.cfg.ota_latest):('latest: '+(s.cfg.ota_latest||'?'));
- document.getElementById('otainstall').style.display=s.cfg.ota_pending?'':'none';
-  document.getElementById('stamsg').textContent=s.cfg.sta===2?'STA online':(s.cfg.sta===1?'STA connecting':'STA off');
-  document.getElementById('sta_test_msg').textContent='uplink test: '+(s.cfg.sta_test_msg||'not tested');
-  document.getElementById('info_fw').textContent='fw '+s.fw+' ('+(s.cfg.variant||'?')+') · flash '+(s.cfg.flash_kb||'?')+' KB · free sketch '+(s.cfg.sketch_free||'?')+' B · boot #'+(s.cfg.boot||'?')+' · reset: '+(s.cfg.reset||'?');
-  document.getElementById('info_mem').textContent='heap '+(s.cfg.heap||'?')+' B · psram '+(s.cfg.psram||'0')+' B · up '+(s.cfg.uptime_s||'0')+' s';
-  document.getElementById('info_pins').textContent=s.pins||'';
-  document.getElementById('info_trigpins').textContent=s.trigpins||'';
-  if(s.waveshare){var al=document.getElementById('alow');if(al){al.disabled=true;al.title='Fixed Active-HIGH on Waveshare (TCA9554 bit HIGH = relay ON)';}}
-  document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · ETH ip '+(s.cfg.eth_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
-  return s;
-}
-// v2.4 per-mode menu: only the active mode's fields are shown (R1/R3).
-// Hidden fields keep their saved values (fillForm still fills them).
-function showMode(){let m=+document.getElementById('rmode').value;
-  document.getElementById('row_step').style.display=(m===1)?'none':'';
-  document.getElementById('row_seqonly').style.display=(m===0)?'':'none';
-  document.getElementById('row_chaseonly').style.display=(m===2)?'':'none';
-  document.getElementById('row_allonly').style.display=(m===1)?'':'none';
-  document.getElementById('row_dir').style.display=(m===1)?'none':'';
-}
-function fillForm(s){if(!s||!s.cfg)return;
- let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
-  for(let k of ['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sinv','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','ota_auto','ota_int_h','ota_url','sta_en','sta_ssid','ap_ssid','ap_ch','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&!dirty[k]&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
-  showMode();
-}
-async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
-async function relay(i,on){if(i>=NREL)return;await jpost('/api/relay',{i,on});refresh();}
-async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
-async function meter(c){let r=await jpost('/api/meter',{cmd:c});let m=document.getElementById('metermsg');if(!r.ok){m.textContent='ERR: '+(r.err||'');}else{m.textContent=(c==='reset'?'day cleared':'ok');}refresh();}
-async function saveCfg(){let ks=['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','cpause','clim','stag'];let b={};for(let k of ks){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(ks);clean(['loop']);loadForm();}refresh();}
-async function saveLabels(){let ks=[];for(let i=0;i<8;i++)ks.push('lbl'+i);let b={};for(let k of ks)b[k]=document.getElementById(k).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);loadForm();}refresh();}
-async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','sinv'];let b={cmd:c};if(c==='fire'||c==='save'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);let m=r.ok?(c==='cancel'?'cancelled':(c==='save'?'saved':'ok')):('ERR: '+(r.err||''));document.getElementById('spoofmsg').textContent=m;document.getElementById('spoofsave').textContent=m;if(r.ok&&(c==='fire'||c==='save')){clean(ks);clean(['sena']);loadForm();}refresh();}
-async function saveTrig(){let b={cmd:'trig'};b.sena=document.getElementById('sena').checked?1:0;b.spin=+document.getElementById('spin').value;b.sinv=+document.getElementById('sinv').value;let r=await jpost('/api/spoof',b);document.getElementById('trigmsg').textContent=r.ok?'trigger saved':'ERR: '+(r.err||'');if(r.ok){clean(['sena','spin','sinv']);loadForm();}refresh();}
-async function staTest(){let p=prompt('Admin password:','');if(p===null)return;let b={cmd:'test',pass:p};b.ssid=document.getElementById('sta_ssid').value;b.sta_pass=document.getElementById('sta_pass').value;let r=await jpost('/api/sta',b);document.getElementById('sta_test_msg').textContent=r.ok?'testing… (watch this line)':'ERR: '+(r.err||'');refresh();}
-async function saveOtaUrl(){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/ota',{ota_url:document.getElementById('ota_url').value,ota_int_h:+document.getElementById('ota_int_h').value,pass:p});document.getElementById('otaurlmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(['ota_url','ota_int_h']);loadForm();}refresh();}
-async function cmd(){let c=document.getElementById('cmd').value;let priv=/^(start|stop|fire|cancel|dayreset|reboot|reset)\b/i.test(c);let b={cmd:c};if(priv){let p=prompt('Admin password:','');if(p===null)return;b.pass=p;}let r=await jpost('/api/cmd',b);document.getElementById('cmdout').textContent=r.ok?(r.out||'ok'):'ERR: '+(r.err||'');refresh();}
-async function restore(){let f=document.getElementById('restorefile').files[0];if(!f){document.getElementById('restoremsg').textContent='pick a backup file first';return;}let t=await f.text();let p=prompt('Admin password:','');if(p===null)return;let b;try{b=JSON.parse(t);}catch(e){document.getElementById('restoremsg').textContent='not a JSON backup';return;}b.pass=p;let r=await jpost('/api/restore',b);document.getElementById('restoremsg').textContent=r.ok?('restored — '+(r.note||'')):'ERR: '+(r.err||'');if(r.ok)loadForm();refresh();}
-async function ota(c){let p=prompt('Admin password:','');if(p===null)return;document.getElementById('otamsg').textContent=(c==='install'?'installing — box reboots on success':'checking…');let r=await jpost('/api/ota',{cmd:c,pass:p});document.getElementById('otamsg').textContent=r.ok?(c==='install'?'install started':'started'):'ERR: '+(r.err||'');refresh();}
-async function saveAdmin(){let ks=['ap_ssid','ap_pass','ap_ch','a_pass','sta_ssid','sta_pass'];let b={};for(let k of ks)b[k]=document.getElementById(k).value;b.sta_en=document.getElementById('sta_en').checked?1:0;b.auto=document.getElementById('auto').checked?1:0;let p=prompt('Admin password:','');if(p===null)return;b.pass=p;let bb={pass:p};for(let k of ['ota_auto'])bb[k]=document.getElementById(k).checked?1:0;await jpost('/api/ota',bb);let r=await jpost('/api/admin',b);document.getElementById('admmsg').textContent=r.ok?'saved (reboot to apply AP/STA)':'ERR: '+r.err;if(r.ok){clean(ks);clean(['sta_en','auto','ota_auto']);document.getElementById('ap_pass').value='';document.getElementById('a_pass').value='';document.getElementById('sta_pass').value='';loadForm();}refresh();}
-async function admin(c){let p=prompt('Admin password:','');if(p===null)return;let r=await jpost('/api/admin',{cmd:c,pass:p});if(!r.ok)alert('ERR: '+(r.err||''));else if(c==='reset_keepwifi'||c==='bootcount_reset')refresh();}
-async function saveReboot(){await saveAdmin();if(!confirm('Saved. Reboot now to apply AP/STA?'))return;let p=prompt('Admin password (reboot):','');if(p===null)return;await jpost('/api/admin',{cmd:'reboot',pass:p});}
-setInterval(refresh,1000);refresh();loadForm();
-</script></body></html>)HTML";
-
-#elif WEB_UI_VARIANT == 2
-// v2.7 LITE: relay tiles + names + LINK pill only. Fetches a strict subset of
-// the routed API (/api/state, /api/relay, /api/seq, /api/config); every id the
-// JS touches exists below (web-contract holds by construction).
-static const char PAGE_DASH[] PROGMEM = R"HTML(
-<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>BMS Tester Lite</title><style>
-*{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:12px}
-.wrap{max-width:720px;margin:0 auto}header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
-header h2{margin:0;font-size:22px}.ver{font-size:12px;color:#94a3b8}
-.pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700}
-#link.G{background:#14532d;color:#4ade80}#link.R{background:#450a0a;color:#f87171}#clk{color:#94a3b8;font-size:13px}
-.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#334155;border:1px solid #475569;vertical-align:middle}
-.dot.G{background:#22c55e;box-shadow:0 0 8px #22c55e}.dot.R{background:#ef4444;box-shadow:0 0 8px #ef4444}
-.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin:12px 0}
-.card h3{margin:0 0 10px;font-size:15px;color:#93c5fd;text-transform:uppercase;letter-spacing:.5px}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
-.rly{border:2px solid #475569;background:#0f172a;color:#94a3b8;border-radius:10px;padding:14px 4px;font-size:15px;font-weight:700;cursor:pointer;transition:border-color .3s,box-shadow .3s,background .3s,color .3s}
-.rly small{display:block;font-size:11px;font-weight:400}
-.rly.on{border-color:#22c55e;background:#052e16;color:#4ade80;box-shadow:0 0 12px #22c55e66}
-button{background:#2563eb;border:0;color:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;margin:2px}
-button.danger{background:#b91c1c}button.ok{background:#15803d}
-label{font-size:13px;color:#cbd5e1}input{background:#0f172a;border:1px solid #475569;color:#e2e8f0;border-radius:8px;padding:8px;margin:3px 2px;font-size:14px}
-.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.msg{font-size:13px;color:#4ade80;margin-left:8px}
-.note{font-size:12px;color:#94a3b8}
-</style></head><body><div class=wrap>
-<header><h2>&#9889; BMS Tester</h2><span class=ver>lite</span><span class=ver id=fwver></span><span id=dotG class=dot></span><span id=dotR class=dot></span><span id=link class="pill R">?</span><span id=clk class=ver></span></header>
-<div class=card><h3>Relays</h3>
-<div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
-<div class=grid id=relays></div></div>
-<div class=card><h3>Relay labels</h3>
-<div class=row id=labels></div>
-<div class=row><button onclick="saveLabels()">Save labels</button><span class=msg id=lblmsg></span></div></div>
-<div class=row><span class=note>Lite build: relays + names + link only. Reflash FULL for bench SVG, spoof, OTA, console. Tiles tap = force ON/OFF (needs IDLE).</span></div>
-</div>
-<script>
-async function jget(u){let r=await fetch(u);return r.json();}
-async function jpost(u,b){let r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return r.json();}
-async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return null;}
- document.getElementById('fwver').textContent=s.fw||'';
- let lk=document.getElementById('link');lk.textContent=s.link?'LINK GREEN':'LINK RED';lk.className='pill '+(s.link?'G':'R');
- document.getElementById('dotG').className='dot '+(s.link?'G':'');document.getElementById('dotR').className='dot '+(s.link?'':'R');
- document.getElementById('clk').textContent='seq '+(s.running?'RUNNING':'IDLE')+' · cyc '+s.cycles+' · act '+s.acts;
- let d=document.getElementById('relays');d.innerHTML='';
- s.relays.forEach((on,i)=>{let nm=(s.cfg['lbl'+i]||('R'+(i+1)));d.innerHTML+=`<button class="rly${on?' on':''}" onclick="relay(${i},${on?0:1})">${nm}<small>${on?'ON':'OFF'}</small></button>`;});
- return s;
-}
-function fillForm(s){if(!s||!s.cfg)return;
- let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
- for(let k of ['lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&document.activeElement!==e){e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
-}
-async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
-async function relay(i,on){await jpost('/api/relay',{i,on});refresh();}
-async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
-async function saveLabels(){let b={};for(let i=0;i<8;i++)b['lbl'+i]=document.getElementById('lbl'+i).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok)loadForm();refresh();}
-setInterval(refresh,1000);refresh();loadForm();
-</script></body></html>)HTML";
-
-#else
-// v2.7 FULL (default): the classic page + live SVG bench card + tile glow +
-// chase sweep highlight + meter readout (mv/ma/msoc, tenths). All inline,
-// zero CDN — works on the offline AP.
+// ---- dashboard: FULL is the only variant (classic/lite retired) ----
+// Single PAGE_DASH below: inline SVG bench card + tile sweep animation +
+// live meter readout (mv/ma/msoc, tenths), all inline, zero CDN — works on
+// the offline AP. OTA assets stay FULL so on-device updating keeps working
+// on every box.
 static const char PAGE_DASH[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>BMS Tester</title><style>
@@ -634,6 +409,10 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <button class=danger onclick="if(confirm('Factory reset?'))admin('reset')">Factory reset</button><span class=msg id=admmsg></span></div>
 <div class=row><button onclick="if(confirm('Reset settings but keep Wi-Fi + passwords?'))admin('reset_keepwifi')">Reset settings (keep Wi-Fi)</button>
 <button onclick="admin('bootcount_reset')">Reset boot counter</button></div></div>
+<div class=card id=buzzcard><h3>Buzzer</h3>
+<div class=row><label><input type=checkbox id=buzz> Buzzer enabled</label>
+<button onclick="saveBuzz()">Save</button><span class=msg id=buzzmsg></span></div>
+<div class=row><span class=note>Waveshare board only — link beeps and alarms stay silent until enabled.</span></div></div>
 <div class=card><h3>Information</h3>
 <div class=row><span class=note id=info_fw></span></div>
 <div class=row><span class=note id=info_mem></span></div>
@@ -681,6 +460,7 @@ async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return n
  document.getElementById('info_pins').textContent=s.pins||'';
   document.getElementById('info_trigpins').textContent=s.trigpins||'';
  if(s.waveshare){var al=document.getElementById('alow');if(al){al.disabled=true;al.title='Fixed Active-HIGH on Waveshare (TCA9554 bit HIGH = relay ON)';}}
+ var bc=document.getElementById('buzzcard');if(bc)bc.style.display=s.waveshare?'':'none';
   document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · ETH ip '+(s.cfg.eth_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
  bench(s);
  return s;
@@ -695,6 +475,7 @@ function showMode(){let m=+document.getElementById('rmode').value;
 function fillForm(s){if(!s||!s.cfg)return;
  let lb=document.getElementById('labels');if(lb&&lb.children.length===0){let h='';for(let i=0;i<8;i++)h+=`<label>R${i+1} <input id="lbl${i}" size=8></label>`;lb.innerHTML=h;}
  for(let k of ['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','loop','cpause','clim','stag','auto','sena','sinv','sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','ota_auto','ota_int_h','ota_url','sta_en','sta_ssid','ap_ssid','ap_ch','lbl0','lbl1','lbl2','lbl3','lbl4','lbl5','lbl6','lbl7']){let e=document.getElementById(k);if(e&&!dirty[k]&&document.activeElement!==e){if(e.type==='checkbox')e.checked=!!s.cfg[k];else e.value=(s.cfg[k]===undefined?'':s.cfg[k]);}}
+ var bz=document.getElementById('buzz');if(bz&&!dirty['buzz']&&document.activeElement!==bz)bz.checked=(s.buzzer==='1');
  showMode();
 }
 async function loadForm(){let s;try{s=await jget('/api/state');}catch(e){return;}fillForm(s);}
@@ -702,6 +483,7 @@ async function relay(i,on){if(i>=NREL)return;await jpost('/api/relay',{i,on});re
 async function seq(c){let r=await jpost('/api/seq',{cmd:c});if(!r.ok)alert(r.err||'ERR');refresh();}
 async function meter(c){let r=await jpost('/api/meter',{cmd:c});let m=document.getElementById('metermsg');if(!r.ok){m.textContent='ERR: '+(r.err||'');}else{m.textContent=(c==='reset'?'day cleared':'ok');}refresh();}
 async function saveCfg(){let ks=['rmode','nrel','step','hseq','swp','hall','bmode','alow','dir','cpause','clim','stag'];let b={};for(let k of ks){b[k]=+document.getElementById(k).value;}b.loop=document.getElementById('loop').checked?1:0;let r=await jpost('/api/config',b);document.getElementById('cfgmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(ks);clean(['loop']);loadForm();}refresh();}
+async function saveBuzz(){let b={buzz:document.getElementById('buzz').checked?1:0};let r=await jpost('/api/config',b);document.getElementById('buzzmsg').textContent=r.ok?'saved':'ERR: '+(r.err||'');if(r.ok){clean(['buzz']);loadForm();}refresh();}
 async function saveLabels(){let ks=[];for(let i=0;i<8;i++)ks.push('lbl'+i);let b={};for(let k of ks)b[k]=document.getElementById(k).value;let r=await jpost('/api/config',b);document.getElementById('lblmsg').textContent=r.ok?'saved':'ERR';if(r.ok){clean(ks);loadForm();}refresh();}
 async function spoof(c){let ks=['sv','sa','sc','ssoc','ssec','s2v','s2a','s2c','s2soc','s2sec','spin','sinv'];let b={cmd:c};if(c==='fire'||c==='save'){for(let k of ks)b[k]=+document.getElementById(k).value;b.sena=document.getElementById('sena').checked?1:0;}let r=await jpost('/api/spoof',b);let m=r.ok?(c==='cancel'?'cancelled':(c==='save'?'saved':'ok')):('ERR: '+(r.err||''));document.getElementById('spoofmsg').textContent=m;document.getElementById('spoofsave').textContent=m;if(r.ok&&(c==='fire'||c==='save')){clean(ks);clean(['sena']);loadForm();}refresh();}
 async function saveTrig(){let b={cmd:'trig'};b.sena=document.getElementById('sena').checked?1:0;b.spin=+document.getElementById('spin').value;b.sinv=+document.getElementById('sinv').value;let r=await jpost('/api/spoof',b);document.getElementById('trigmsg').textContent=r.ok?'trigger saved':'ERR: '+(r.err||'');if(r.ok){clean(['sena','spin','sinv']);loadForm();}refresh();}
@@ -715,7 +497,6 @@ async function admin(c){let p=prompt('Admin password:','');if(p===null)return;le
 async function saveReboot(){await saveAdmin();if(!confirm('Saved. Reboot now to apply AP/STA?'))return;let p=prompt('Admin password (reboot):','');if(p===null)return;await jpost('/api/admin',{cmd:'reboot',pass:p});}
 setInterval(refresh,1000);refresh();loadForm();
 </script></body></html>)HTML";
-#endif
 
 // ---- route helpers ----
 static void send_json(const String &s) {
@@ -840,6 +621,12 @@ static void handle_state() {
     s += ",\"rs485hwde\":\"";
     s += (*G->rs485_hw_de ? "1" : "0");
   }
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Buzzer toggle state (Waveshare only): 1 = user enabled, 0 = silent.
+  s += ",\"buzzer\":\"";
+  s += (c.buzzer_enabled ? "1" : "0");
+  s += "\"";
+#endif
   if (G->ota) {
     s += ",\"ota_auto\":" + String(G->ota->auto_enabled ? 1 : 0) +
          ",\"ota_latest\":\"" + String(G->ota->latest_tag) + "\"" +
@@ -1038,6 +825,7 @@ static bool apply_cfg_keys(const String &b, String &err) {
     t.allon_stagger_ms = (uint16_t)constrain(jnum(b, "stag", 50), 0, 1000);
   if (has(b, "dir")) t.seq_dir = (jnum(b, "dir", 0) == 1) ? 1 : 0;
   if (has(b, "auto")) t.boot_autostart = jnum(b, "auto", 0) != 0;
+  if (has(b, "buzz")) t.buzzer_enabled = jnum(b, "buzz", 0) != 0;
   // R10: a mode switch strands the old mode's relays — require IDLE first.
   if (t.relay_mode != c.relay_mode && G->seq->running()) {
     err = "stop the sequence first, then switch mode";

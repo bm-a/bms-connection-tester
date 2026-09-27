@@ -28,17 +28,16 @@ def main() -> int:
         routes[(path, method)] = handler
     print(f"routes: {sorted(p for p, _ in routes)}")
 
-    # ---- dashboard variants (v2.7): three PAGE_DASH blocks (classic/lite/full),
-    # one per WEB_UI_VARIANT branch. Each block's JS must only fetch routed
-    # endpoints and only touch ids present in its own HTML (lite is a strict
-    # subset by construction — the same rules prove it).
+    # ---- dashboard (FULL is the only variant since classic/lite retired):
+    # one PAGE_DASH block. Its JS must only fetch routed endpoints and only
+    # touch ids present in its own HTML.
     blocks = []
     for m in re.finditer(r'PAGE_DASH\[\] PROGMEM = R"HTML\((.*?)\)HTML"',
                          src, re.S):
         blocks.append(m.group(1))
     print(f"dash variants: {len(blocks)}")
-    if len(blocks) != 3:
-        fail(f"expected 3 PAGE_DASH variants (classic/lite/full), found {len(blocks)}")
+    if len(blocks) != 1:
+        fail(f"expected 1 PAGE_DASH block (FULL only), found {len(blocks)}")
         blocks = blocks[:1] if blocks else []
 
     def check_block(page, tag):
@@ -71,7 +70,7 @@ def main() -> int:
                 fail(f"[{tag}] JS uses #{eid} with no id= in HTML")
 
     for i, page in enumerate(blocks):
-        check_block(page, ("classic", "lite", "full")[i] if len(blocks) == 3 else f"v{i}")
+        check_block(page, "full")
 
     # Login wall is gone since v2.3.1 (WPA2 is the gate); sensitive actions
     # carry the admin password per request. Manual firmware upload page stays.
@@ -112,7 +111,7 @@ def main() -> int:
 
     # 2. element ids (per variant block, checked above in check_block).
 
-    # 3. state keys: union of all variant scripts vs handle_state emission.
+    # 3. state keys: the FULL page script vs handle_state emission.
     state_fn = src.split("static void handle_state()", 1)[1].split(
         "static void handle_relay()", 1)[0]
     emitted = set(re.findall(r'"\\?"?([a-z_]+)\\?"?:', state_fn))
@@ -156,7 +155,7 @@ def main() -> int:
         "/api/seq": ["cmd"],
         "/api/config": ["rmode", "nrel", "step", "hseq", "swp", "hall",
                         "bmode", "alow", "dir", "loop", "cpause", "clim",
-                        "stag", "lbl0", "lbl1", "lbl2", "lbl3", "lbl4",
+                        "stag", "buzz", "lbl0", "lbl1", "lbl2", "lbl3", "lbl4",
                         "lbl5", "lbl6", "lbl7"],
         "/api/spoof": ["cmd", "sv", "sa", "sc", "ssoc", "ssec",
                        "s2v", "s2a", "s2c", "s2soc", "s2sec", "sena", "sinv",
