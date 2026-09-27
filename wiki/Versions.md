@@ -1,5 +1,34 @@
 # Versions / Changelog (Keep a Changelog)
 
+## [v2.9.0] — 2026-09-27
+### Full Waveshare 8DO support: Ethernet, buzzer, fault alarms
+- **W5500 Ethernet** via ESP-IDF `esp_eth` (Arduino-ESP32 2.0.17 has no
+  W5500 support; the official demo needs ≥ 3.0). Demo pinout (SPI
+  SCK15/MISO14/MOSI13, CS16, IRQ12, RST39, PHY addr 1), DHCP client,
+  hostname `bms-tester`. The dashboard answers on the Ethernet IP too
+  (`eth_ip` in `/api/state`, `ETH ip` in the Information card). Best-effort:
+  any failure just skips Ethernet — boot, AP (192.168.4.1), STA, captive
+  portal and OTA policy are never affected.
+- **Buzzer** on GPIO46 (LEDC 1 kHz / 8-bit / duty ≤ 200, official demo
+  values): short beep on meter-link up/down, 200 ms on sequencer start,
+  500 ms flicker on sequencer stop, one-shot 5 s flickering alarm on
+  output-driver failure. Non-blocking pattern engine, drained from loop();
+  never driven before setup() (GPIO46 is a strapping pin).
+- **TCA9554 fault surfacing**: latched `ok|fail` — `"expander":"ok"|"fail"`
+  in `/api/state`, RGB flashes red while the expander is unreachable (demo
+  DoutFailTask pattern), one-shot buzzer alarm. Safe-boot park 0x00 and
+  write-retry unchanged; self-heals when the bus recovers.
+- **Docs**: USB-OTG jumper warning — do not connect the board to a computer
+  while the jumper is set to USB-OTG (the jumper feeds external power
+  through Type-C).
+- Routing note: with WiFi STA + Ethernet both up, outbound traffic follows
+  lwIP's default interface (most recently connected). The STA-online gate
+  for OTA checks is unchanged.
+### Verified
+- **182/182** native tests (0 failures), `pio run -e s3-waveshare` and
+  `-e esp32-s3-devkitc-1` SUCCESS, 30-day soak: 2,591,400 polls/replies,
+  millis rollover crossed, PASS.
+
 ## [v2.8] — 2026-09-27
 ### Meter counter: 5 s settle fumble guard
 - A link gap ≥ 3 s now only **arms** a reseat candidate; the new meter

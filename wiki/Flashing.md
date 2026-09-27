@@ -1,31 +1,28 @@
-# Flashing — all different ways (v2.8)
+# Flashing — all different ways (v2.9)
 
 ![Bring-up terminal](https://raw.githubusercontent.com/bm-a/bms-connection-tester/main/docs/img/terminal.png)
 
 *Sim → sequence → `STATUS?` → flash: the whole bring-up in three commands.*
 
-Pick **one** method. v2.8 ships two firmware lines in one release:
-**generic FULL** (8 MB ESP32-S3, FULL dashboard) and **Waveshare**
-(ESP32-S3-POE-ETH-8DI-8DO, FULL dashboard on the board pin map). Both report
-`FW_VERSION 2.8` and both OTA-check `/releases/latest` (the old Waveshare
-`-wsN` prerelease line is retired).
+Pick **one** method. v2.9 ships the **Waveshare**
+(ESP32-S3-POE-ETH-8DI-8DO, FULL dashboard on the board pin map) line; the
+generic line's last release is v2.8.10. Both report `FW_VERSION` and
+OTA-check `/releases/latest`, each downloading its own variant asset.
 
 ## 1. Ready binaries with esptool (any PC, no IDE) — ONE file, ONE command
 1. `pip install esptool`
-2. Choose the file for your board from the **v2.8 release assets**:
-   - `bms-tester-8mb.bin` — generic ESP32-S3 DevKitC-1 (8 MB), FULL dashboard.
-     Merged image (bootloader + partitions + app).
-   - `bms-tester-waveshare.bin` — Waveshare ESP32-S3-POE-ETH-8DI-8DO. Merged
-     image (bootloader@0x0 + partitions@0x8000 + app@0x10000).
+2. Choose the file for your board from the **v2.9.0 release assets**:
+   - `bms-tester-waveshare-v2.9.0.bin` — Waveshare ESP32-S3-POE-ETH-8DI-8DO.
+     Merged image (bootloader@0x0 + partitions@0x8000 + app@0x10000).
    - `waveshare-firmware.bin` — Waveshare app-only image (for the dashboard
-     `/update` upload path on a Waveshare box).
+     `/update` upload path on a Waveshare box, and the board's OTA target).
 3. Plug in the S3, find the port (COMx / /dev/ttyACM0), then:
 
 ```
 esptool.py --chip esp32s3 --port <PORT> --baud 460800 write-flash 0x0 <FILE>
 ```
 
-Verify against the SHA-256 sums published in the v2.8 release notes.
+Verify against the SHA-256 sums published in the v2.9.0 release notes.
 
 ## 2. Browser flasher (no installs)
 Open an ESP Web Tools flasher (e.g. https://www.espthings.io/tools/esp32-flasher/),

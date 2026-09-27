@@ -68,11 +68,20 @@ RGB — no external relay module, MAX485, or LEDs needed.
 | DI1–DI8 | GPIO4–GPIO11, opto-isolated, active = LOW (INPUT_PULLUP) |
 | RGB | GPIO38 onboard WS2812 (no discrete green/red LEDs on this board) |
 
+### Ethernet + buzzer (v2.9.0)
+- GPIO12–16: **W5500 Ethernet is implemented** — SPI SCK15/MISO14/MOSI13,
+  CS16, IRQ12, RST39, PHY addr 1. DHCP client, hostname `bms-tester`;
+  the dashboard answers on the Ethernet IP too (`eth_ip` in `/api/state`,
+  `ETH ip` in the Information card). Best-effort: any failure just skips
+  Ethernet — boot, the AP (192.168.4.1), STA, captive portal and OTA policy
+  are never affected.
+- GPIO46: **buzzer is driven** — LEDC 1 kHz / 8-bit / duty ≤ 200 (official
+  demo values). Beeps on meter-link up/down, sequencer start (200 ms) /
+  stop (500 ms flicker), output-driver failure (5 s flickering alarm).
+  Never driven before setup() (GPIO46 is a strapping pin).
+
 ### Reserved / unused (do not touch)
-- GPIO12–16: W5500 Ethernet (INT/MOSI/MISO/SCLK/CS) — **reserved, Ethernet
-  is NOT implemented** in v2.8 (Wi-Fi AP stays the management path).
 - GPIO40: RTC interrupt; GPIO41/42 shared with RTC @ 0x51.
-- GPIO46: buzzer (unused by this firmware).
 
 ### Spoof-trigger safe pins (Waveshare)
 Only the DI screw terminals are user-drivable: **DI1–DI8 (GPIO4–11,
@@ -85,6 +94,11 @@ active LOW)**. Anything else falls back to DI1 (GPIO4).
   all-on). Tie coil-supply GND to ESP GND (common reference for the
   optoisolated inputs). Never power coils from USB/ESP pins.
 - MAX485 VCC = 3.3 V, common GND with the meter.
+
+> ⚠️ **Waveshare 8DO USB-OTG jumper:** when the jumper is set to
+> **USB-OTG**, the Type-C port feeds the board from an external USB power
+> supply. **Do not connect the board to a computer while the jumper is in
+> the USB-OTG position.**
 
 ## RS485 bus wiring
 - A/B twisted pair from the transceiver to the meter; 120 Ω termination
