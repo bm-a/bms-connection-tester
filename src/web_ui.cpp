@@ -766,7 +766,7 @@ static void handle_state() {
     s += (G->seq->relayOn(i) ? "1" : "0");
   }
 #ifdef BOARD_WAVESHARE_8DI8RO
-  // Live DI states (DI1-DI8 = GPIO4-11), 1=HIGH (active), 0=LOW (idle)
+  // Live DI states (DI1-DI8 = GPIO4-11), 1=HIGH (idle), 0=LOW (active)
   s += "],\"dis\":[";
   for (uint8_t i = 0; i < 8; i++) {
     if (i) s += ",";

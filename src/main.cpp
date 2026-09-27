@@ -434,23 +434,27 @@ void setup() {
   seq.begin(&cfg);
   btn_in.begin(true);
 #ifdef BOARD_WAVESHARE_8DI8RO
-  // DIs idle LOW (pulldown); BOOT button idles HIGH (pullup)
-  spoof_in.begin(false);
-  wifi_in.begin(false);
-  relay_trig_in.begin(false);
+  // DIs idle HIGH (pullup); BOOT button idles HIGH (pullup).
+  // NOTE: Waveshare DI optocouplers are NPN open-collector: they can ONLY
+  // pull the GPIO LOW, never drive it HIGH. INPUT_PULLDOWN would leave the
+  // GPIO stuck LOW forever (idle=LOW, active=LOW) -> no edge, no trigger.
+  // Do NOT "fix" this to PULLDOWN/active-HIGH (see v2.8.3/v2.8.4 regression).
+  spoof_in.begin(true);
+  wifi_in.begin(true);
+  relay_trig_in.begin(true);
 #else
   spoof_in.begin(true);
   wifi_in.begin(true);
 #endif
   pinMode(PIN_BUTTON, INPUT_PULLUP);
 #ifdef BOARD_WAVESHARE_8DI8RO
-  // Waveshare DIs are opto-isolated, active-HIGH (opto drives GPIO HIGH).
-  // Use PULLDOWN so idle=LOW, active=HIGH (verified vs. user test sketch).
-  pinMode(PIN_SPOOF, INPUT_PULLDOWN);
-  pinMode(PIN_WIFI_KILL, INPUT_PULLDOWN);  // idle LOW = AP on
-  pinMode(PIN_RELAY_TRIGGER, INPUT_PULLDOWN);  // DI3: idle LOW
+  // Waveshare DIs are opto-isolated, active-LOW (NPN opto pulls GPIO LOW).
+  // Use PULLUP so idle=HIGH, active=LOW. See note above re v2.8.3/v2.8.4.
+  pinMode(PIN_SPOOF, INPUT_PULLUP);
+  pinMode(PIN_WIFI_KILL, INPUT_PULLUP);  // idle HIGH = AP on
+  pinMode(PIN_RELAY_TRIGGER, INPUT_PULLUP);  // DI3: idle HIGH
   // DI4-DI8 (GPIO7-11): configure for dashboard readout (no function yet)
-  for (uint8_t i = 3; i < 8; i++) pinMode(WS_PIN_DI_BASE + i, INPUT_PULLDOWN);
+  for (uint8_t i = 3; i < 8; i++) pinMode(WS_PIN_DI_BASE + i, INPUT_PULLUP);
 #else
   pinMode(PIN_SPOOF, INPUT_PULLUP);
   pinMode(PIN_WIFI_KILL, INPUT_PULLUP);  // idle HIGH = AP on
@@ -512,25 +516,17 @@ void loop() {
     web_factory_reset();  // wipes NVS + reboots; never returns
   }
 
-  // --- v2.3.1: WiFi kill switch ---
-#ifdef BOARD_WAVESHARE_8DI8RO
-  // Active-HIGH (opto drives HIGH): rose = pressed = AP off, fell = released = AP on
-  bool wifiRaw = digitalRead(PIN_WIFI_KILL) == HIGH;  // pulldown idle LOW
-  wifi_in.update(wifiRaw, now);
-  if (wifi_in.rose()) web_wifi_set(false);
-  else if (wifi_in.fell()) web_wifi_set(true);
-#else
+  // --- v2.3.1: WiFi kill switch (ground PIN_WIFI_KILL = AP off now) ---
   bool wifiRaw = digitalRead(PIN_WIFI_KILL) == HIGH;  // pull-up idle HIGH
   wifi_in.update(wifiRaw, now);  // fell = grounded, rose = released
   if (wifi_in.fell()) web_wifi_set(false);
   else if (wifi_in.rose()) web_wifi_set(true);
-#endif
 
 #ifdef BOARD_WAVESHARE_8DI8RO
-  // --- DI3: manual relay sequencer trigger (active-HIGH = START/STOP) ---
-  bool trigRaw = digitalRead(PIN_RELAY_TRIGGER) == HIGH;  // pulldown idle LOW
-  relay_trig_in.update(trigRaw, now);  // rose = active
-  if (relay_trig_in.rose()) handle_button_press(seq, cfg, now);
+  // --- DI3: manual relay sequencer trigger (ground = START/STOP) ---
+  bool trigRaw = digitalRead(PIN_RELAY_TRIGGER) == HIGH;  // pull-up idle HIGH
+  relay_trig_in.update(trigRaw, now);  // fell = grounded
+  if (relay_trig_in.fell()) handle_button_press(seq, cfg, now);
 #endif
 
   // --- v2.0: spoof trigger input (v2.3: fires the two-stage plan) ---
@@ -544,12 +540,7 @@ void loop() {
     spoof_in.begin(true);
   }
   bool spRaw = digitalRead(curSpoofPin) == HIGH;
-#ifdef BOARD_WAVESHARE_8DI8RO
-  // Active-HIGH (opto drives HIGH); spoof_invert flips the sense
-  bool spActive = cfg.spoof_invert ? !spRaw : spRaw;
-#else
   bool spActive = cfg.spoof_invert ? spRaw : !spRaw;
-#endif
   spoof_in.update(!spActive, now);
   if (spoof_in.fell() && cfg.spoof_enabled)
     spoof.trigger(now, (unsigned long)cfg.spoof_seconds * 1000UL,
