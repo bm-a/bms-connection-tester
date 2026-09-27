@@ -1,5 +1,8 @@
 #include "web_ui.h"
 #include "fw_upload.h"  // v2.4 Tasmota-grade update gates (host-tested)
+#ifdef BOARD_WAVESHARE_8DI8RO
+#include "waveshare_pins.h"  // WS_PIN_DI_BASE for live DI states
+#endif
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <WiFi.h>
@@ -338,7 +341,7 @@ label{font-size:13px;color:#cbd5e1}input,select{background:#0f172a;border:1px so
 <header><h2>&#9889; BMS Tester</h2><span class=ver id=fwver></span><span id=dotG class=dot></span><span id=dotR class=dot></span><span id=link class="pill R">?</span><span id=clk></span></header>
 <div class=card><h3>Relays</h3>
 <div class=row><button class=ok onclick="seq('start')">&#9654; START</button><button class=danger onclick="seq('stop')">STOP ALL</button></div>
-<div class=grid id=relays></div></div>
+<div class=grid id=relays></div><div class=row><span id=dis style="font-size:12px;color:#888"></span></div></div>
 <div class=card><h3>Meters today (approx)</h3>
 <div class=row><span id=meters></span></div>
 <div class=row><button class=warn onclick="if(confirm('Clear today counters?'))meter('reset')">New day (reset)</button><span class=msg id=metermsg></span></div>
@@ -422,6 +425,7 @@ async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return n
  NREL=s.cfg.nrel||8;
  let d=document.getElementById('relays');d.innerHTML='';
  s.relays.forEach((on,i)=>{let lim=i>=NREL;let nm=(s.cfg['lbl'+i]||('R'+(i+1)));d.innerHTML+=`<button class="rly${on?' on':''}${lim?' lim':''}" ${lim?'disabled':''} onclick="relay(${i},${on?0:1})">${nm}<small>${on?'ON':'OFF'}</small></button>`;});
+ if(s.dis){var dd=document.getElementById('dis');if(dd){dd.textContent='DI: '+s.dis.map(function(v,i){return 'DI'+(i+1)+'='+(v?'HI':'LO')}).join(' ');}}
  document.getElementById('ota_status').textContent='OTA: '+(s.cfg.ota_status||'');
  document.getElementById('ota_latest').textContent=s.cfg.ota_pending?('update available: '+s.cfg.ota_latest):('latest: '+(s.cfg.ota_latest||'?'));
  document.getElementById('otainstall').style.display=s.cfg.ota_pending?'':'none';
@@ -761,6 +765,14 @@ static void handle_state() {
     if (i) s += ",";
     s += (G->seq->relayOn(i) ? "1" : "0");
   }
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // Live DI states (DI1-DI8 = GPIO4-11), 1=HIGH (idle), 0=LOW (active)
+  s += "],\"dis\":[";
+  for (uint8_t i = 0; i < 8; i++) {
+    if (i) s += ",";
+    s += (digitalRead(WS_PIN_DI_BASE + i) ? "1" : "0");
+  }
+#endif
   // v2.6 daily meter batch (R38): flat keys in the cfg section (shared
   // validation-table rule — counters are read-only here; only the day
   // reset goes through /api/meter, never /api/config or restore).
