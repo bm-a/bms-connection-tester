@@ -160,7 +160,16 @@ static void apply_leds(bool on) {
   // Onboard RGB mirrors the discretes: green = talking, red = silent.
   // RMT-driven, safe to call from the 250 ms eval (never the hot RX loop).
 #if defined(ARDUINO)
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // 8DI8RO quirk: this board's RGB element expects RGB byte order, not the
+  // WS2812-standard GRB (Waveshare's own demo works around it the same way:
+  // RGB_Light(r,g,b) -> neopixelWrite(pin, g, r, b), "RGB color adjustment").
+  // neopixelWrite() emits GRB on the wire, so swap R/G here, otherwise our
+  // red (silent) state physically displays as green and vice versa.
+  neopixelWrite(PIN_RGB, on ? RGB_BRIGHT : 0, on ? 0 : RGB_BRIGHT, 0);
+#else
   neopixelWrite(PIN_RGB, on ? 0 : RGB_BRIGHT, on ? RGB_BRIGHT : 0, 0);
+#endif
 #endif
 }
 
@@ -405,6 +414,10 @@ static void handle_status_command() {
 }
 
 void setup() {
+  // Drive the lamp FIRST: the WS2812 latches its power-on/reset color until
+  // commanded, so assert the red (silent) boot state before anything else —
+  // in particular before I2C/TCA bring-up on the Waveshare path.
+  apply_leds(false);
 #ifdef BOARD_WAVESHARE_8DI8RO
   Wire.begin(WS_I2C_SDA, WS_I2C_SCL);
   tca_relays_init();  // expander: all outputs, all relays OFF first
@@ -414,7 +427,6 @@ void setup() {
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_RED, OUTPUT);
 #endif
-  apply_leds(false); // boot red
 
   // ---- v2.0 init (after frozen LED boot state) ----
   seq.begin(&cfg);
