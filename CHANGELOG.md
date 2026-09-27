@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.8.6] — 2026-09-27
+### Added
+- JBD write acknowledgment: `reply_for()` now returns a valid 6-byte JBD ACK
+  (`DD <REG> 00 <CK_HI> <CK_LO> 77`) for write commands instead of silence.
+  The e-rickshaw meter sends `DD A5 03...` and expects a response; the ACK
+  echoes the register with status 0x00 (success) and a valid checksum.
+### Verified
+- 166/166 native tests, `pio run -e s3-waveshare` SUCCESS
+
 ## [v2.8.5] — 2026-09-27
 ### Fixed
 - Waveshare DI polarity: reverted v2.8.3/v2.8.4's `INPUT_PULLDOWN`/active-HIGH

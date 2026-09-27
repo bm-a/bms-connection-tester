@@ -132,9 +132,6 @@ bool JbdParser::feed(uint8_t b, JbdFrame &out) {
 const uint8_t *reply_for(uint8_t reg, bool is_write, size_t &out_len) {
   if (is_write) {
     // JBD write ACK: DD <REG> 00 <CK_HI> <CK_LO> 77.
-    // NOTE: the parser sets is_write=true only for 0x5A command bytes
-    // (non-standard). The meter's DD A5 ... requests are treated as reads
-    // (is_write=false) and get the 34-byte data response below.
     // Checksum covers REG + 0x00 (status=success).
     // Static buffer — reply_for is called synchronously from loop(), and
     // send_frame() transmits immediately before the next call.
