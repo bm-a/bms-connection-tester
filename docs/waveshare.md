@@ -32,6 +32,27 @@ Two deliberate differences from the generic build:
 - **Ethernet is reserved, not integrated.** The W5500 pins are left alone;
   the box keeps the always-on Wi-Fi AP (`BMS-Tester`) like the generic build.
 
+## Wi-Fi
+
+The board brings up a Wi-Fi access point on boot (same as the generic
+build):
+
+| Setting | Default | Notes |
+|---|---|---|
+| AP SSID | `BMS-Tester` | (`WEB_AP_SSID_DEFAULT` in `src/web_ui.h`) |
+| AP password | `bms12345` | (`WEB_AP_PASS_DEFAULT`; min 8 chars) |
+| Admin password | `admin123` | Gates reboot, factory reset, update upload, and saves in the web UI |
+
+All three are changeable from the web UI **admin tab** (leave a password
+field blank to keep the current value; settings persist in NVS across
+reboots). The defaults above apply to a fresh flash or after a factory
+reset (hold BOOT 10 s).
+
+- **Wi-Fi kill switch:** DI2 terminal (**GPIO5**), active LOW = AP off.
+  Ground DI2 to drop the AP, release to bring it back.
+- **STA client mode** is also available from the web UI admin tab: the box
+  can join your own network instead of (or as well as) hosting the AP.
+
 ## Build
 
 ```sh
