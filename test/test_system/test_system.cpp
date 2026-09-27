@@ -64,7 +64,10 @@ void test_select_matrix(void) {
   TEST_ASSERT_EQUAL_PTR(BMS_RESPONSE_NAME, r);
 
   r = select_reply(mk_frame(0x03, true), c, 2, sfB, rl);
-  TEST_ASSERT_NULL(r);  // writes silent even mid-spoof
+  TEST_ASSERT_NOT_NULL(r);  // v2.8.6+: writes get JBD ACK even mid-spoof
+  TEST_ASSERT_EQUAL_UINT(BMS_WRITE_ACK_LEN, rl);
+  TEST_ASSERT_EQUAL_UINT8(0xDD, r[0]);
+  TEST_ASSERT_EQUAL_UINT8(0x77, r[rl - 1]);
   r = select_reply(mk_frame(0x09, false), c, 2, sfB, rl);
   TEST_ASSERT_NULL(r);  // unknown silent even mid-spoof
 }
@@ -228,7 +231,7 @@ void test_office_day_24h(void) {
   TEST_ASSERT_EQUAL_UINT(polls, replies);
   TEST_ASSERT_EQUAL_UINT(5, spoof1);   // stage 1 ("100"): exactly 5 s
   TEST_ASSERT_EQUAL_UINT(10, spoof2);  // stage 2 (88.8/188): exactly 10 s
-  TEST_ASSERT_FALSE(write_got_reply);
+  TEST_ASSERT_TRUE(write_got_reply);  // v2.8.6+: writes get JBD ACK
   TEST_ASSERT_TRUE(saw_r1_at_8);
   TEST_ASSERT_TRUE(saw_r8_at_8);
   TEST_ASSERT_TRUE(saw_off_after_abort);

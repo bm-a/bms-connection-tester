@@ -116,11 +116,28 @@ void test_dispatcher_answers_known_reads(void) {
 
 void test_dispatcher_silent_option_a(void) {
   size_t n = 0xBEEF;
-  TEST_ASSERT_NULL(reply_for(0x03, true, n));   // write: silence
-  TEST_ASSERT_NULL(reply_for(0x04, true, n));   // write: silence
+  // Writes now get a JBD ACK (v2.8.6+), not silence.
+  const uint8_t *r;
+  r = reply_for(0x03, true, n);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL_UINT(BMS_WRITE_ACK_LEN, n);
+  TEST_ASSERT_EQUAL_UINT8(0xDD, r[0]);
+  TEST_ASSERT_EQUAL_UINT8(0x03, r[1]);  // echoes register
+  TEST_ASSERT_EQUAL_UINT8(0x00, r[2]);  // status = success
+  TEST_ASSERT_EQUAL_UINT8(0x77, r[n - 1]);
+  // ACK checksum must be valid: covers REG + 0x00
+  uint16_t ck = ((uint16_t)r[3] << 8) | r[4];
+  TEST_ASSERT_EQUAL_HEX16(jbd_checksum(&r[1], 2), ck);
+  r = reply_for(0x04, true, n);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL_UINT(BMS_WRITE_ACK_LEN, n);
+  TEST_ASSERT_EQUAL_UINT8(0x04, r[1]);
+  // Unknown registers (reads): still silent
   TEST_ASSERT_NULL(reply_for(0x09, false, n));  // unknown reg: silence
   TEST_ASSERT_NULL(reply_for(0xFF, false, n));  // unknown reg: silence
-  TEST_ASSERT_NULL(reply_for(0x10, true, n));   // write: silence
+  r = reply_for(0x10, true, n);   // write to unknown reg: ACK anyway
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL_UINT8(0x10, r[1]);
 }
 
 void test_canned_frames_self_consistent(void) {

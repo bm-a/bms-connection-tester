@@ -130,7 +130,22 @@ bool JbdParser::feed(uint8_t b, JbdFrame &out) {
 }
 
 const uint8_t *reply_for(uint8_t reg, bool is_write, size_t &out_len) {
-  if (is_write) return 0;  // option A: never answer writes
+  if (is_write) {
+    // JBD write ACK: DD <REG> 00 <CK_HI> <CK_LO> 77.
+    // Checksum covers REG + 0x00 (status=success).
+    // Static buffer — reply_for is called synchronously from loop(), and
+    // send_frame() transmits immediately before the next call.
+    static uint8_t ack[BMS_WRITE_ACK_LEN];
+    ack[0] = 0xDD;
+    ack[1] = reg;
+    ack[2] = 0x00;
+    uint16_t ck = jbd_checksum(&ack[1], 2);  // covers REG + 0x00
+    ack[3] = (uint8_t)(ck >> 8);
+    ack[4] = (uint8_t)(ck & 0xFF);
+    ack[5] = 0x77;
+    out_len = BMS_WRITE_ACK_LEN;
+    return ack;
+  }
   switch (reg) {
     case 0x03: out_len = BMS_RESPONSE_LEN; return BMS_RESPONSE;
     case 0x04: out_len = BMS_RESPONSE_CELLS_LEN; return BMS_RESPONSE_CELLS;

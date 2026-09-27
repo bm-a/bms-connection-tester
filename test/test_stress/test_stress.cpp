@@ -26,9 +26,13 @@ void test_exhaustive_single_byte_corruptions(void) {
         for (int j = 0; j < 7; j++) hit |= p.feed(w[j], f);
         TEST_ASSERT_TRUE(hit);
         TEST_ASSERT_TRUE(f.is_write);
-        // ...and the dispatcher must stay silent (option A).
+        // ...and the dispatcher must return a valid JBD ACK (v2.8.6+).
         size_t rl = 0;
-        TEST_ASSERT_NULL(reply_for(f.reg, f.is_write, rl));
+        const uint8_t *ack = reply_for(f.reg, f.is_write, rl);
+        TEST_ASSERT_NOT_NULL(ack);
+        TEST_ASSERT_EQUAL_UINT(BMS_WRITE_ACK_LEN, rl);
+        TEST_ASSERT_EQUAL_UINT8(0xDD, ack[0]);
+        TEST_ASSERT_EQUAL_UINT8(0x77, ack[rl - 1]);
         checked++;
         continue;
       }
@@ -98,12 +102,15 @@ void test_cadence_register_sweep(void) {
         t.note_poll(now);
         size_t rl = 0;
         TEST_ASSERT_NOT_NULL(reply_for(f.reg, f.is_write, rl));
-        // interleave a write + unknown read: green refresh, no reply
+        // interleave a write + unknown read: green refresh, write gets ACK
         uint8_t w[9] = {0xDD, 0x5A, 0x10, 0x02, 0xAA, 0x55, 0xFE, 0xEF, 0x77};
         for (int i = 0; i < 9; i++)
           if (p.feed(w[i], f)) {
             t.note_poll(now);
-            TEST_ASSERT_NULL(reply_for(f.reg, f.is_write, rl));
+            size_t arl = 0;
+            const uint8_t *a = reply_for(f.reg, f.is_write, arl);
+            TEST_ASSERT_NOT_NULL(a);
+            TEST_ASSERT_EQUAL_UINT(BMS_WRITE_ACK_LEN, arl);
           }
         now += periods[pi];
       }
