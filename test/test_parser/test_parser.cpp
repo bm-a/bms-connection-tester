@@ -193,9 +193,33 @@ void test_soak_slow_poll(void) {
   TEST_ASSERT_FALSE(t.active(now + 11000));
 }
 
+void test_parser_7byte_one_byte_ck_rule(void) {
+  // v2.8.9: explicit 1-byte checksum rule for the real meter's 7-byte
+  // request (ground truth from SOC_DOCKLIGHT.xlsx capture):
+  //   DD A5 REG 00 FF CK 77, CK = 0x100 - REG.
+  // Build frames per this rule for regs 0x03..0x05 and expect acceptance.
+  for (uint8_t reg = 0x03; reg <= 0x05; reg++) {
+    uint8_t req[7] = {0xDD, 0xA5, reg, 0x00, 0xFF,
+                      (uint8_t)(0x100u - reg), 0x77};
+    JbdFrame f;
+    TEST_ASSERT_TRUE_MESSAGE(parse_once(req, 7, f), "1-byte CK rule");
+    TEST_ASSERT_FALSE(f.is_write);
+    TEST_ASSERT_EQUAL_UINT8(reg, f.reg);
+    TEST_ASSERT_EQUAL_UINT8(0, f.len);
+  }
+  // Wrong 1-byte checksum must still be rejected.
+  uint8_t bad[7] = {0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFC, 0x77};
+  JbdFrame f;
+  JbdParser p;
+  bool hit = false;
+  for (int i = 0; i < 7; i++) hit |= p.feed(bad[i], f);
+  TEST_ASSERT_FALSE(hit);
+}
+
 void run_all() {
   RUN_TEST(test_parser_03_read);
   RUN_TEST(test_parser_04_05_reads);
+  RUN_TEST(test_parser_7byte_one_byte_ck_rule);
   RUN_TEST(test_parser_write_flagged);
   RUN_TEST(test_parser_rejects_corrupt);
   RUN_TEST(test_parser_resync_on_noise);

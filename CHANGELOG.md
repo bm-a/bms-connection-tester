@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.8.9] — 2026-09-27
+### Fixed (CRITICAL)
+- 7-byte meter request format: the real e-rickshaw meter sends
+  `DD A5 03 00 FF FD 77` (7 bytes, NOT 8). Ground truth from the
+  `SOC_DOCKLIGHT.xlsx` bus capture. Byte[5] (`FD`) is a ONE-byte checksum
+  = `0x100 - REG` (reg 0x03 → 0xFD, 0x04 → 0xFC, 0x05 → 0xFB).
+  `JbdParser::feed()` now accepts the frame via an explicit 1-byte checksum
+  rule in addition to the existing 16-bit check, so the 7-byte request is
+  recognized intentionally rather than by checksum coincidence.
+### Verified
+- Our 34-byte SOC 100% response matches the Excel capture byte-for-byte.
+- All Excel TX examples (SOC 100%/50%, 90% 45C, 0x2A variants) verify
+  against our checksum rule (`0x10000 - sum(bytes[2..30])`).
+- New parser test: 7-byte 1-byte-checksum rule for regs 0x03–0x05.
+- All native tests pass (167 Unity + 105 PIO + soak), `pio run -e s3-waveshare` SUCCESS
+
 ## [v2.8.8] — 2026-09-27
 ### Fixed (CRITICAL)
 - Waveshare RS485 DE pin: the board DOES have a DE line on **GPIO21**.

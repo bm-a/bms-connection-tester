@@ -15,7 +15,7 @@
 // both report "2.8" and both OTA-check /releases/latest — the old -wsN
 // prerelease line is retired (ota_tag_is_waveshare_line stays as a predicate
 // for the host tests).
-#define FW_VERSION "2.8.8"
+#define FW_VERSION "2.8.9"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
 // v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and
@@ -26,6 +26,10 @@
 // spoof window — see relay_ctrl.h / web_ui.h.
 
 // Fixed meter request for register 0x03: DD A5 03 00 FF FD 77
+// (v2.8.9: ground truth from real e-rickshaw meter capture — the meter sends
+// a 7-byte request, NOT 8-byte. Byte[5] is a ONE-byte checksum = 0x100 - REG.
+// The streaming parser accepts it via the 16-bit check AND the explicit
+// 1-byte rule; see JbdParser::feed JST_CKLO.)
 extern const uint8_t BMS_REQUEST[7];
 #define BMS_REQUEST_LEN 7
 

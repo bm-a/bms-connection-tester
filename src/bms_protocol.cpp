@@ -109,6 +109,16 @@ bool JbdParser::feed(uint8_t b, JbdFrame &out) {
       uint16_t want = (uint16_t)(0x10000UL - (s & 0xFFFFUL));
       uint16_t got_ck = ((uint16_t)ckhi << 8) | b;
       ck_ok = (want == got_ck);
+      // v2.8.9: explicit 7-byte meter request format (ground truth from
+      // real e-rickshaw meter capture): DD A5 REG 00 FF CK 77, where CK is a
+      // ONE-byte checksum = 0x100 - REG (e.g. reg 0x03 -> 0xFD, 0x04 -> 0xFC,
+      // 0x05 -> 0xFB). Accept on this rule too, so the frame is recognized
+      // intentionally rather than only via the 16-bit checksum coincidence
+      // (0xFFFD == 0x10000 - (0x03 + 0x00)).
+      if (!ck_ok && len == 0 && ckhi == 0xFF) {
+        uint8_t want1 = (uint8_t)(0x100u - reg);
+        if (b == want1) ck_ok = true;
+      }
       st = JST_END;
       return false;
     }
