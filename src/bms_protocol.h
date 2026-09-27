@@ -15,7 +15,7 @@
 // both report "2.8" and both OTA-check /releases/latest — the old -wsN
 // prerelease line is retired (ota_tag_is_waveshare_line stays as a predicate
 // for the host tests).
-#define FW_VERSION "2.8.6"
+#define FW_VERSION "2.8.7"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
 // v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and
@@ -42,8 +42,9 @@ extern const uint8_t BMS_RESPONSE_NAME[19];
 #define BMS_RESPONSE_NAME_LEN 19
 
 // JBD write ACK template (6 bytes): DD <REG> 00 <CK_HI> <CK_LO> 77.
-// Filled at runtime by reply_for() for write commands. Checksum covers
-// REG + 0x00 (status). E.g. reg 0x03 -> DD 03 00 FF FD 77.
+// Filled at runtime by reply_for() for 0x5A write commands (non-standard;
+// the meter's DD A5 ... requests are treated as reads). Checksum covers
+// REG + 0x00 (status).
 #define BMS_WRITE_ACK_LEN 6
 
 // Generic JBD checksum: 0x10000 - sum(buf[0..len-1]).
