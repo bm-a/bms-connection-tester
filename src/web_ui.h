@@ -24,6 +24,11 @@ struct WebCtx {
   OtaState *ota = nullptr;        // v2.3: OTA status surfaced on dashboard
   void (*on_ota_check)() = nullptr;  // v2.3: main.cpp performs a check now
   void (*on_ota_install)() = nullptr;  // v2.3.1: dashboard Install button
+  // v2.8.7 RS485 diagnostics: last RX/TX frames (set by main.cpp)
+  const uint8_t *diag_rx = nullptr;
+  const uint8_t *diag_rx_len = nullptr;
+  const uint8_t *diag_tx = nullptr;
+  const uint8_t *diag_tx_len = nullptr;
 };
 
 // AP defaults (overridden by NVS once saved).

@@ -816,6 +816,25 @@ static void handle_state() {
        ",\"sta\":" + String(web_sta_state()) +
        ",\"sta_en\":" + String(ident.sta_en ? 1 : 0) +
        ",\"sta_ssid\":\"" + String(ident.sta_ssid) + "\"";
+  // v2.8.7 RS485 diagnostics: last RX/TX frames as hex strings.
+  // Proves exactly what the ESP32 received and transmitted.
+  if (G->diag_rx && G->diag_rx_len && G->diag_tx && G->diag_tx_len) {
+    s += ",\"rs485rx\":\"";
+    for (uint8_t i = 0; i < *G->diag_rx_len; i++) {
+      char hb[3];
+      snprintf(hb, sizeof(hb), "%02X", G->diag_rx[i]);
+      s += hb;
+      if (i + 1 < *G->diag_rx_len) s += " ";
+    }
+    s += "\",\"rs485tx\":\"";
+    for (uint8_t i = 0; i < *G->diag_tx_len; i++) {
+      char hb[3];
+      snprintf(hb, sizeof(hb), "%02X", G->diag_tx[i]);
+      s += hb;
+      if (i + 1 < *G->diag_tx_len) s += " ";
+    }
+    s += "\"";
+  }
   if (G->ota) {
     s += ",\"ota_auto\":" + String(G->ota->auto_enabled ? 1 : 0) +
          ",\"ota_latest\":\"" + String(G->ota->latest_tag) + "\"" +
