@@ -32,7 +32,7 @@
 // ---- Controls: BOOT button = START/STOP; DI terminals for the rest ----
 #define WS_PIN_BUTTON     0   // BOOT, press = LOW (strapping pin: holding it
                               // at power-on enters download mode — normal)
-#define WS_PIN_DI_BASE    4   // DI1..DI8 = GPIO4..GPIO11, active = LOW
+#define WS_PIN_DI_BASE    4   // DI1..DI8 = GPIO4..GPIO11, active = HIGH (opto drives HIGH)
 #define WS_PIN_DI_COUNT   8
 #define WS_PIN_SPOOF      4   // DI1: spoof trigger (default, web-changeable)
 #define WS_PIN_WIFI_KILL  5   // DI2: ground = AP off (default)

@@ -449,6 +449,8 @@ void setup() {
   pinMode(PIN_SPOOF, INPUT_PULLDOWN);
   pinMode(PIN_WIFI_KILL, INPUT_PULLDOWN);  // idle LOW = AP on
   pinMode(PIN_RELAY_TRIGGER, INPUT_PULLDOWN);  // DI3: idle LOW
+  // DI4-DI8 (GPIO7-11): configure for dashboard readout (no function yet)
+  for (uint8_t i = 3; i < 8; i++) pinMode(WS_PIN_DI_BASE + i, INPUT_PULLDOWN);
 #else
   pinMode(PIN_SPOOF, INPUT_PULLUP);
   pinMode(PIN_WIFI_KILL, INPUT_PULLUP);  // idle HIGH = AP on
