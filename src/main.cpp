@@ -1,4 +1,4 @@
-// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.8.
+// e-rickshaw meter RS485 connection tester — ESP32-S3 firmware v2.9.
 // v1.x base FROZEN: JBD responder (0x03/0x04/05, option-A silence), adaptive
 // link window, green/red LEDs + RGB mirror, STATUS?. v2.0 ADDS (never alters):
 // 8-relay sequencer (sequential / all-ON, 3 button behaviors), always-on WiFi
@@ -34,7 +34,8 @@
 //   GPIO4 (DI1 terminal) -> spoof trigger to COM (active = LOW, web-changeable)
 //   GPIO5 (DI2 terminal) -> WiFi kill to COM (active = LOW = AP off)
 //   GPIO38 -> onboard WS2812 RGB (mirrors green/red, no wiring needed)
-//   GPIO12..16 = W5500 Ethernet (reserved, untouched) | GPIO46 = buzzer
+//   GPIO12..16 = W5500 Ethernet (SPI15/14/13, CS16, IRQ12, RST39, best-effort)
+//   GPIO46 = buzzer (LEDC, driven only after setup)
 //   DI3..DI8 (GPIO6..11) free. USB-C powered (never the pack).
 //
 // USB-serial STATUS? extension (test jig only, NOT a JBD command):
@@ -48,6 +49,7 @@
 #include "ota.h"
 #ifdef BOARD_WAVESHARE_8DI8RO
 #include "waveshare_pins.h"  // TCA9554 relay map + pure port logic (host-tested)
+#include "ws_eth.h"          // W5500 Ethernet (ESP-IDF esp_eth, best-effort)
 #include <Wire.h>
 #endif
 #define RS485_SERIAL Serial2
@@ -140,13 +142,46 @@ static bool relaysArmed = false;
 #ifdef BOARD_WAVESHARE_8DI8RO
 static uint8_t lastWsRelayBits = 0x00;  // TCA9554 output-register cache
 
+// Live TCA9554 status (see waveshare_pins.h): false on any bus error,
+// true again on any success (self-heals); /api/state reports
+// "expander":"ok|fail", the RGB flashes red while failed.
+static WsTcaFault tca_fault;
+
+// ---- Buzzer: GPIO46, LEDC 1 kHz / 8-bit, duty <= WS_BUZZER_DUTY ----
+// Strapping pin: never driven before setup() runs (the official demo's
+// GPIO_Init runs in setup too); ledcWrite(0) parks it silent. All sounds
+// are queued through WsBuzzer (non-blocking pattern engine, host-tested)
+// and drained from loop() — never delay(), never in the RS485 hot path.
+#define WS_BUZZER_LEDC_CH 1
+static bool buzzer_ready = false;
+static WsBuzzer ws_buzzer;
+static void buzzer_init() {
+  ledcSetup(WS_BUZZER_LEDC_CH, 1000, 8);  // 1 kHz, 8-bit (official demo)
+  ledcAttachPin(WS_PIN_BUZZER, WS_BUZZER_LEDC_CH);
+  ledcWrite(WS_BUZZER_LEDC_CH, 0);
+  buzzer_ready = true;
+}
+// Queue a beep (no-op before buzzer_init; Waveshare build only).
+static void buzzer_beep(uint16_t total_ms, uint16_t flick_ms) {
+  if (buzzer_ready) ws_buzzer.push(total_ms, flick_ms);
+}
+// Advance the pattern engine; touch LEDC only when the level changes.
+static void buzzer_tick(unsigned long now) {
+  if (buzzer_ready && ws_buzzer.tick(now))
+    ledcWrite(WS_BUZZER_LEDC_CH, ws_buzzer.out ? WS_BUZZER_DUTY : 0);
+}
+
 // Minimal TCA9554PWR access: single-register write. Returns false on bus
-// error (caller parks safe / retries; sequencer state is untouched).
+// error (caller parks safe / retries; sequencer state is untouched). A
+// failure latches tca_fault (one-shot buzzer alarm on the edge); any
+// later success clears it again.
 static bool tca_write_reg(uint8_t reg, uint8_t val) {
   Wire.beginTransmission(WS_TCA9554_ADDR);
   Wire.write(reg);
   Wire.write(val);
-  return Wire.endTransmission() == 0;
+  bool ok = Wire.endTransmission() == 0;
+  if (tca_fault.note(ok)) buzzer_beep(5000, 500);  // demo DoutFailTask alarm
+  return ok;
 }
 
 // All pins output, all channels OFF — the expander equivalent of the
@@ -176,6 +211,18 @@ static void rebuild_spoof_frame() {
 static void apply_leds(bool on) {
   connected = on;
 #ifdef BOARD_WAVESHARE_8DI8RO
+  // Expander fault override (official demo DoutFailTask pattern): red flash
+  // while the TCA9554 is unreachable. Takes over the whole lamp.
+  if (!tca_fault.ok) {
+    bool phase = (millis() / 250) % 2 == 0;
+    // R/G-swapped board (v2.8.1): physical red = neopixelWrite(pin, 0, B, 0).
+    neopixelWrite(PIN_RGB, 0, phase ? RGB_BRIGHT : 0, 0);
+    return;
+  }
+  // Link-transition beep. The boot call happens before buzzer_init, so it
+  // stays silent — no strapping-pin drive during early boot.
+  static bool prev_on = false;
+  if (on != prev_on) { buzzer_beep(200, 0); prev_on = on; }
   // No discrete LEDs on this board — the onboard RGB (GPIO38) is the lamp.
 #else
   digitalWrite(PIN_LED_GREEN, on ? HIGH : LOW);
@@ -450,6 +497,9 @@ void setup() {
 #ifdef BOARD_WAVESHARE_8DI8RO
   Wire.begin(WS_I2C_SDA, WS_I2C_SCL);
   tca_relays_init();  // expander: all outputs, all relays OFF first
+  buzzer_init();      // GPIO46 LEDC beeper (post-boot; strapping pin)
+  ws_eth_init();      // W5500 Ethernet (DHCP + hostname): best-effort only —
+                      // any failure just skips Ethernet, boot/WiFi unaffected
 #endif
   // RS485 DE: park RX mode first (both boards; on Waveshare the UART claims
   // GPIO21 for hardware direction later in setup — this covers early boot).
@@ -502,6 +552,12 @@ void setup() {
   wctx.diag_rx_len = &diagRxLen;
   wctx.diag_tx = diagTxFrame;
   wctx.diag_tx_len = &diagTxLen;
+#ifdef BOARD_WAVESHARE_8DI8RO
+  // v2.9.0: expander live status + W5500 Ethernet IP for /api/state and the
+  // dashboard (fields stay null on generic builds, so JSON omits them).
+  wctx.expander_ok = &tca_fault.ok;
+  wctx.eth_ip = ws_eth_ip_str;
+#endif
   web_setup(wctx);  // loads NVS config, builds spoof frames, starts always-on AP
   // v2.3 burn-in: auto-start the configured mode (relays already OFF-first).
   // (void): boot start is always outside the post-stop dead-band (R12).
@@ -632,6 +688,17 @@ void loop() {
   // --- live status evaluation (millis timer, no delay) ---
   if (now - lastEvalMs >= EVAL_INTERVAL_MS) {
     lastEvalMs = now;
+#ifdef BOARD_WAVESHARE_8DI8RO
+    // v2.9.0: sequencer start/stop beeps (link beeps live in apply_leds)
+    // + drain the non-blocking buzzer pattern engine.
+    static bool prev_running = false;
+    bool running = seq.running();
+    if (running != prev_running) {
+      buzzer_beep(running ? 200 : 500, running ? 0 : 150);
+      prev_running = running;
+    }
+    buzzer_tick(now);
+#endif
     apply_leds(tracker.active(now));
   }
   // (v2.6 meter heuristic is fed inside web_tick() below: link gaps = new

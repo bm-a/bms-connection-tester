@@ -5,6 +5,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Every release ships Tasmota-style one-file images (`bms-tester-8mb.bin`,
 plus `bms-tester-n16r8.bin` from v1.2 on): `write-flash 0x0 <file>`.
 
+## [v2.9.0] — 2026-09-27
+### Added (Waveshare ESP32-S3-POE-ETH-8DI-8DO — full 8DO support)
+- W5500 Ethernet via ESP-IDF `esp_eth` (`src/ws_eth.cpp`): the installed
+  Arduino core is 2.0.17, whose Arduino-ETH has no W5500 support (the
+  official demo needs Arduino-ESP32 ≥ 3.0), so the ESP-IDF 4.4 W5500 MAC/PHY
+  drivers are bound directly with the demo's exact pinout (SPI SCK 15 /
+  MISO 14 / MOSI 13, CS 16, IRQ 12, RST 39, PHY addr 1). DHCP client +
+  hostname `bms-tester`; the WebServer binds all interfaces so the
+  dashboard answers on the Ethernet IP with no web-code changes.
+  Best-effort by design: every init step is checked, any failure just
+  skips Ethernet — boot, the AP (192.168.4.1), STA, captive portal and OTA
+  policy are never affected.
+- Buzzer on GPIO46 (LEDC 1 kHz / 8-bit, duty ≤ 200, like the official
+  demo): short beep on meter-link up/down transitions, 200 ms on sequencer
+  start, 500 ms flicker on sequencer stop, one-shot 5 s flickering alarm on
+  output-driver failure. Non-blocking pattern engine (`WsBuzzer`,
+  host-tested) drained from loop(); never driven before setup() (GPIO46 is
+  a strapping pin) and never in the RS485 hot path.
+- TCA9554 fault surfacing: a latched `ok|fail` status (`WsTcaFault`,
+  host-tested) — `/api/state` now reports `"expander":"ok"|"fail"`, the RGB
+  flashes red while the expander is unreachable (demo DoutFailTask pattern),
+  and the failure raises the one-shot buzzer alarm. Safe-boot park 0x00 and
+  write-retry semantics unchanged; any later successful write self-heals
+  the status back to `ok`.
+- `/api/state` now includes `"eth_ip":"<addr>"` when Ethernet is up (empty
+  string otherwise); the dashboard Information card shows `ETH ip` next to
+  the existing STA IP in all dashboard variants.
+### Changed
+- Routing note: with WiFi STA and Ethernet both up, outbound traffic (OTA
+  check/download) follows lwIP's default interface (most recently
+  connected). The STA-online gate for OTA checks is unchanged — Ethernet is
+  an extra management path, not an OTA-policy change.
+### Docs
+- `docs/waveshare-wiring.md`: USB-OTG jumper warning (do not connect the
+  board to a computer while the jumper is set to USB-OTG — the jumper feeds
+  external power through Type-C).
+### Verified
+- 182/182 native Unity tests (7+8+14+4+36+11+12+6+5+52+3+24, 0 failures),
+  incl. 11 new v2.9.0 tests: W5500 pinout, buzzer constants/pattern
+  engine (solid/flicker/sub-50-solid/FIFO/full-drop), TCA fault latch
+  (edge + self-heal), `expander`/`eth_ip` in /api/state (present + omitted
+  on generic), dashboard ETH ip row. `pio run -e s3-waveshare` and
+  `-e esp32-s3-devkitc-1` both SUCCESS. 30-day soak: 2,591,400
+  polls/replies, millis rollover crossed, no reset needed (PASS).
+
 ## [v2.8.10] — 2026-09-27
 ### Fixed
 - Waveshare 8DO alignment to the official ESP32-S3-POE-ETH-8DI-8DO demo:

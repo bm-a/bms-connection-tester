@@ -436,7 +436,7 @@ async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return n
   document.getElementById('info_pins').textContent=s.pins||'';
   document.getElementById('info_trigpins').textContent=s.trigpins||'';
   if(s.waveshare){var al=document.getElementById('alow');if(al){al.disabled=true;al.title='Fixed Active-HIGH on Waveshare (TCA9554 bit HIGH = relay ON)';}}
-  document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
+  document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · ETH ip '+(s.cfg.eth_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
   return s;
 }
 // v2.4 per-mode menu: only the active mode's fields are shown (R1/R3).
@@ -681,7 +681,7 @@ async function refresh(){let s;try{s=await jget('/api/state');}catch(e){return n
  document.getElementById('info_pins').textContent=s.pins||'';
   document.getElementById('info_trigpins').textContent=s.trigpins||'';
  if(s.waveshare){var al=document.getElementById('alow');if(al){al.disabled=true;al.title='Fixed Active-HIGH on Waveshare (TCA9554 bit HIGH = relay ON)';}}
-  document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
+  document.getElementById('info_net').textContent='STA rssi '+(s.cfg.rssi||'0')+' dBm · STA ip '+(s.cfg.sta_ip||'-')+' · ETH ip '+(s.cfg.eth_ip||'-')+' · MAC '+(s.cfg.sta_mac||'-');
  bench(s);
  return s;
 }
@@ -870,6 +870,18 @@ static void handle_state() {
     s += ",\"sta_ip\":\"";
     s += (web_sta_state() == 2 ? WiFi.localIP().toString() : String(""));
     s += "\"";
+    // v2.9.0 Waveshare: expander live status + W5500 Ethernet IP. Fields
+    // are emitted only when main.cpp provides them (null on generic).
+    if (G->expander_ok) {
+      s += ",\"expander\":\"";
+      s += (*G->expander_ok ? "ok" : "fail");
+      s += "\"";
+    }
+    if (G->eth_ip) {
+      s += ",\"eth_ip\":\"";
+      s += G->eth_ip();
+      s += "\"";
+    }
     s += ",\"sta_mac\":\""; s += WiFi.macAddress(); s += "\"";
     snprintf(num, sizeof(num), "%d", sta_test);
     s += ",\"sta_test\":"; s += num;

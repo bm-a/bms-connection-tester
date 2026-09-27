@@ -35,9 +35,10 @@ board also accepts DC 7–36 V on its VIN terminal (Waveshare spec); USB-C
 | START/STOP | BOOT button | GPIO0. Press = LOW. 10 s hold = factory reset |
 | Spoof trigger | DI1 terminal | GPIO4, active LOW. Web-changeable to DI1–DI8 (GPIO4–11) |
 | Wi-Fi kill | DI2 terminal | GPIO5, active LOW = AP off |
-| Status lamp | Onboard WS2812 RGB | GPIO38. Green = link up, red = bus silent |
-| Spare inputs | DI3–DI8 terminals | GPIO6–GPIO11, opto-isolated, active LOW, currently unused by firmware |
-| Reserved, untouched | W5500 Ethernet (GPIO12–16), GPIO40 (RTC int), GPIO46 (buzzer) | Ethernet is **not implemented** in firmware; the box stays on the Wi-Fi AP |
+| Status lamp | Onboard WS2812 RGB | GPIO38. Green = link up, red = bus silent; flashes red while the TCA9554 output expander is unreachable |
+| Ethernet (W5500) | SPI SCK15/MISO14/MOSI13, CS16/IRQ12/RST39 | DHCP client, hostname `bms-tester`; dashboard also answers on the Ethernet IP (`eth_ip` in /api/state). Best-effort: failure never blocks boot or Wi-Fi |
+| Buzzer | GPIO46, LEDC 1 kHz/8-bit/duty 200 | Beeps on link up/down, sequencer start/stop, output-driver failure alarm |
+| Reserved, untouched | GPIO40 (RTC int) | — |
 
 DI1–DI8 are opto-isolated: wire a trigger as a dry contact (or driven
 signal) between the DIx terminal and COM so the GPIO is pulled LOW when
@@ -49,8 +50,11 @@ Two deliberate differences from the generic DIY build:
 - **Relay polarity is fixed.** The TCA9554 stage drives HIGH-bit = ON in
   hardware, so the dashboard **Logic dropdown is disabled** (greyed out)
   on this board. Relay labels always match the coils.
-- **Ethernet is reserved, not integrated.** The W5500 pins are left alone;
-  the box keeps the always-on `BMS-Tester` AP like the generic build.
+- **Ethernet is integrated (best-effort).** The W5500 (SPI SCK15/MISO14/MOSI13,
+  CS16/IRQ12/RST39) gets a DHCP address via ESP-IDF `esp_eth` and the
+  dashboard answers on it (`eth_ip` in /api/state, `ETH ip` in the
+  Information card). The always-on `BMS-Tester` Wi-Fi AP stays exactly as
+  before; an Ethernet failure never blocks boot or touches Wi-Fi.
 
 ## 3. Wiring
 

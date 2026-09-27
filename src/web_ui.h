@@ -27,6 +27,10 @@ struct WebCtx {
   // v2.8.7 RS485 diagnostics: last RX/TX frames (set by main.cpp)
   const uint8_t *diag_rx = nullptr;
   const uint8_t *diag_rx_len = nullptr;
+  // v2.9.0 Waveshare: TCA9554 expander live status + W5500 Ethernet IP.
+  // Null on generic builds (/api/state omits both fields there).
+  const bool *expander_ok = nullptr;
+  const char *(*eth_ip)() = nullptr;  // "" when Ethernet is down
   const uint8_t *diag_tx = nullptr;
   const uint8_t *diag_tx_len = nullptr;
 };

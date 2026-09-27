@@ -73,10 +73,15 @@ static inline WsTcaInitStep ws_tca_init_step(uint8_t step) {
 // ---- Indicators ----
 #define WS_PIN_RGB  38  // onboard WS2812 (discrete green/red LEDs don't exist)
 
+// ---- Buzzer (GPIO46) ----
+#define WS_PIN_BUZZER   46  // active buzzer, LEDC 1 kHz / 8-bit, duty <= 200
+#define WS_BUZZER_DUTY  200 // official demo Dutyfactor (of 255 max)
+// Strapping pin: the ESP glue must never drive it before setup() (the
+// official demo's GPIO_Init runs in setup too); ledcWrite(0) parks silent.
+
 // ---- Reserved: do not touch ----
- // GPIO12..16 = W5500 Ethernet (INT/MOSI/MISO/SCLK/CS)
+ // GPIO12..16 = W5500 Ethernet (INT/MOSI/MISO/SCLK/CS) — driven by ws_eth.cpp
  // GPIO40     = RTC interrupt; GPIO41/42 shared with RTC @ 0x51
- // GPIO46     = buzzer (unused by this firmware)
 
 // Logical output i (0..7) -> EXIO(i+1) -> output-register bit i.
 // Official demo: HIGH bit = channel ON (Dout_Open = Set_EXIO(CH, true);
@@ -96,3 +101,67 @@ static inline uint8_t ws_output_byte(const bool on[8], uint8_t relay_count) {
     if (on[i]) b |= ws_relay_bit(i);
   return b;
 }
+
+// ---- Buzzer pattern engine — pure logic, host-tested ----
+// Models the official 8DO demo's Buzzer_Open_Time() queue
+// (Buzzer_Indicate[10] drained by BuzzerTask) without tasks or delays: the
+// ESP glue advances tick(now) from loop() and drives LEDC only when `out`
+// changes. Frequency/duty (1 kHz, 8-bit, duty WS_BUZZER_DUTY) live in the
+// ESP glue (main.cpp); this engine only computes the on/off pattern.
+#define WS_BUZZER_QUEUE 4
+struct WsBuzzer {
+  struct Req { uint16_t total_ms; uint16_t flick_ms; };
+  Req q[WS_BUZZER_QUEUE];
+  uint8_t qn = 0;
+  bool run = false;
+  Req cur = {0, 0};
+  unsigned long start_ms = 0;
+  bool out = false;  // current output level; ESP writes duty when it changes
+  // Queue a beep: total_ms long, toggling every flick_ms (0 = solid on).
+  // Sub-50 ms flicker counts as solid, like the demo. Drops when full.
+  bool push(uint16_t total_ms, uint16_t flick_ms) {
+    if (total_ms == 0 || qn >= WS_BUZZER_QUEUE) return false;
+    if (flick_ms < 51) flick_ms = 0;
+    q[qn++] = {total_ms, flick_ms};
+    return true;
+  }
+  // Advance to `now` (millis). Returns true exactly when `out` changed.
+  bool tick(unsigned long now) {
+    if (!run) {
+      if (qn == 0) return false;
+      cur = q[0];
+      for (uint8_t i = 1; i < qn; i++) q[i - 1] = q[i];
+      qn--;
+      run = true;
+      start_ms = now;
+      out = false;
+    }
+    unsigned long el = now - start_ms;
+    if (el >= cur.total_ms) {
+      run = false;
+      if (out) { out = false; return true; }
+      return false;
+    }
+    bool want = true;
+    if (cur.flick_ms) want = ((el / cur.flick_ms) % 2) == 0;
+    if (want != out) { out = want; return true; }
+    return false;
+  }
+  bool idle() const { return !run && qn == 0; }
+};
+
+// ---- TCA9554 fault latch — pure logic, host-tested ----
+// Live expander status for /api/state ("expander":"ok|fail"), the RGB fault
+// override and the one-shot buzzer alarm. Unlike the demo's DoutFailTask
+// (which clears Failure_Flag after each 5 s alarm), this is a live status:
+// false on any bus error, true again on any success (self-heals when the
+// bus recovers). note() returns true exactly on the true->false edge so the
+// alarm fires once per outage, not on every eval while it persists.
+struct WsTcaFault {
+  bool ok = true;
+  bool note(bool write_ok) {
+    if (write_ok) { ok = true; return false; }
+    if (ok) { ok = false; return true; }
+    return false;
+  }
+};

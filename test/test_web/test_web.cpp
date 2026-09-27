@@ -127,8 +127,55 @@ void test_state_defaults(void) {
   TEST_ASSERT_TRUE(has(r.body, "\"mv\":520"));
   TEST_ASSERT_TRUE(has(r.body, "\"ma\":0"));
   TEST_ASSERT_TRUE(has(r.body, "\"msoc\":100"));
-  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.8.10\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"fw\":\"2.9.0\""));
   TEST_ASSERT_TRUE(has(r.body, "\"link\":false"));
+}
+
+// v2.9.0 Waveshare: expander live status + W5500 Ethernet IP in /api/state.
+static const char *g_eth_ip_val = "";
+static const char *test_eth_ip(void) { return g_eth_ip_val; }
+static bool g_expander_ok = true;
+
+void test_state_expander_and_eth_ip(void) {
+  fresh_env();
+  ctx.expander_ok = &g_expander_ok;
+  ctx.eth_ip = test_eth_ip;
+  // Expander unreachable, Ethernet up with an address.
+  g_expander_ok = false;
+  g_eth_ip_val = "192.168.1.50";
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"expander\":\"fail\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"eth_ip\":\"192.168.1.50\""));
+  // Expander recovered, Ethernet down: ok + empty string (never omitted
+  // while the function is provided).
+  g_expander_ok = true;
+  g_eth_ip_val = "";
+  r = WebServer::get("/api/state");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "\"expander\":\"ok\""));
+  TEST_ASSERT_TRUE(has(r.body, "\"eth_ip\":\"\""));
+}
+
+void test_state_omits_waveshare_fields_on_generic(void) {
+  // Generic build leaves both WebCtx fields null -> keys absent from JSON.
+  fresh_env();
+  ctx.expander_ok = nullptr;
+  ctx.eth_ip = nullptr;
+  WebServer::Resp r = WebServer::get("/api/state");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_FALSE(has(r.body, "\"expander\""));
+  TEST_ASSERT_FALSE(has(r.body, "\"eth_ip\""));
+}
+
+void test_dashboard_eth_ip_row(void) {
+  // Information card shows ETH ip next to the STA ip in every dashboard
+  // variant (the JS reads s.cfg.eth_ip with a '-' fallback).
+  fresh_env();
+  WebServer::Resp r = WebServer::get("/");
+  TEST_ASSERT_EQUAL_INT(200, r.code);
+  TEST_ASSERT_TRUE(has(r.body, "ETH ip"));
+  TEST_ASSERT_TRUE(has(r.body, "s.cfg.eth_ip"));
 }
 
 void test_relay_override(void) {
@@ -781,7 +828,7 @@ void test_console_verbs(void) {
   r = WebServer::post("/api/cmd", "{\"cmd\":\"status\"}");
   TEST_ASSERT_TRUE(has(r.body, "LINK RED"));
   r = WebServer::post("/api/cmd", "{\"cmd\":\"version\"}");
-  TEST_ASSERT_TRUE(has(r.body, "2.8"));
+  TEST_ASSERT_TRUE(has(r.body, FW_VERSION));  // tracks bms_protocol.h
   r = WebServer::post("/api/cmd", "{\"cmd\":\"bogus\"}");
   TEST_ASSERT_TRUE(has(r.body, "\"ok\":0"));
   // Privileged verbs need the password...
@@ -1130,6 +1177,9 @@ void run_all() {
   RUN_TEST(test_portal_redirect_flow);
   RUN_TEST(test_portal_landing);
   RUN_TEST(test_state_defaults);
+  RUN_TEST(test_state_expander_and_eth_ip);
+  RUN_TEST(test_state_omits_waveshare_fields_on_generic);
+  RUN_TEST(test_dashboard_eth_ip_row);
   RUN_TEST(test_relay_override);
   RUN_TEST(test_seq_start_stop);
   RUN_TEST(test_config_validation_persist);

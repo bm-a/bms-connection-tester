@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "../../src/waveshare_pins.h"
+#include "../../src/ws_eth.h"
 #include "../../src/relay_ctrl.h"
 #include "../../src/ota.h"
 #include "../../src/fw_upload.h"
@@ -28,6 +29,21 @@ void test_ws_pin_map(void) {
   TEST_ASSERT_EQUAL_UINT8(4, WS_PIN_SPOOF);
   TEST_ASSERT_EQUAL_UINT8(5, WS_PIN_WIFI_KILL);
   TEST_ASSERT_EQUAL_UINT8(38, WS_PIN_RGB);
+  TEST_ASSERT_EQUAL_UINT8(46, WS_PIN_BUZZER);
+}
+
+// ---- W5500 Ethernet pinout (official 8DO demo WS_ETH.h) ----
+
+void test_ws_8do_demo_eth_pins(void) {
+  // Demo: SPI.begin(15, 14, 13);
+  // ETH.begin(ETH_PHY_W5500, /*addr*/ 1, /*cs*/ 16, /*irq*/ 12, /*rst*/ 39, SPI)
+  TEST_ASSERT_EQUAL_UINT8(15, WS_ETH_SPI_SCK);
+  TEST_ASSERT_EQUAL_UINT8(14, WS_ETH_SPI_MISO);
+  TEST_ASSERT_EQUAL_UINT8(13, WS_ETH_SPI_MOSI);
+  TEST_ASSERT_EQUAL_UINT8(16, WS_ETH_CS);
+  TEST_ASSERT_EQUAL_UINT8(12, WS_ETH_IRQ);
+  TEST_ASSERT_EQUAL_UINT8(39, WS_ETH_RST);
+  TEST_ASSERT_EQUAL_UINT8(1, WS_ETH_PHY_ADDR);
 }
 
 // ---- TCA9554 output byte: EXIO(i+1) = bit i, HIGH = ON ----
@@ -211,6 +227,98 @@ void test_ws_8do_demo_dout_polarity(void) {
   TEST_ASSERT_EQUAL_UINT8(0x00, ws_output_byte(all_off, 8)); // demo ALL_OFF
 }
 
+// ---- Buzzer (GPIO46): 1 kHz / 8-bit / duty <= 200 (official demo) ----
+
+void test_ws_buzzer_constants(void) {
+  TEST_ASSERT_EQUAL_UINT8(200, WS_BUZZER_DUTY);  // demo Dutyfactor (of 255)
+  TEST_ASSERT_TRUE(WS_BUZZER_DUTY <= 200);       // hard cap, never exceed demo
+}
+
+void test_ws_buzzer_solid_beep(void) {
+  WsBuzzer b;
+  TEST_ASSERT_TRUE(b.idle());
+  TEST_ASSERT_TRUE(b.push(200, 0));  // 200 ms solid (link transition beep)
+  TEST_ASSERT_TRUE(b.tick(0));       // starts: out 0->1
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_FALSE(b.tick(100));    // mid-beep: no change
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_TRUE(b.tick(200));     // expires: out 1->0
+  TEST_ASSERT_FALSE(b.out);
+  TEST_ASSERT_TRUE(b.idle());
+  TEST_ASSERT_FALSE(b.tick(300));    // idle: silent
+}
+
+void test_ws_buzzer_flicker(void) {
+  WsBuzzer b;
+  TEST_ASSERT_TRUE(b.push(500, 150));  // 500 ms, toggles every 150 ms
+  TEST_ASSERT_TRUE(b.tick(0));
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_TRUE(b.tick(150));   // 1->0
+  TEST_ASSERT_FALSE(b.out);
+  TEST_ASSERT_TRUE(b.tick(300));   // 0->1
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_TRUE(b.tick(450));   // 1->0
+  TEST_ASSERT_FALSE(b.out);
+  TEST_ASSERT_FALSE(b.tick(500));  // expiry while already 0: no change
+  TEST_ASSERT_FALSE(b.out);
+  TEST_ASSERT_TRUE(b.idle());
+}
+
+void test_ws_buzzer_sub50_flicker_is_solid(void) {
+  // Demo rule (Buzzer_Open_Time): flicker < 50 ms counts as solid on.
+  WsBuzzer b;
+  TEST_ASSERT_TRUE(b.push(200, 30));
+  TEST_ASSERT_TRUE(b.tick(0));
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_FALSE(b.tick(60));
+  TEST_ASSERT_FALSE(b.tick(120));
+  TEST_ASSERT_TRUE(b.out);  // never toggled
+  TEST_ASSERT_TRUE(b.tick(200));
+  TEST_ASSERT_FALSE(b.out);
+}
+
+void test_ws_buzzer_fifo_and_full(void) {
+  WsBuzzer b;
+  TEST_ASSERT_TRUE(b.push(100, 0));
+  TEST_ASSERT_TRUE(b.push(200, 0));
+  TEST_ASSERT_TRUE(b.push(300, 0));
+  TEST_ASSERT_TRUE(b.push(400, 0));
+  TEST_ASSERT_FALSE(b.push(500, 0));  // queue full: dropped, never blocks
+  TEST_ASSERT_TRUE(b.tick(0));    // first request starts
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_TRUE(b.tick(100));  // first expires -> out 1->0
+  TEST_ASSERT_FALSE(b.out);
+  TEST_ASSERT_TRUE(b.tick(100));  // second starts immediately after
+  TEST_ASSERT_TRUE(b.out);
+  TEST_ASSERT_TRUE(b.tick(300));  // second expires (100 + 200)
+  TEST_ASSERT_FALSE(b.out);
+  TEST_ASSERT_TRUE(b.tick(300));  // third starts
+  TEST_ASSERT_TRUE(b.out);
+}
+
+void test_ws_buzzer_empty_push_rejected(void) {
+  WsBuzzer b;
+  TEST_ASSERT_FALSE(b.push(0, 0));
+  TEST_ASSERT_TRUE(b.idle());
+}
+
+// ---- TCA9554 fault latch (one-shot alarm edge, self-heal) ----
+
+void test_ws_tca_fault_edge_and_selfheal(void) {
+  WsTcaFault f;
+  TEST_ASSERT_TRUE(f.ok);
+  TEST_ASSERT_FALSE(f.note(true));   // success: no edge, stays ok
+  TEST_ASSERT_TRUE(f.ok);
+  TEST_ASSERT_TRUE(f.note(false));   // first failure: edge fires (alarm)
+  TEST_ASSERT_FALSE(f.ok);
+  TEST_ASSERT_FALSE(f.note(false));  // still failed: no repeat edge
+  TEST_ASSERT_FALSE(f.ok);
+  TEST_ASSERT_FALSE(f.note(true));   // bus recovers: self-heals, no edge
+  TEST_ASSERT_TRUE(f.ok);
+  TEST_ASSERT_TRUE(f.note(false));   // new outage: edge fires again
+  TEST_ASSERT_FALSE(f.ok);
+}
+
 void run_all() {
   RUN_TEST(test_ws_pin_map);
   RUN_TEST(test_ws_output_byte_all_on_off);
@@ -228,6 +336,14 @@ void run_all() {
   RUN_TEST(test_ws_8do_demo_tca_regs);
   RUN_TEST(test_ws_8do_demo_tca_init_sequence);
   RUN_TEST(test_ws_8do_demo_dout_polarity);
+  RUN_TEST(test_ws_8do_demo_eth_pins);
+  RUN_TEST(test_ws_buzzer_constants);
+  RUN_TEST(test_ws_buzzer_solid_beep);
+  RUN_TEST(test_ws_buzzer_flicker);
+  RUN_TEST(test_ws_buzzer_sub50_flicker_is_solid);
+  RUN_TEST(test_ws_buzzer_fifo_and_full);
+  RUN_TEST(test_ws_buzzer_empty_push_rejected);
+  RUN_TEST(test_ws_tca_fault_edge_and_selfheal);
 }
 
 #ifdef ARDUINO

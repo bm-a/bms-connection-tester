@@ -16,6 +16,10 @@ https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO
 
 Both feed the same rail — never connect both at once.
 
+> ⚠️ **USB-OTG jumper:** when the jumper is set to **USB-OTG**, the Type-C
+> port feeds the board from an external USB power supply. **Do not connect
+> the board to a computer while the jumper is in the USB-OTG position.**
+
 **PWR LED** (red, near the USB port) lights as soon as the board has power.
 If it's dark, check your supply before anything else.
 
@@ -200,11 +204,11 @@ don't go looking for GPIOs for them; they don't exist.
 
 | Connector | Use | Firmware touches it? |
 |---|---|---|
-| RJ45 Ethernet (W5500) | 10/100 Mbps network | **No** — reserved, not implemented. The box uses Wi-Fi. |
+| RJ45 Ethernet (W5500) | 10/100 Mbps network | **Yes** — DHCP client, hostname `bms-tester`; dashboard also on the Ethernet IP. Best-effort: failure never blocks boot/Wi-Fi. |
 | RTC battery header | PCF85063 backup cell | No |
 | TF card slot | Storage | No |
 | Pin header (GPIO0/1/2/3/21/43/44/45/47/48 …) | Expansion | No — free for your own hardware |
-| Buzzer (GPIO46) | Audible alerts | No — unused by this firmware |
+| Buzzer (GPIO46) | Audible alerts | **Yes** — LEDC 1 kHz / 8-bit / duty ≤ 200. Beeps: link up/down (short), sequencer start (200 ms) / stop (500 ms flicker), output-driver failure (5 s flickering alarm). Never driven before setup() (GPIO46 is a strapping pin). |
 
 ---
 
