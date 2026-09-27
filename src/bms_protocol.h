@@ -15,12 +15,11 @@
 // both report "2.8" and both OTA-check /releases/latest — the old -wsN
 // prerelease line is retired (ota_tag_is_waveshare_line stays as a predicate
 // for the host tests).
-#define FW_VERSION "2.8.6"
+#define FW_VERSION "2.8.5"
 
 // JBD / Xiaoxiang Smart BMS, 9600 8N1, half-duplex over RS485.
 // v2.x base (frozen): answers Basic Info (0x03), Cell Voltages (0x04) and
-// Device Name (0x05); v2.8.6+: sends JBD ACK on writes (was silent option A);
-// stays SILENT on unknown registers.
+// Device Name (0x05); stays SILENT on writes/unknown registers (option A).
 // Green lamp = any well-formed meter frame seen within the adaptive window.
 // v2.0 adds (additive only): 8-relay sequencer, always-on AP web UI,
 // spoof window — see relay_ctrl.h / web_ui.h.
@@ -40,11 +39,6 @@ extern const uint8_t BMS_RESPONSE_CELLS[35];
 // Canned device name ("TEST-14S100A").
 extern const uint8_t BMS_RESPONSE_NAME[19];
 #define BMS_RESPONSE_NAME_LEN 19
-
-// JBD write ACK template (6 bytes): DD <REG> 00 <CK_HI> <CK_LO> 77.
-// Filled at runtime by reply_for() for write commands. Checksum covers
-// REG + 0x00 (status). E.g. reg 0x03 -> DD 03 00 FF FD 77.
-#define BMS_WRITE_ACK_LEN 6
 
 // Generic JBD checksum: 0x10000 - sum(buf[0..len-1]).
 // Caller chooses the slice. Requests: CMD+LEN(+DATA).
@@ -87,7 +81,7 @@ class JbdParser {
   void restart();
 };
 
-// ---- reply dispatcher (v2.8.6+: ACK on writes, silence on unknown reads) ----
+// ---- reply dispatcher (option A: silence unless known read) ----
 const uint8_t *reply_for(uint8_t reg, bool is_write, size_t &out_len);
 
 // ---- adaptive green window (since v1.1) ----
